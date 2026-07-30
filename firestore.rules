@@ -25,7 +25,12 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && request.resource.data.schemaVersion == 1
         && request.resource.data.reducerVersion == 'room-v1'
-        && request.resource.data.type in ['game/created', 'player/joined']
+        && request.resource.data.type in [
+          'game/created',
+          'player/joined',
+          'race/configured',
+          'player/ready'
+        ]
         && request.resource.data.payload is map
         && (
           (
@@ -37,6 +42,19 @@ service cloud.firestore {
           (
             request.resource.data.type == 'player/joined'
             && request.resource.data.payload.uid == request.auth.uid
+          )
+          ||
+          (
+            request.resource.data.type == 'race/configured'
+            && request.resource.data.payload.config is map
+            && request.resource.data.payload.config.editionId == 'avalon-hill-2005'
+            && request.resource.data.payload.config.courseId == 'risky-exchange'
+          )
+          ||
+          (
+            request.resource.data.type == 'player/ready'
+            && request.resource.data.payload.uid == request.auth.uid
+            && request.resource.data.payload.configurationEventId is string
           )
         );
       allow update, delete: if false;

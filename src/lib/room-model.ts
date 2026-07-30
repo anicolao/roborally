@@ -1,3 +1,14 @@
+import {
+  EDITION_ID,
+  PRNG_VERSION,
+  RACE_REDUCER_VERSION,
+  deriveRaceSetup,
+  type RaceConfig,
+  type RaceSetup
+} from './game/setup';
+import { BOARD_MANIFEST_VERSION, COURSE_MANIFEST_VERSION } from './game/course-manifest';
+import { PROGRAM_MANIFEST_VERSION } from './game/program-manifest';
+
 export const ROOM_SCHEMA_VERSION = 1;
 export const ROOM_REDUCER_VERSION = 'room-v1';
 export const MAX_ROOM_PLAYERS = 8;
@@ -14,7 +25,11 @@ export const ROBOTS = [
 ] as const;
 
 export type RobotId = (typeof ROBOTS)[number]['id'];
-export type RoomEventType = 'game/created' | 'player/joined';
+export type RoomEventType =
+  | 'game/created'
+  | 'player/joined'
+  | 'race/configured'
+  | 'player/ready';
 
 export interface GameCreatedPayload {
   gameId: string;
@@ -28,7 +43,20 @@ export interface PlayerJoinedPayload {
   robotId: RobotId;
 }
 
-export type RoomEventPayload = GameCreatedPayload | PlayerJoinedPayload;
+export interface RaceConfiguredPayload {
+  config: RaceConfig;
+}
+
+export interface PlayerReadyPayload {
+  uid: string;
+  configurationEventId: string;
+}
+
+export type RoomEventPayload =
+  | GameCreatedPayload
+  | PlayerJoinedPayload
+  | RaceConfiguredPayload
+  | PlayerReadyPayload;
 
 export interface RoomEvent {
   id: string;
@@ -61,7 +89,14 @@ export interface ReplayDiagnostic {
     | 'player-already-joined'
     | 'room-full'
     | 'name-unavailable'
-    | 'robot-unavailable';
+    | 'robot-unavailable'
+    | 'host-only'
+    | 'not-seated'
+    | 'not-enough-players'
+    | 'invalid-configuration'
+    | 'stale-configuration'
+    | 'already-ready'
+    | 'race-already-started';
   message: string;
 }
 
@@ -70,6 +105,10 @@ export interface RoomState {
   roomCode: string;
   hostUid: string;
   players: RoomPlayer[];
+  configuration: RaceConfig | null;
+  configurationEventId: string;
+  readyPlayerUids: string[];
+  setup: RaceSetup | null;
   acceptedEventIds: string[];
   diagnostics: ReplayDiagnostic[];
 }
@@ -80,6 +119,10 @@ export function emptyRoomState(): RoomState {
     roomCode: '',
     hostUid: '',
     players: [],
+    configuration: null,
+    configurationEventId: '',
+    readyPlayerUids: [],
+    setup: null,
     acceptedEventIds: [],
     diagnostics: []
   };
@@ -112,6 +155,29 @@ function diagnostic(
 
 function isRobotId(value: unknown): value is RobotId {
   return ROBOTS.some((robot) => robot.id === value);
+}
+
+function isSupportedConfiguration(value: unknown, playerCount: number): value is RaceConfig {
+  if (!value || typeof value !== 'object') return false;
+  const config = value as Partial<RaceConfig>;
+  return (
+    config.editionId === EDITION_ID &&
+    config.reducerVersion === RACE_REDUCER_VERSION &&
+    config.prngVersion === PRNG_VERSION &&
+    config.programManifestVersion === PROGRAM_MANIFEST_VERSION &&
+    config.optionManifestVersion === null &&
+    config.boardManifestVersion === BOARD_MANIFEST_VERSION &&
+    config.courseManifestVersion === COURSE_MANIFEST_VERSION &&
+    config.courseId === 'risky-exchange' &&
+    typeof config.seed === 'string' &&
+    config.seed.length >= 1 &&
+    config.seed.length <= 64 &&
+    (config.lives === 3 || (config.lives === 4 && playerCount >= 5)) &&
+    Array.isArray(config.expansionIds) &&
+    config.expansionIds.length === 0 &&
+    Array.isArray(config.houseRuleIds) &&
+    config.houseRuleIds.length === 0
+  );
 }
 
 export function replayRoom(events: readonly RoomEvent[]): RoomState {
@@ -185,6 +251,10 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         diagnostic(state, event, 'room-not-created', 'A player cannot join before room creation.');
         continue;
       }
+      if (state.setup) {
+        diagnostic(state, event, 'race-already-started', 'A player cannot join a started race.');
+        continue;
+      }
       if (state.players.some((player) => player.uid === payload.uid)) {
         diagnostic(state, event, 'player-already-joined', `${name} is already seated.`);
         continue;
@@ -208,6 +278,69 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         robotId: payload.robotId,
         seat: state.players.length + 1
       });
+      state.readyPlayerUids = [];
+    } else if (event.type === 'race/configured') {
+      const payload = event.payload as RaceConfiguredPayload;
+      if (state.setup) {
+        diagnostic(state, event, 'race-already-started', 'A started race cannot be reconfigured.');
+        continue;
+      }
+      if (event.actorUid !== state.hostUid) {
+        diagnostic(state, event, 'host-only', 'Only the room host can configure the race.');
+        continue;
+      }
+      if (state.players.length < 2) {
+        diagnostic(state, event, 'not-enough-players', 'At least two players must be seated.');
+        continue;
+      }
+      if (!payload || !isSupportedConfiguration(payload.config, state.players.length)) {
+        diagnostic(
+          state,
+          event,
+          'invalid-configuration',
+          'The race references unsupported or invalid 2005 manifests.'
+        );
+        continue;
+      }
+
+      state.configuration = payload.config;
+      state.configurationEventId = event.id;
+      state.readyPlayerUids = [];
+    } else if (event.type === 'player/ready') {
+      const payload = event.payload as PlayerReadyPayload;
+      if (state.setup) {
+        diagnostic(state, event, 'race-already-started', 'The race readiness barrier has closed.');
+        continue;
+      }
+      if (
+        !payload ||
+        payload.uid !== event.actorUid ||
+        !state.players.some((player) => player.uid === event.actorUid)
+      ) {
+        diagnostic(state, event, 'not-seated', 'Only a seated player can become ready.');
+        continue;
+      }
+      if (
+        !state.configuration ||
+        payload.configurationEventId !== state.configurationEventId
+      ) {
+        diagnostic(
+          state,
+          event,
+          'stale-configuration',
+          'Readiness must reference the current race configuration.'
+        );
+        continue;
+      }
+      if (state.readyPlayerUids.includes(event.actorUid)) {
+        diagnostic(state, event, 'already-ready', 'The player is already ready.');
+        continue;
+      }
+
+      state.readyPlayerUids.push(event.actorUid);
+      if (state.readyPlayerUids.length === state.players.length) {
+        state.setup = deriveRaceSetup(state.players, state.configuration);
+      }
     } else {
       diagnostic(state, event, 'invalid-event', `Event ${event.id} has an unknown type.`);
       continue;

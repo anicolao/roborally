@@ -80,4 +80,42 @@ describe('append-only game stream rules', () => {
     await assertFails(deleteDoc(event));
     await assertFails(setDoc(doc(db, 'games/room'), { mutable: true }));
   });
+
+  it('allows attributed configuration and readiness events but denies false readiness', async () => {
+    const db = environment.authenticatedContext('robot-a').firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'games/room/events/robot-a-000001'), {
+        ...eventData('robot-a'),
+        type: 'race/configured',
+        payload: {
+          config: {
+            editionId: 'avalon-hill-2005',
+            courseId: 'risky-exchange'
+          }
+        }
+      })
+    );
+    await assertSucceeds(
+      setDoc(doc(db, 'games/room/events/robot-a-000002'), {
+        ...eventData('robot-a'),
+        type: 'player/ready',
+        clientSeq: 2,
+        payload: {
+          uid: 'robot-a',
+          configurationEventId: 'robot-a-000001'
+        }
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, 'games/room/events/robot-a-000003'), {
+        ...eventData('robot-a'),
+        type: 'player/ready',
+        clientSeq: 3,
+        payload: {
+          uid: 'robot-b',
+          configurationEventId: 'robot-a-000001'
+        }
+      })
+    );
+  });
 });

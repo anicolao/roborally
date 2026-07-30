@@ -19,6 +19,7 @@ import {
   replayRoom,
   type GameCreatedPayload,
   type PlayerJoinedPayload,
+  type RaceConfiguredPayload,
   type RoomEvent,
   type RoomEventPayload,
   type RoomEventType,
@@ -123,6 +124,27 @@ export async function joinRoom(
   await appendRoomEvent(db, user, roomCode, 'player/joined', {
     uid: user.uid,
     ...player
+  });
+}
+
+export async function configureRace(
+  db: Firestore,
+  user: User,
+  roomCode: string,
+  payload: RaceConfiguredPayload
+) {
+  await appendRoomEvent(db, user, roomCode, 'race/configured', payload);
+}
+
+export async function markReady(
+  db: Firestore,
+  user: User,
+  roomCode: string,
+  configurationEventId: string
+) {
+  await appendRoomEvent(db, user, roomCode, 'player/ready', {
+    uid: user.uid,
+    configurationEventId
   });
 }
 
