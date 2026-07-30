@@ -441,12 +441,20 @@ commits.
 
 ### 7. Board elements
 
+**Status:** Implemented as the seventh vertical tracer.
+
 - Implement atomic express and normal conveyors, curves, convergence and
   occupancy conflicts, register-numbered pushers, and gears.
 - Add geometry and movement fixtures for every such element on Exchange and
   the selected Docking Bay.
 - Add `007-conveyors-pushers-and-gears`, including an express-to-normal curve
   and an ambiguous conveyor collision that leaves both robots still.
+
+The reviewed Exchange and Docking Bay A manifests contain no curved conveyors
+and no pushers. Scenario 007 therefore proves the printed straight
+express-to-normal handoff, gear activation, and ambiguous occupancy fallback
+through ordinary play, while exhaustive semantic fixtures prove both curve
+directions and register-gated pushers without inventing course geometry.
 
 ### 8. Lasers, damage, and locked registers
 

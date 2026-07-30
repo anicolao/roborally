@@ -104,11 +104,11 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
         {
           spec: 'Move 2 and Move 3 execute one space at a time across the open factory seam',
           check: async () => {
-            await expect(host.locator('[data-coordinate="6,12"] .race-robot')).toHaveAttribute(
+            await expect(host.locator('[data-coordinate="6,13"] .race-robot')).toHaveAttribute(
               'title',
               /Ada, Axle, facing south/
             );
-            await expect(host.locator('[data-coordinate="7,11"] .race-robot')).toHaveAttribute(
+            await expect(host.locator('[data-coordinate="7,10"] .race-robot')).toHaveAttribute(
               'title',
               /Grace, Bit, facing north/
             );
@@ -136,8 +136,8 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
         {
           spec: 'Both clients converge on the same final robot coordinates and facings',
           check: async () => {
-            await expect(guest.locator('[data-coordinate="6,12"] .race-robot')).toHaveCount(1);
-            await expect(guest.locator('[data-coordinate="7,11"] .race-robot')).toHaveCount(1);
+            await expect(guest.locator('[data-coordinate="6,13"] .race-robot')).toHaveCount(1);
+            await expect(guest.locator('[data-coordinate="7,10"] .race-robot')).toHaveCount(1);
           }
         },
         {

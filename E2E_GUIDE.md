@@ -53,6 +53,13 @@ shared Archive marker also depends on the later flag/archive turn slice; the
 browser visibly exposes the same fallback rule until that complete-race
 scenario can exercise the combined history.
 
+Scenario 007 likewise keeps reviewed course geometry authoritative. Ordinary
+three-player Programs visibly prove normal conveyance, a gear, an
+express-to-normal substep handoff, and an unresolved occupancy dependency.
+Exchange and Docking Bay A print neither curved belts nor pushers, so the
+browser asserts their absence and exhaustive pure fixtures cover both curve
+rotations and every register-gated pusher behavior.
+
 ## Scenario layout
 
 Use the next three-digit sequence and a short kebab-case capability name:
