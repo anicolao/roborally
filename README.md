@@ -107,6 +107,13 @@ The selected reviewed course has 68 conveyor cells, five gears, and no printed
 pushers or curved belts; generic semantic fixtures cover the latter two rules
 without adding fictional Exchange geometry.
 
+Lasers now target from one post-board snapshot after every register. Contiguous
+board lanes stop at their nearest robot, robot rays stop at walls or the first
+robot, and then every recorded hit applies one damage. Damage five through nine
+locks registers 5 back through 1 with their exact card IDs; ten damage enters
+the same Life-loss and re-entry pipeline as pits and edges. A fully locked
+robot executes all five retained cards in the pure repeated-Program fixture.
+
 The generated browser walkthroughs cover
 [application readiness](tests/e2e/001-app-shell-and-deployment/README.md) and
 [create, join, full-room, and reload behavior](tests/e2e/002-create-join-and-replay-room/README.md),
@@ -119,8 +126,10 @@ and
 and
 [pushing, destruction, Lives, and ordered re-entry](tests/e2e/006-pushing-destruction-lives-and-reentry/README.md),
 and
-[atomic conveyors and gears](tests/e2e/007-conveyors-pushers-and-gears/README.md).
-Lasers, damage, and locked registers are the next slice in
+[atomic conveyors and gears](tests/e2e/007-conveyors-pushers-and-gears/README.md),
+and
+[laser snapshots, damage, and locked registers](tests/e2e/008-lasers-damage-and-locked-registers/README.md).
+Flags, archives, repairs, and victory are the next slice in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 Nix is always available and is the mandatory entry point for every tooling,

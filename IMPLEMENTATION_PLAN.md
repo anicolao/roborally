@@ -458,6 +458,8 @@ directions and register-gated pushers without inventing course geometry.
 
 ### 8. Lasers, damage, and locked registers
 
+**Status:** Implemented as the eighth vertical tracer.
+
 - Implement board beams, robot line of sight, walls/robot blocking, one
   post-board-element targeting snapshot for unmodified base lasers, and
   per-hit damage.
@@ -466,6 +468,12 @@ directions and register-gated pushers without inventing course geometry.
   destruction.
 - Add `008-lasers-damage-and-locked-registers`, proving owner/observer views,
   locked-card conservation, and a fully locked repeated program.
+
+Scenario 008 reaches six damage through ordinary simultaneous robot fire and
+proves public owner/observer lock state. Exhaustive reducer fixtures cover
+board-beam blocking, the entire damage/lock table, exact locked-card retention,
+tenth-damage destruction, and execution of a fully locked five-card Program;
+the later complete-race tracer will exercise that repetition across live turns.
 
 ### 9. Flags, archives, repairs, and victory
 

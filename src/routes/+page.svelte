@@ -482,7 +482,12 @@
                   {#each roomState.resolution.robots as robot}
                     <li>
                       <strong>{robot.name}</strong>
-                      <span>{robot.status} · {robot.lives} Lives · {robot.damage} Damage</span>
+                      <span>
+                        {robot.status} · {robot.lives} Lives · {robot.damage} Damage
+                        {robot.lockedRegisters.length
+                          ? ` · Locked ${robot.lockedRegisters.map(({ register }) => `R${register}`).join('/')}`
+                          : ''}
+                      </span>
                     </li>
                   {/each}
                 </ul>
@@ -491,8 +496,9 @@
                   facing with no robot in line of sight within three spaces.
                 </p>
                 <p class="board-phase">
-                  Board phase: express conveyors → all conveyors → register pushers → gears.
-                  Exchange prints no pushers; register fixtures still cover that solver.
+                  Board phase: express conveyors → all conveyors → register pushers → gears →
+                  one laser snapshot. Exchange prints no pushers; fixtures cover that stage.
+                  Damage 9 repeats all five locked registers.
                 </p>
                 {#if reentryChoices.length > 0}
                   <div class="reentry-choice">

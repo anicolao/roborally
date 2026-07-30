@@ -8,9 +8,12 @@ import { PROGRAM_CARDS, type ProgramAction } from './program-manifest';
 import {
   applyProgramCard,
   applyReentryChoice,
+  createRaceRobotPositions,
   legalReentryChoices,
+  lockedRegisterNumbersForDamage,
   movementBlockedByWall,
   resolveBoardElements,
+  resolveLaserSnapshot,
   resolveProgrammedTurn,
   type ProgramResolution,
   type RaceRobotPosition,
@@ -32,6 +35,7 @@ function raceRobot(
     archive: { x: overrides.x, y: overrides.y },
     lives: 3,
     damage: 0,
+    lockedRegisters: [],
     status: 'active',
     destructionOrder: null,
     optionLossPending: false,
@@ -433,5 +437,217 @@ describe('priority Program movement', () => {
     resolveBoardElements([pushed], 2, trace, cells);
     expect(pushed.x).toBe(5);
     expect(trace).toContainEqual(expect.objectContaining({ kind: 'pusher' }));
+  });
+
+  it('casts robot lasers to the first target and stops at walls and intervening robots', () => {
+    const programming = createProgrammingState(
+      deriveRaceSetup(
+        [
+          { uid: 'shooter', name: 'Shooter', robotId: 'axle' },
+          { uid: 'target', name: 'Target', robotId: 'bit' }
+        ],
+        riskyExchangeConfig('LASER-RAYS')
+      ),
+      riskyExchangeConfig('LASER-RAYS')
+    );
+    const shooter = raceRobot({
+      uid: 'shooter',
+      name: 'Shooter',
+      x: 1,
+      y: 6,
+      facing: 'east'
+    });
+    const target = raceRobot({ uid: 'target', name: 'Target', x: 3, y: 6 });
+    const behind = raceRobot({ uid: 'behind', name: 'Behind', x: 5, y: 6 });
+    const trace: ResolutionTraceEntry[] = [];
+    resolveLaserSnapshot([shooter, target, behind], 1, trace, programming, []);
+    expect(target.damage).toBe(1);
+    expect(behind.damage).toBe(0);
+
+    const blockedShooter = raceRobot({
+      uid: 'blocked',
+      name: 'Blocked',
+      x: 4,
+      y: 5,
+      facing: 'east'
+    });
+    const blockedTarget = raceRobot({
+      uid: 'blocked-target',
+      name: 'Blocked Target',
+      x: 6,
+      y: 5
+    });
+    resolveLaserSnapshot(
+      [blockedShooter, blockedTarget],
+      2,
+      trace,
+      programming,
+      []
+    );
+    expect(blockedTarget.damage).toBe(0);
+  });
+
+  it('takes board and robot targets from one snapshot and locks damage registers', () => {
+    const config = riskyExchangeConfig('LASER-LOCKS');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'host', name: 'Ada', robotId: 'axle' },
+        { uid: 'guest', name: 'Grace', robotId: 'bit' }
+      ],
+      config
+    );
+    let programming = createProgrammingState(setup, config);
+    for (const player of programming.players) {
+      programming = submitProgram(
+        programming,
+        player.uid,
+        player.hand.slice(0, 5),
+        1_000
+      );
+    }
+    const robots = createRaceRobotPositions(setup);
+    const target = robots[0];
+    const other = robots[1];
+    target.x = 10;
+    target.y = 3;
+    target.damage = 4;
+    other.x = 1;
+    other.y = 16;
+    other.facing = 'south';
+    const laserLane: BoardCell[] = [
+      {
+        x: 10,
+        y: 3,
+        elements: [{ kind: 'laser', direction: 'east', beamCount: 1 }]
+      }
+    ];
+    const trace: ResolutionTraceEntry[] = [];
+
+    for (let register = 1; register <= 5; register += 1) {
+      resolveLaserSnapshot(robots, register, trace, programming, laserLane);
+    }
+
+    expect(target.damage).toBe(9);
+    expect(target.lockedRegisters.map(({ register }) => register)).toEqual([1, 2, 3, 4, 5]);
+    expect(target.lockedRegisters.map(({ cardId }) => cardId)).toEqual(
+      programming.players[0].registers.map(({ cardId }) => cardId)
+    );
+    expect(trace.filter(({ kind }) => kind === 'board-laser')).toHaveLength(5);
+  });
+
+  it('lets the nearest robot block a contiguous multi-beam board-laser lane', () => {
+    const config = riskyExchangeConfig('BOARD-BEAM');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'near', name: 'Near', robotId: 'axle' },
+        { uid: 'far', name: 'Far', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const near = raceRobot({
+      uid: 'near',
+      name: 'Near',
+      x: 10,
+      y: 3,
+      facing: 'north'
+    });
+    const far = raceRobot({
+      uid: 'far',
+      name: 'Far',
+      x: 12,
+      y: 3,
+      facing: 'south'
+    });
+    const cells: BoardCell[] = [10, 11, 12].map((x) => ({
+      x,
+      y: 3,
+      elements: [{ kind: 'laser', direction: 'east', beamCount: 2 }]
+    }));
+    const trace: ResolutionTraceEntry[] = [];
+    resolveLaserSnapshot([near, far], 1, trace, programming, cells);
+
+    expect(near.damage).toBe(2);
+    expect(far.damage).toBe(0);
+    expect(trace.filter(({ kind }) => kind === 'board-laser')).toHaveLength(2);
+  });
+
+  it('destroys on tenth damage and repeats all five fully locked cards', () => {
+    expect(
+      Array.from({ length: 10 }, (_, damage) => lockedRegisterNumbersForDamage(damage))
+    ).toEqual([
+      [],
+      [],
+      [],
+      [],
+      [],
+      [5],
+      [4, 5],
+      [3, 4, 5],
+      [2, 3, 4, 5],
+      [1, 2, 3, 4, 5]
+    ]);
+
+    const config = riskyExchangeConfig('FULLY-LOCKED');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'host', name: 'Ada', robotId: 'axle' },
+        { uid: 'guest', name: 'Grace', robotId: 'bit' }
+      ],
+      config
+    );
+    const lockedUid = setup.players[0].uid;
+    const lockedCards = {
+      1: 'program-010',
+      2: 'program-020',
+      3: 'program-030',
+      4: 'program-040',
+      5: 'program-050'
+    } as const;
+    let programming = createProgrammingState(
+      setup,
+      config,
+      { [lockedUid]: 9 },
+      { [lockedUid]: lockedCards }
+    );
+    for (const player of programming.players) {
+      programming = submitProgram(
+        programming,
+        player.uid,
+        player.uid === lockedUid ? [] : player.hand.slice(0, 5),
+        1_000
+      );
+    }
+    const repeated = resolveProgrammedTurn(programming, setup)!;
+    expect(
+      repeated.trace
+        .filter(({ actorUid, kind }) => actorUid === lockedUid && kind === 'reveal')
+        .map(({ cardId }) => cardId)
+    ).toEqual(Object.values(lockedCards));
+
+    const doomed = raceRobot({
+      uid: 'doomed',
+      name: 'Doomed',
+      x: 10,
+      y: 3,
+      damage: 9,
+      lives: 1
+    });
+    const trace: ResolutionTraceEntry[] = [];
+    resolveLaserSnapshot(
+      [doomed],
+      1,
+      trace,
+      programming,
+      [
+        {
+          x: 10,
+          y: 3,
+          elements: [{ kind: 'laser', direction: 'east', beamCount: 1 }]
+        }
+      ]
+    );
+    expect(doomed).toMatchObject({ status: 'eliminated', lives: 0, damage: 0 });
+    expect(trace).toContainEqual(expect.objectContaining({ kind: 'destroyed-damage' }));
   });
 });
