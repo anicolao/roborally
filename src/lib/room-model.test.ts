@@ -297,4 +297,103 @@ describe('immutable room replay', () => {
     expect(state.programming?.currentTurnDiscard).toHaveLength(8);
     expect(state.diagnostics).toEqual([]);
   });
+
+  it('pauses for owner-authored re-entry choices after ordinary Program destruction', () => {
+    const joinedHost = event('host', 2, 'player/joined', {
+      uid: 'host',
+      name: 'Ada',
+      robotId: 'axle'
+    }, 2);
+    const joinedGuest = event('guest', 1, 'player/joined', {
+      uid: 'guest',
+      name: 'Grace',
+      robotId: 'bit'
+    }, 3);
+    const configured = event('host', 3, 'race/configured', {
+      config: riskyExchangeConfig('PUSH-416')
+    }, 4);
+    const hostReady = event('host', 4, 'player/ready', {
+      uid: 'host',
+      configurationEventId: configured.id
+    }, 5);
+    const guestReady = event('guest', 2, 'player/ready', {
+      uid: 'guest',
+      configurationEventId: configured.id
+    }, 6);
+    const hostProgram = event('host', 5, 'program/submitted', {
+      uid: 'host',
+      turnId: 'turn-001',
+      cardIds: [
+        'program-520',
+        'program-300',
+        'program-060',
+        'program-170',
+        'program-140'
+      ]
+    }, 1_000);
+    const guestProgram = event('guest', 3, 'program/submitted', {
+      uid: 'guest',
+      turnId: 'turn-001',
+      cardIds: [
+        'program-570',
+        'program-250',
+        'program-800',
+        'program-820',
+        'program-790'
+      ]
+    }, 2_000);
+    const events = [
+      created,
+      joinedHost,
+      joinedGuest,
+      configured,
+      hostReady,
+      guestReady,
+      hostProgram,
+      guestProgram
+    ];
+    const destroyed = replayRoom(events);
+
+    expect(destroyed.resolution).toMatchObject({
+      phase: 'awaiting-reentry',
+      nextReentryUid: 'host'
+    });
+    expect(destroyed.resolution?.robots).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          uid: 'host',
+          status: 'destroyed',
+          destructionOrder: 1,
+          lives: 2
+        }),
+        expect.objectContaining({
+          uid: 'guest',
+          status: 'destroyed',
+          destructionOrder: 2,
+          lives: 2
+        })
+      ])
+    );
+
+    const hostReentry = event('host', 6, 'effect/chosen', {
+      uid: 'host',
+      turnId: 'turn-001',
+      choice: { kind: 'reentry', x: 7, y: 15, facing: 'north' }
+    }, 3_000);
+    const guestReentry = event('guest', 4, 'effect/chosen', {
+      uid: 'guest',
+      turnId: 'turn-001',
+      choice: { kind: 'reentry', x: 6, y: 15, facing: 'east' }
+    }, 4_000);
+    const reentered = replayRoom([...events, hostReentry, guestReentry]);
+
+    expect(reentered.resolution?.phase).toBe('turn-complete');
+    expect(reentered.resolution?.robots).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ uid: 'host', status: 'active', damage: 2 }),
+        expect.objectContaining({ uid: 'guest', status: 'active', damage: 2 })
+      ])
+    );
+    expect(reentered.diagnostics).toEqual([]);
+  });
 });

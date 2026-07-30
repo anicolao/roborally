@@ -18,6 +18,7 @@ import {
   normalizeRoomCode,
   replayRoom,
   type GameCreatedPayload,
+  type EffectChosenPayload,
   type PlayerJoinedPayload,
   type ProgramSubmittedPayload,
   type RaceConfiguredPayload,
@@ -171,6 +172,19 @@ export async function claimProgramTimeout(
   await appendRoomEvent(db, user, roomCode, 'program/timed-out', {
     targetUid,
     turnId: 'turn-001'
+  });
+}
+
+export async function chooseEffect(
+  db: Firestore,
+  user: User,
+  roomCode: string,
+  choice: EffectChosenPayload['choice']
+) {
+  await appendRoomEvent(db, user, roomCode, 'effect/chosen', {
+    uid: user.uid,
+    turnId: 'turn-001',
+    choice
   });
 }
 

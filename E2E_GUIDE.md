@@ -45,6 +45,14 @@ the same controls and public application behavior as a player.
 Pure unit and model tests remain necessary for combinatorial rules. They do not
 replace the tracer proving that a real player can reach the behavior.
 
+Scenario 006 follows that boundary deliberately: two ordinary browser-authored
+Programs create the push and both destructions, and each owner appends their
+own re-entry choice through the normal UI. Shared-archive adjacency and
+line-of-sight combinations are exhaustive pure fixtures because reaching a
+shared Archive marker also depends on the later flag/archive turn slice; the
+browser visibly exposes the same fallback rule until that complete-race
+scenario can exercise the combined history.
+
 ## Scenario layout
 
 Use the next three-digit sequence and a short kebab-case capability name:

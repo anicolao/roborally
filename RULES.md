@@ -372,6 +372,12 @@ Resolution pauses until the authorized player chooses a legal combination.
 
 The 2005 edition does **not** use virtual robots.
 
+The current implementation applies these rules to Program movement, including
+transactional push chains, pits, course edges, Life loss, elimination, and
+ordered re-entry. Until the reviewed Option manifest lands, every destruction
+still records the mandatory Option-loss decision point and deterministically
+continues because no Option can yet be owned.
+
 ## Option cards
 
 The 26 Option cards are public once drawn. Their printed text can modify
