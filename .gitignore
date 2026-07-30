@@ -1,0 +1,11 @@
+.direnv/
+.env
+.firebase/
+.svelte-kit/
+build/
+firebase-debug.log
+firestore-debug.log
+node_modules/
+playwright-report/
+result
+test-results/

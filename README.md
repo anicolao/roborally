@@ -61,9 +61,11 @@ enforces legal actions and masks information from its local display.
 
 ## Development status
 
-This milestone is documentation-only. Application scaffolding, Firebase
-configuration, tests, original assets, and deployment arrive together in the
-first end-to-end tracer bullet described in
+The first end-to-end tracer bullet now provides the static SvelteKit shell,
+anonymous Firebase initialization, append-only Firestore Rules and tests,
+deterministic Playwright screenshots, the generated application-shell
+walkthrough, repository verification hooks, and retained GitHub Pages preview
+workflow. Gameplay begins with room membership in the next slice described in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 Nix is always available and is the mandatory entry point for every tooling,
