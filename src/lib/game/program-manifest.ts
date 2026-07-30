@@ -10,14 +10,14 @@ export type ProgramAction =
   | 'move-3';
 
 export interface ProgramCard {
-  id: `program-${number}`;
+  id: `program-${string}`;
   action: ProgramAction;
   priority: number;
 }
 
 function cards(action: ProgramAction, priorities: readonly number[]): ProgramCard[] {
   return priorities.map((priority) => ({
-    id: `program-${priority}` as const,
+    id: `program-${String(priority).padStart(3, '0')}` as const,
     action,
     priority
   }));

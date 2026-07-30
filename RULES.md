@@ -152,6 +152,12 @@ PRNG to fill empty registers from that player's remaining hand. This is the
 online equivalent of the right-hand player choosing blindly; the choice must
 not depend on which browser claims the timeout.
 
+The implementation keeps each stable Program card in exactly one zone: draw
+pile, a player's hand, an unlocked register, a locked register, or the current
+turn discard. Submissions contain card IDs, are accepted only once, and cannot
+be retracted. A path preview describes card-only movement and is always labeled
+as excluding robot interference and unrevealed board outcomes.
+
 ## Power down
 
 Only a damaged robot may announce a power down. An announcement made during the

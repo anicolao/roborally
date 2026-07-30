@@ -19,6 +19,7 @@ import {
   replayRoom,
   type GameCreatedPayload,
   type PlayerJoinedPayload,
+  type ProgramSubmittedPayload,
   type RaceConfiguredPayload,
   type RoomEvent,
   type RoomEventPayload,
@@ -145,6 +146,31 @@ export async function markReady(
   await appendRoomEvent(db, user, roomCode, 'player/ready', {
     uid: user.uid,
     configurationEventId
+  });
+}
+
+export async function submitProgram(
+  db: Firestore,
+  user: User,
+  roomCode: string,
+  cardIds: ProgramSubmittedPayload['cardIds']
+) {
+  await appendRoomEvent(db, user, roomCode, 'program/submitted', {
+    uid: user.uid,
+    turnId: 'turn-001',
+    cardIds
+  });
+}
+
+export async function claimProgramTimeout(
+  db: Firestore,
+  user: User,
+  roomCode: string,
+  targetUid: string
+) {
+  await appendRoomEvent(db, user, roomCode, 'program/timed-out', {
+    targetUid,
+    turnId: 'turn-001'
   });
 }
 

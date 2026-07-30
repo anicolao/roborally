@@ -404,6 +404,8 @@ commits.
 
 ### 4. Shared-deck deal, hidden programs, and timer
 
+**Status:** Implemented as the fourth vertical tracer.
+
 - Implement available-card shuffle, round-robin dealing, damage-dependent hand
   size foundation, five register slots, locked-card conservation, submission,
   reveal barriers, and cleanup zones.
