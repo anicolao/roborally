@@ -214,6 +214,14 @@ Timer scenarios use an injected clock or explicit canonical timestamps.
 Randomness uses committed seeds and versioned PRNG output. A failed test must
 be reproducible with the same event stream, seed, and clock.
 
+For a canonical Firestore deadline, a scenario may shift the complete isolated
+room stream backward by a fixed duration through the emulator's privileged REST
+surface. Shift every event by the same amount so total ordering is preserved,
+then claim the timeout through the ordinary browser UI. This is a clock fixture,
+not a reducer shortcut: the actual client still writes the timeout event and
+every observer replays it. Never wait 30 real seconds or add a production
+test-only timer duration.
+
 Do not retry a flaky scenario into passing. Remove nondeterminism at its source.
 
 ## Animation and reduced motion

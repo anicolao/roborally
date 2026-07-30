@@ -61,7 +61,7 @@ enforces legal actions and masks information from its local display.
 
 ## Development status
 
-The first three end-to-end tracer bullets are implemented. The foundation
+The first four end-to-end tracer bullets are implemented. The foundation
 provides the static SvelteKit shell, repository verification, and retained
 GitHub Pages previews. Players can now create join links, claim one of eight
 unique robots, fill a two-to-eight-player room, reload, and reconstruct the
@@ -76,12 +76,22 @@ robots, flags, and semantic 12×16 course. The board has pan, zoom, fit, and a
 coordinate text equivalent. The transcription review is recorded in
 [the initial manifest review](docs/data/avalon-hill-2005-step3-review.md).
 
+The first turn now deals the seeded shared Program deck round-robin in original
+Dock order. Each player orders five cards with a labeled, explicitly
+non-authoritative preview and submits once. The projection conserves all 84
+stable card IDs across draw pile, hands, locked/unlocked registers, and turn
+discard; opponents see five face-down registers until the barrier closes. The
+next-to-last submission creates a canonical 30-second deadline, and a valid
+timeout event fills the last program from a versioned random stream.
+
 The generated browser walkthroughs cover
 [application readiness](tests/e2e/001-app-shell-and-deployment/README.md) and
 [create, join, full-room, and reload behavior](tests/e2e/002-create-join-and-replay-room/README.md),
 plus the
-[fixed-seed Risky Exchange setup](tests/e2e/003-configure-risky-exchange/README.md).
-Shared-deck dealing and programming are the next slice in
+[fixed-seed Risky Exchange setup](tests/e2e/003-configure-risky-exchange/README.md)
+and
+[shared-deck programming and timeout behavior](tests/e2e/004-shared-deck-deal-and-program/README.md).
+Priority movement and walls are the next slice in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 Nix is always available and is the mandatory entry point for every tooling,

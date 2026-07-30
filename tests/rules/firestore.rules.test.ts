@@ -118,4 +118,48 @@ describe('append-only game stream rules', () => {
       })
     );
   });
+
+  it('attributes private Program submissions and permits any member to claim a timeout', async () => {
+    const db = environment.authenticatedContext('robot-a').firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'games/room/events/robot-a-000001'), {
+        ...eventData('robot-a'),
+        type: 'program/submitted',
+        payload: {
+          uid: 'robot-a',
+          turnId: 'turn-001',
+          cardIds: [
+            'program-010',
+            'program-020',
+            'program-030',
+            'program-040',
+            'program-050'
+          ]
+        }
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, 'games/room/events/robot-a-000002'), {
+        ...eventData('robot-a'),
+        type: 'program/submitted',
+        clientSeq: 2,
+        payload: {
+          uid: 'robot-b',
+          turnId: 'turn-001',
+          cardIds: []
+        }
+      })
+    );
+    await assertSucceeds(
+      setDoc(doc(db, 'games/room/events/robot-a-000003'), {
+        ...eventData('robot-a'),
+        type: 'program/timed-out',
+        clientSeq: 3,
+        payload: {
+          targetUid: 'robot-b',
+          turnId: 'turn-001'
+        }
+      })
+    );
+  });
 });

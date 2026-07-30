@@ -8,6 +8,13 @@ import {
 } from './game/setup';
 import { BOARD_MANIFEST_VERSION, COURSE_MANIFEST_VERSION } from './game/course-manifest';
 import { PROGRAM_MANIFEST_VERSION } from './game/program-manifest';
+import type { ProgramCard } from './game/program-manifest';
+import {
+  createProgrammingState,
+  submitProgram,
+  timeOutProgram,
+  type ProgrammingState
+} from './game/programming';
 
 export const ROOM_SCHEMA_VERSION = 1;
 export const ROOM_REDUCER_VERSION = 'room-v1';
@@ -29,7 +36,9 @@ export type RoomEventType =
   | 'game/created'
   | 'player/joined'
   | 'race/configured'
-  | 'player/ready';
+  | 'player/ready'
+  | 'program/submitted'
+  | 'program/timed-out';
 
 export interface GameCreatedPayload {
   gameId: string;
@@ -52,11 +61,24 @@ export interface PlayerReadyPayload {
   configurationEventId: string;
 }
 
+export interface ProgramSubmittedPayload {
+  uid: string;
+  turnId: 'turn-001';
+  cardIds: ProgramCard['id'][];
+}
+
+export interface ProgramTimedOutPayload {
+  targetUid: string;
+  turnId: 'turn-001';
+}
+
 export type RoomEventPayload =
   | GameCreatedPayload
   | PlayerJoinedPayload
   | RaceConfiguredPayload
-  | PlayerReadyPayload;
+  | PlayerReadyPayload
+  | ProgramSubmittedPayload
+  | ProgramTimedOutPayload;
 
 export interface RoomEvent {
   id: string;
@@ -96,7 +118,9 @@ export interface ReplayDiagnostic {
     | 'invalid-configuration'
     | 'stale-configuration'
     | 'already-ready'
-    | 'race-already-started';
+    | 'race-already-started'
+    | 'invalid-program'
+    | 'invalid-timeout';
   message: string;
 }
 
@@ -109,6 +133,7 @@ export interface RoomState {
   configurationEventId: string;
   readyPlayerUids: string[];
   setup: RaceSetup | null;
+  programming: ProgrammingState | null;
   acceptedEventIds: string[];
   diagnostics: ReplayDiagnostic[];
 }
@@ -123,6 +148,7 @@ export function emptyRoomState(): RoomState {
     configurationEventId: '',
     readyPlayerUids: [],
     setup: null,
+    programming: null,
     acceptedEventIds: [],
     diagnostics: []
   };
@@ -340,7 +366,54 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       state.readyPlayerUids.push(event.actorUid);
       if (state.readyPlayerUids.length === state.players.length) {
         state.setup = deriveRaceSetup(state.players, state.configuration);
+        state.programming = createProgrammingState(state.setup, state.configuration);
       }
+    } else if (event.type === 'program/submitted') {
+      const payload = event.payload as ProgramSubmittedPayload;
+      if (
+        !payload ||
+        payload.uid !== event.actorUid ||
+        payload.turnId !== 'turn-001' ||
+        !Array.isArray(payload.cardIds) ||
+        !state.programming
+      ) {
+        diagnostic(state, event, 'invalid-program', 'The Program submission is malformed.');
+        continue;
+      }
+      const next = submitProgram(
+        state.programming,
+        event.actorUid,
+        payload.cardIds,
+        event.createdAt ?? 0
+      );
+      if (next.diagnostics.length !== state.programming.diagnostics.length) {
+        diagnostic(state, event, 'invalid-program', 'The Program submission is not legal.');
+        continue;
+      }
+      state.programming = next;
+    } else if (event.type === 'program/timed-out') {
+      const payload = event.payload as ProgramTimedOutPayload;
+      if (
+        !payload ||
+        payload.turnId !== 'turn-001' ||
+        typeof payload.targetUid !== 'string' ||
+        !state.programming ||
+        !state.configuration
+      ) {
+        diagnostic(state, event, 'invalid-timeout', 'The timeout claim is malformed.');
+        continue;
+      }
+      const next = timeOutProgram(
+        state.programming,
+        payload.targetUid,
+        event.createdAt ?? 0,
+        state.configuration.seed
+      );
+      if (next.diagnostics.length !== state.programming.diagnostics.length) {
+        diagnostic(state, event, 'invalid-timeout', 'The timeout claim is not yet legal.');
+        continue;
+      }
+      state.programming = next;
     } else {
       diagnostic(state, event, 'invalid-event', `Event ${event.id} has an unknown type.`);
       continue;

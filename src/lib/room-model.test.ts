@@ -237,4 +237,64 @@ describe('immutable room replay', () => {
       'invalid-configuration'
     ]);
   });
+
+  it('replays hidden Program submissions through the immutable event stream', () => {
+    const joinedHost = event('host', 2, 'player/joined', {
+      uid: 'host',
+      name: 'Ada',
+      robotId: 'axle'
+    }, 2);
+    const joinedGuest = event('guest', 1, 'player/joined', {
+      uid: 'guest',
+      name: 'Grace',
+      robotId: 'bit'
+    }, 3);
+    const configured = event('host', 3, 'race/configured', {
+      config: riskyExchangeConfig('PROGRAM-REPLAY')
+    }, 4);
+    const hostReady = event('host', 4, 'player/ready', {
+      uid: 'host',
+      configurationEventId: configured.id
+    }, 5);
+    const guestReady = event('guest', 2, 'player/ready', {
+      uid: 'guest',
+      configurationEventId: configured.id
+    }, 6);
+    const dealt = replayRoom([
+      created,
+      joinedHost,
+      joinedGuest,
+      configured,
+      hostReady,
+      guestReady
+    ]);
+    const hostHand = dealt.programming!.players.find(({ uid }) => uid === 'host')!.hand;
+    const guestHand = dealt.programming!.players.find(({ uid }) => uid === 'guest')!.hand;
+    const hostProgram = event('host', 5, 'program/submitted', {
+      uid: 'host',
+      turnId: 'turn-001',
+      cardIds: hostHand.slice(0, 5)
+    }, 1_000);
+    const guestProgram = event('guest', 3, 'program/submitted', {
+      uid: 'guest',
+      turnId: 'turn-001',
+      cardIds: guestHand.slice(0, 5)
+    }, 2_000);
+
+    const state = replayRoom([
+      created,
+      joinedHost,
+      joinedGuest,
+      configured,
+      hostReady,
+      guestReady,
+      hostProgram,
+      guestProgram
+    ]);
+
+    expect(state.programming?.phase).toBe('programmed');
+    expect(state.programming?.players.every(({ submitted }) => submitted)).toBe(true);
+    expect(state.programming?.currentTurnDiscard).toHaveLength(8);
+    expect(state.diagnostics).toEqual([]);
+  });
 });

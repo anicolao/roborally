@@ -8,6 +8,8 @@
   import type { Unsubscribe } from 'firebase/firestore';
   import type { FirebaseServices } from '$lib/firebase';
   import CourseBoard from '$lib/components/CourseBoard.svelte';
+  import { PROGRAM_CARDS, type ProgramCard } from '$lib/game/program-manifest';
+  import { previewProgram, programCardZones } from '$lib/game/programming';
   import { riskyExchangeConfig } from '$lib/game/setup';
   import {
     MAX_ROOM_PLAYERS,
@@ -39,6 +41,10 @@
   let copied = false;
   let setupSeed = 'RISKY-2005';
   let setupLives: 3 | 4 = 3;
+  let selectedProgramCardIds: ProgramCard['id'][] = [];
+  let clockNow = Date.now();
+  let clockInterval: ReturnType<typeof setInterval> | undefined;
+  let showProgramming = false;
   const buildHash = (import.meta.env.VITE_GIT_HASH ?? 'local-development').slice(0, 8);
 
   $: currentPlayer = services
@@ -50,6 +56,15 @@
     ? roomState.readyPlayerUids.includes(currentPlayer.uid)
     : false;
   $: isHost = currentPlayer?.uid === roomState.hostUid;
+  $: programmingPlayer = currentPlayer && roomState.programming
+    ? roomState.programming.players.find((player) => player.uid === currentPlayer.uid)
+    : undefined;
+  $: programPreview = programmingPlayer
+    ? previewProgram(programmingPlayer, selectedProgramCardIds)
+    : [];
+  $: deadlineSeconds = roomState.programming?.deadline
+    ? Math.max(0, Math.ceil((roomState.programming.deadline - clockNow) / 1000))
+    : null;
   $: normalizedName = normalizePlayerName(playerName);
   $: canSubmit =
     !!normalizedName &&
@@ -128,6 +143,7 @@
         mode = 'join';
         watchRoom(requestedRoom);
       }
+      clockInterval = setInterval(() => (clockNow = Date.now()), 250);
     } catch (error) {
       console.error(error);
       connectionState = 'error';
@@ -135,7 +151,10 @@
     }
   });
 
-  onDestroy(() => unsubscribe?.());
+  onDestroy(() => {
+    unsubscribe?.();
+    if (clockInterval) clearInterval(clockInterval);
+  });
 
   function showCreate() {
     mode = 'create';
@@ -238,6 +257,52 @@
     }
   }
 
+  function toggleProgramCard(cardId: ProgramCard['id']) {
+    if (programmingPlayer?.submitted) return;
+    if (selectedProgramCardIds.includes(cardId)) {
+      selectedProgramCardIds = selectedProgramCardIds.filter((selected) => selected !== cardId);
+    } else if (selectedProgramCardIds.length < 5) {
+      selectedProgramCardIds = [...selectedProgramCardIds, cardId];
+    }
+  }
+
+  async function submitProgramCards() {
+    if (
+      !services ||
+      !roomService ||
+      selectedProgramCardIds.length !== 5 ||
+      programmingPlayer?.submitted
+    ) return;
+    pending = true;
+    try {
+      await roomService.submitProgram(services.db, services.user, roomCode, selectedProgramCardIds);
+      selectedProgramCardIds = [];
+    } catch (error) {
+      console.error(error);
+      formError = 'The immutable Program submission could not be written.';
+    } finally {
+      pending = false;
+    }
+  }
+
+  async function claimTimeout() {
+    const targetUid = roomState.programming?.deadlinePlayerUid;
+    if (!services || !roomService || !targetUid || deadlineSeconds !== 0) return;
+    pending = true;
+    try {
+      await roomService.claimProgramTimeout(services.db, services.user, roomCode, targetUid);
+    } catch (error) {
+      console.error(error);
+      formError = 'The timeout claim could not be written.';
+    } finally {
+      pending = false;
+    }
+  }
+
+  function cardForId(cardId: ProgramCard['id'] | null) {
+    return PROGRAM_CARDS.find((card) => card.id === cardId);
+  }
+
   const cards = [
     { label: 'Move 3', priority: '840', mark: '↑↑↑' },
     { label: 'Rotate left', priority: '390', mark: '↶' },
@@ -268,18 +333,29 @@
     <section class="configured-race" aria-labelledby="race-heading">
       <CourseBoard setup={roomState.setup} />
       <aside class="setup-summary">
-        <p class="eyebrow"><span>03</span> SEEDED RACE SETUP</p>
-        <h1 id="race-heading">Ready.<br /><em>Race.</em></h1>
+        <p class="eyebrow">
+          <span>{showProgramming ? '04' : '03'}</span>
+          {showProgramming ? 'SHARED DECK / TURN 1' : 'SEEDED RACE SETUP'}
+        </p>
+        <h1 id="race-heading">
+          {showProgramming ? 'Program.' : 'Ready.'}<br />
+          <em>{showProgramming ? 'Secret.' : 'Race.'}</em>
+        </h1>
         <p class="lede">
-          The readiness barrier is closed. This exact setup is derived from seed
-          <strong>{roomState.configuration.seed}</strong> and immutable manifest versions.
+          {#if showProgramming}
+            Seed <strong>{roomState.configuration.seed}</strong> deals one shared 84-card deck in
+            original Dock order. Opponent programs stay masked until the barrier closes.
+          {:else}
+            The readiness barrier is closed. This exact setup is derived from seed
+            <strong>{roomState.configuration.seed}</strong> and immutable manifest versions.
+          {/if}
         </p>
         <dl class="setup-facts">
           <div><dt>{roomState.configuration.lives}</dt><dd>Lives each</dd></div>
           <div><dt>{roomState.setup.players.length}</dt><dd>robots</dd></div>
           <div><dt>3</dt><dd>flags</dd></div>
         </dl>
-        <ol class="setup-order" aria-label="Original Dock order">
+        <ol class="setup-order compact" aria-label="Original Dock order">
           {#each roomState.setup.players as player}
             {@const robot = ROBOTS.find((entry) => entry.id === player.robotId)}
             <li>
@@ -290,10 +366,94 @@
             </li>
           {/each}
         </ol>
-        <p class="archive-note">
-          Every robot’s archive begins on its Dock cell. Option cards remain disabled until their
-          complete 2005 manifest is reviewed.
-        </p>
+        {#if showProgramming && programmingPlayer && roomState.programming}
+          <section class="program-console" aria-labelledby="hand-heading">
+            <div class="program-head">
+              <h2 id="hand-heading">Your hand · {programmingPlayer.hand.length || 'submitted'}</h2>
+              <span>{selectedProgramCardIds.length}/5 registers</span>
+            </div>
+            <p class="conservation" data-testid="program-conservation">
+              {programCardZones(roomState.programming).size}/84 cards accounted ·
+              {roomState.programming.drawPile.length} undealt ·
+              {roomState.programming.currentTurnDiscard.length} turn discard
+            </p>
+            {#if programmingPlayer.submitted}
+              <p class="submission-state">Program committed. It cannot be inspected or changed.</p>
+            {:else}
+              <div class="program-hand" aria-label="Your Program hand">
+                {#each programmingPlayer.hand as cardId}
+                  {@const card = cardForId(cardId)}
+                  {@const selectedIndex = selectedProgramCardIds.indexOf(cardId)}
+                  <button
+                    type="button"
+                    class:selected={selectedIndex >= 0}
+                    aria-pressed={selectedIndex >= 0}
+                    aria-label={`${card?.action} priority ${card?.priority}`}
+                    onclick={() => toggleProgramCard(cardId)}
+                  >
+                    <small>{selectedIndex >= 0 ? `R${selectedIndex + 1}` : card?.priority}</small>
+                    <strong>{card?.action.replaceAll('-', ' ')}</strong>
+                  </button>
+                {/each}
+              </div>
+              <ol class="chosen-registers" aria-label="Chosen registers">
+                {#each Array(5) as _, index}
+                  {@const card = cardForId(selectedProgramCardIds[index] ?? null)}
+                  <li><span>R{index + 1}</span>{card ? `${card.action} ${card.priority}` : 'empty'}</li>
+                {/each}
+              </ol>
+              <p class="preview-note">
+                Preview excludes robots and unrevealed board outcomes.
+                {programPreview.join(' · ')}
+              </p>
+              <button
+                type="button"
+                onclick={submitProgramCards}
+                disabled={pending || selectedProgramCardIds.length !== 5}
+              >Submit immutable program</button>
+            {/if}
+
+            <ul class="opponent-programs" aria-label="Program submission status">
+              {#each roomState.programming.players as player}
+                {#if player.uid !== currentPlayer.uid}
+                  {@const roomPlayer = roomState.players.find(({ uid }) => uid === player.uid)}
+                  <li>
+                    <strong>{roomPlayer?.name}</strong>
+                    {#if roomState.programming.phase === 'programmed'}
+                      <span>
+                        {player.registers.map(({ cardId }) => cardForId(cardId)?.priority).join(' · ')}
+                      </span>
+                    {:else if player.submitted}
+                      <span aria-label="Five face-down registers">▰ ▰ ▰ ▰ ▰</span>
+                    {:else}
+                      <span>programming</span>
+                    {/if}
+                  </li>
+                {/if}
+              {/each}
+            </ul>
+            {#if roomState.programming.deadlinePlayerUid}
+              {@const timedPlayer = roomState.players.find(({ uid }) => uid === roomState.programming?.deadlinePlayerUid)}
+              <div class="deadline" role="timer">
+                <span>{timedPlayer?.name} has {deadlineSeconds} seconds</span>
+                <button type="button" onclick={claimTimeout} disabled={deadlineSeconds !== 0 || pending}>
+                  Fill timed-out program
+                </button>
+              </div>
+            {/if}
+          </section>
+        {/if}
+        {#if showProgramming}
+          <p class="archive-note">Archives remain on the original Dock cells. Trusted-client secrecy masks, but cannot cryptographically hide, readable events.</p>
+        {:else}
+          <p class="archive-note">
+            Every robot’s archive begins on its Dock cell. Option cards remain disabled until their
+            complete 2005 manifest is reviewed.
+          </p>
+          <button class="open-programming" type="button" onclick={() => (showProgramming = true)}>
+            Open programming console
+          </button>
+        {/if}
       </aside>
     </section>
   {:else if mode === 'room' && currentPlayer}
@@ -1099,6 +1259,123 @@
     font-size: 10px;
     line-height: 1.4;
   }
+  .setup-order.compact { max-height: 105px; }
+  .setup-order.compact li { padding: 5px 7px; }
+  .program-console {
+    display: grid;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 9px;
+    border-top: 1px solid #344043;
+  }
+  .program-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .program-head h2 {
+    margin: 0;
+    color: #eef4ee;
+    font: 700 10px 'Space Mono', monospace;
+    text-transform: uppercase;
+  }
+  .program-head span { color: #d2ff37; font: 8px 'Space Mono', monospace; text-transform: uppercase; }
+  .program-hand {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+  }
+  .program-hand button {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    min-height: 44px;
+    place-items: center;
+    padding: 12px 3px 3px;
+    border-color: #465356;
+    color: #a8b3b1;
+    background: #111819;
+  }
+  .program-hand button.selected {
+    border-color: #d2ff37;
+    color: #eef4ee;
+    background: #1a2418;
+  }
+  .program-hand small {
+    position: absolute;
+    top: 3px;
+    right: 4px;
+    color: #ffcf4b;
+    font: 7px 'Space Mono', monospace;
+  }
+  .program-hand strong {
+    overflow: hidden;
+    font: 700 7px 'Space Mono', monospace;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .chosen-registers {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 3px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .chosen-registers li {
+    display: grid;
+    min-width: 0;
+    min-height: 29px;
+    place-items: center;
+    overflow: hidden;
+    border: 1px solid #354245;
+    color: #788588;
+    font: 6px 'Space Mono', monospace;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .chosen-registers span { color: #d2ff37; }
+  .preview-note, .submission-state {
+    margin: 0;
+    color: #778487;
+    font-size: 8px;
+    line-height: 1.35;
+  }
+  .conservation {
+    margin: 0;
+    color: #ffcf4b;
+    font: 7px 'Space Mono', monospace;
+    text-transform: uppercase;
+  }
+  .submission-state {
+    padding: 9px;
+    border: 1px solid #53613b;
+    color: #d2ff37;
+    background: #151d13;
+  }
+  .opponent-programs {
+    display: grid;
+    gap: 3px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .opponent-programs li, .deadline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 28px;
+    padding: 4px 6px;
+    border: 1px solid #354245;
+    color: #7f8d8f;
+    font: 7px 'Space Mono', monospace;
+    text-transform: uppercase;
+  }
+  .opponent-programs strong { color: #eef4ee; }
+  .deadline { gap: 7px; border-color: #8b7130; color: #ffcf4b; }
+  .deadline button { min-height: 28px; padding: 0 6px; font-size: 7px; }
 
   footer {
     border-top: 1px solid #344043;
@@ -1187,9 +1464,14 @@
     .setup-facts div { padding: 5px 2px; }
     .setup-facts dt { font-size: 12px; }
     .setup-order { max-height: 155px; margin-top: 7px; }
+    .setup-order.compact { max-height: 76px; }
     .setup-order li { grid-template-columns: 24px minmax(0, 1fr); padding: 5px; }
     .setup-order em { grid-column: 2; }
     .archive-note { margin-top: 6px; font-size: 8px; }
+    .program-console { margin-top: 6px; padding-top: 6px; }
+    .program-hand { grid-template-columns: repeat(3, 1fr); }
+    .program-hand button { min-height: 37px; padding: 10px 2px 2px; }
+    .chosen-registers li { min-height: 23px; }
     .seats { grid-template-rows: repeat(4, 1fr); gap: 4px; }
     .seats li {
       min-height: 0;

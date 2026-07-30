@@ -29,7 +29,9 @@ service cloud.firestore {
           'game/created',
           'player/joined',
           'race/configured',
-          'player/ready'
+          'player/ready',
+          'program/submitted',
+          'program/timed-out'
         ]
         && request.resource.data.payload is map
         && (
@@ -55,6 +57,19 @@ service cloud.firestore {
             request.resource.data.type == 'player/ready'
             && request.resource.data.payload.uid == request.auth.uid
             && request.resource.data.payload.configurationEventId is string
+          )
+          ||
+          (
+            request.resource.data.type == 'program/submitted'
+            && request.resource.data.payload.uid == request.auth.uid
+            && request.resource.data.payload.turnId == 'turn-001'
+            && request.resource.data.payload.cardIds is list
+          )
+          ||
+          (
+            request.resource.data.type == 'program/timed-out'
+            && request.resource.data.payload.targetUid is string
+            && request.resource.data.payload.turnId == 'turn-001'
           )
         );
       allow update, delete: if false;
