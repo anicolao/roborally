@@ -417,6 +417,8 @@ commits.
 
 ### 5. Priority movement, rotation, and walls
 
+**Status:** Implemented as the fifth vertical tracer.
+
 - Execute all seven instruction classes and all 84 unique priorities across
   five registers.
 - Implement stepwise Move 2/3, Back Up, rotations, walls, course seams, and

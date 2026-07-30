@@ -331,11 +331,11 @@
 
   {#if mode === 'room' && currentPlayer && roomState.setup && roomState.configuration}
     <section class="configured-race" aria-labelledby="race-heading">
-      <CourseBoard setup={roomState.setup} />
+      <CourseBoard setup={roomState.setup} robots={roomState.resolution?.robots} />
       <aside class="setup-summary">
         <p class="eyebrow">
-          <span>{showProgramming ? '04' : '03'}</span>
-          {showProgramming ? 'SHARED DECK / TURN 1' : 'SEEDED RACE SETUP'}
+          <span>{roomState.resolution ? '05' : showProgramming ? '04' : '03'}</span>
+          {roomState.resolution ? 'PRIORITY RESOLUTION' : showProgramming ? 'SHARED DECK / TURN 1' : 'SEEDED RACE SETUP'}
         </p>
         <h1 id="race-heading">
           {showProgramming ? 'Program.' : 'Ready.'}<br />
@@ -440,6 +440,27 @@
                   Fill timed-out program
                 </button>
               </div>
+            {/if}
+            {#if roomState.resolution}
+              <section class="resolution-console" aria-labelledby="resolution-heading">
+                <h2 id="resolution-heading">Turn 1 complete · {roomState.resolution.trace.length} microsteps</h2>
+                <ol aria-label="Resolution feed" aria-live="polite">
+                  {#each roomState.resolution.trace.slice(-5) as entry, index}
+                    <li style={`--trace-index:${index}`}>
+                      <span>R{entry.register} · {entry.priority}</span>
+                      {entry.text}
+                    </li>
+                  {/each}
+                </ol>
+                <details class="full-resolution">
+                  <summary>Full resolution text</summary>
+                  <ol aria-label="Full resolution feed">
+                    {#each roomState.resolution.trace as entry}
+                      <li><span>R{entry.register} · {entry.priority}</span>{entry.text}</li>
+                    {/each}
+                  </ol>
+                </details>
+              </section>
             {/if}
           </section>
         {/if}
@@ -1376,6 +1397,51 @@
   .opponent-programs strong { color: #eef4ee; }
   .deadline { gap: 7px; border-color: #8b7130; color: #ffcf4b; }
   .deadline button { min-height: 28px; padding: 0 6px; font-size: 7px; }
+  .resolution-console {
+    display: grid;
+    gap: 5px;
+    min-height: 0;
+    padding-top: 6px;
+    border-top: 1px solid #344043;
+  }
+  .resolution-console h2 {
+    margin: 0;
+    color: #d2ff37;
+    font: 700 8px 'Space Mono', monospace;
+    text-transform: uppercase;
+  }
+  .resolution-console ol {
+    display: grid;
+    gap: 2px;
+    max-height: 100px;
+    margin: 0;
+    padding: 0;
+    overflow: auto;
+    list-style: none;
+  }
+  .resolution-console li {
+    padding: 3px 5px;
+    border-left: 2px solid #536164;
+    color: #91a09f;
+    background: #0d1314;
+    font-size: 8px;
+    line-height: 1.25;
+    animation: trace-in 180ms ease-out both;
+    animation-delay: calc(var(--trace-index) * 18ms);
+  }
+  .resolution-console li span { color: #ffcf4b; font: 7px 'Space Mono', monospace; }
+  .full-resolution summary {
+    color: #91a09f;
+    cursor: pointer;
+    font: 7px 'Space Mono', monospace;
+    text-transform: uppercase;
+  }
+  .full-resolution:not([open]) > ol { display: none; }
+  .full-resolution[open] > ol { max-height: 160px; margin-top: 4px; }
+  @keyframes trace-in {
+    from { opacity: 0; transform: translateX(5px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
 
   footer {
     border-top: 1px solid #344043;
@@ -1500,6 +1566,10 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    *, *::before, *::after {
+      scroll-behavior: auto !important;
+      transition: none !important;
+      animation: none !important;
+    }
   }
 </style>

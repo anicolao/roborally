@@ -15,6 +15,7 @@ import {
   timeOutProgram,
   type ProgrammingState
 } from './game/programming';
+import { resolveProgrammedTurn, type ProgramResolution } from './game/movement';
 
 export const ROOM_SCHEMA_VERSION = 1;
 export const ROOM_REDUCER_VERSION = 'room-v1';
@@ -134,6 +135,7 @@ export interface RoomState {
   readyPlayerUids: string[];
   setup: RaceSetup | null;
   programming: ProgrammingState | null;
+  resolution: ProgramResolution | null;
   acceptedEventIds: string[];
   diagnostics: ReplayDiagnostic[];
 }
@@ -149,6 +151,7 @@ export function emptyRoomState(): RoomState {
     readyPlayerUids: [],
     setup: null,
     programming: null,
+    resolution: null,
     acceptedEventIds: [],
     diagnostics: []
   };
@@ -391,6 +394,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         continue;
       }
       state.programming = next;
+      state.resolution = state.setup ? resolveProgrammedTurn(next, state.setup) : null;
     } else if (event.type === 'program/timed-out') {
       const payload = event.payload as ProgramTimedOutPayload;
       if (
@@ -414,6 +418,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         continue;
       }
       state.programming = next;
+      state.resolution = state.setup ? resolveProgrammedTurn(next, state.setup) : null;
     } else {
       diagnostic(state, event, 'invalid-event', `Event ${event.id} has an unknown type.`);
       continue;

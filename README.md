@@ -61,7 +61,7 @@ enforces legal actions and masks information from its local display.
 
 ## Development status
 
-The first four end-to-end tracer bullets are implemented. The foundation
+The first five end-to-end tracer bullets are implemented. The foundation
 provides the static SvelteKit shell, repository verification, and retained
 GitHub Pages previews. Players can now create join links, claim one of eight
 unique robots, fill a two-to-eight-player room, reload, and reconstruct the
@@ -84,14 +84,23 @@ discard; opponents see five face-down registers until the barrier closes. The
 next-to-last submission creates a canonical 30-second deadline, and a valid
 timeout event fills the last program from a versioned random stream.
 
+Once the programming barrier closes, all five registers now resolve from the
+highest unique priority to the lowest. Move 2 and Move 3 advance one cell at a
+time; Back Up preserves facing; both quarter-turns and U-Turn rotate in place;
+and walls are checked from both adjacent cells across factory-board seams. The
+same reducer trace drives final robot geometry, a reduced-motion-safe visual
+feed, and a complete text equivalent.
+
 The generated browser walkthroughs cover
 [application readiness](tests/e2e/001-app-shell-and-deployment/README.md) and
 [create, join, full-room, and reload behavior](tests/e2e/002-create-join-and-replay-room/README.md),
 plus the
 [fixed-seed Risky Exchange setup](tests/e2e/003-configure-risky-exchange/README.md)
 and
-[shared-deck programming and timeout behavior](tests/e2e/004-shared-deck-deal-and-program/README.md).
-Priority movement and walls are the next slice in
+[shared-deck programming and timeout behavior](tests/e2e/004-shared-deck-deal-and-program/README.md),
+and
+[priority movement, rotations, seams, and walls](tests/e2e/005-program-priority-movement-and-walls/README.md).
+Pushing, pits, destruction, Lives, and re-entry are the next slice in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 Nix is always available and is the mandatory entry point for every tooling,

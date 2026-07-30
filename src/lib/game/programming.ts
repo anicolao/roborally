@@ -200,7 +200,10 @@ export function timeOutProgram(
     return state;
   }
 
-  const random = createPrng(`${seed}:${state.turnId}:timeout:${targetUid}`);
+  // Anonymous Firebase UIDs differ between otherwise identical runs. Deal order is
+  // Dock order, so it is the canonical stable identity for timeout randomization.
+  const targetDealIndex = state.players.indexOf(target);
+  const random = createPrng(`${seed}:${state.turnId}:timeout:dock-${targetDealIndex + 1}`);
   const available = [...target.hand];
   for (let index = available.length - 1; index > 0; index -= 1) {
     const selected = Math.floor(random() * (index + 1));

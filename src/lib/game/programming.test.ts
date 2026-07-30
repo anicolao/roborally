@@ -125,13 +125,54 @@ describe('shared Program deck', () => {
     expect(
       timedOut.players.find(({ uid }) => uid === targetUid)?.registers.map(({ cardId }) => cardId)
     ).toEqual([
-      'program-410',
-      'program-440',
+      'program-430',
+      'program-010',
       'program-810',
-      'program-620',
-      'program-630'
+      'program-820',
+      'program-310'
     ]);
     expect(programCardZones(timedOut)).toHaveLength(84);
+  });
+
+  it('randomizes timeout fills by stable Dock order rather than ephemeral UIDs', () => {
+    const replacementSetup = {
+      ...setup,
+      players: setup.players.map((player, index) => ({
+        ...player,
+        uid: `replacement-${index + 1}`
+      }))
+    };
+    const original = createProgrammingState(setup, config);
+    const replacement = createProgrammingState(replacementSetup, config);
+    const originalSubmitted = submitProgram(
+      original,
+      original.players[0].uid,
+      original.players[0].hand.slice(0, 5),
+      1_000
+    );
+    const replacementSubmitted = submitProgram(
+      replacement,
+      replacement.players[0].uid,
+      replacement.players[0].hand.slice(0, 5),
+      1_000
+    );
+
+    const originalTimedOut = timeOutProgram(
+      originalSubmitted,
+      originalSubmitted.deadlinePlayerUid!,
+      originalSubmitted.deadline!,
+      config.seed
+    );
+    const replacementTimedOut = timeOutProgram(
+      replacementSubmitted,
+      replacementSubmitted.deadlinePlayerUid!,
+      replacementSubmitted.deadline!,
+      config.seed
+    );
+
+    expect(
+      replacementTimedOut.players[1].registers.map(({ cardId }) => cardId)
+    ).toEqual(originalTimedOut.players[1].registers.map(({ cardId }) => cardId));
   });
 
   it('labels previews as non-authoritative and excludes interference', () => {

@@ -9,12 +9,20 @@
   } from '$lib/game/course-manifest';
   import { ROBOTS } from '$lib/room-model';
   import type { RaceSetup } from '$lib/game/setup';
+  import type { RaceRobotPosition } from '$lib/game/movement';
 
-  let { setup }: { setup: RaceSetup } = $props();
+  let { setup, robots }: { setup: RaceSetup; robots?: RaceRobotPosition[] } = $props();
 
   let zoom = $state(1);
   let panX = $state(0);
   let panY = $state(0);
+  const displayedRobots = $derived(
+    robots?.map((robot) => ({
+      ...robot,
+      name: setup.players.find(({ uid }) => uid === robot.uid)?.name ?? robot.uid,
+      position: { x: robot.x, y: robot.y }
+    })) ?? setup.players
+  );
 
   const cells = Array.from({ length: 16 * 12 }, (_, index) => ({
     x: (index % 12) + 1,
@@ -58,7 +66,7 @@
   function describeCell(x: number, y: number): string {
     const contents = boardCells.get(`${x},${y}`)?.elements.map(elementLabel) ?? [];
     const flag = flags.get(`${x},${y}`);
-    const robots = setup.players.filter((player) => player.position.x === x && player.position.y === y);
+    const robots = displayedRobots.filter((player) => player.position.x === x && player.position.y === y);
     if (flag) contents.push(`Flag ${flag}`);
     for (const robot of robots) contents.push(`${robot.name}'s ${robot.robotId}, facing ${robot.facing}`);
     return contents.length ? `Column ${x}, row ${y}: ${contents.join(', ')}` : `Column ${x}, row ${y}: floor`;
@@ -118,7 +126,7 @@
           {#each walls.filter((wall) => wall.x === position.x && wall.y === position.y) as wall}
             <span class={`wall ${wall.edge}`}></span>
           {/each}
-          {#each setup.players.filter((player) => player.position.x === position.x && player.position.y === position.y) as player}
+          {#each displayedRobots.filter((player) => player.position.x === position.x && player.position.y === position.y) as player}
             {@const robot = ROBOTS.find((entry) => entry.id === player.robotId)}
             <span class={`race-robot facing-${player.facing}`} title={`${player.name}, ${robot?.name}, facing ${player.facing}`}>
               <i></i>{robot?.mark}
