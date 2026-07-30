@@ -35,7 +35,7 @@ and browser-level tracer bullets verified with Playwright.
 - Reconnect and replay from the complete immutable event history.
 - Keyboard-, touch-, phone-, tablet-, and desktop-friendly play.
 
-The first complete race will use **Risky Exchange**, the published easy course
+The first complete race will use **Risky Exchange**, the published medium course
 on the Exchange board for two to eight players. Later slices add the remaining
 board faces, Option cards, expert variants, team courses, and multi-board
 courses without replacing the real multiplayer path with a mock.
@@ -61,7 +61,7 @@ enforces legal actions and masks information from its local display.
 
 ## Development status
 
-The first two end-to-end tracer bullets are implemented. The foundation
+The first three end-to-end tracer bullets are implemented. The foundation
 provides the static SvelteKit shell, repository verification, and retained
 GitHub Pages previews. Players can now create join links, claim one of eight
 unique robots, fill a two-to-eight-player room, reload, and reconstruct the
@@ -69,10 +69,19 @@ same seating from the ordered append-only Firestore stream. Invalid,
 conflicting, stale, or incompatible events produce replay diagnostics without
 partially changing the projected room.
 
+The host can now commit the reviewed 2005 Risky Exchange manifests and a setup
+seed. Configuration-scoped readiness events close into a deterministic first
+player, original Dock order, three/four-Life setup, archives, north-facing
+robots, flags, and semantic 12×16 course. The board has pan, zoom, fit, and a
+coordinate text equivalent. The transcription review is recorded in
+[the initial manifest review](docs/data/avalon-hill-2005-step3-review.md).
+
 The generated browser walkthroughs cover
 [application readiness](tests/e2e/001-app-shell-and-deployment/README.md) and
-[create, join, full-room, and reload behavior](tests/e2e/002-create-join-and-replay-room/README.md).
-Reviewed 2005 setup and Risky Exchange are the next slice in
+[create, join, full-room, and reload behavior](tests/e2e/002-create-join-and-replay-room/README.md),
+plus the
+[fixed-seed Risky Exchange setup](tests/e2e/003-configure-risky-exchange/README.md).
+Shared-deck dealing and programming are the next slice in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 Nix is always available and is the mandatory entry point for every tooling,

@@ -7,6 +7,8 @@
   import { onDestroy, onMount } from 'svelte';
   import type { Unsubscribe } from 'firebase/firestore';
   import type { FirebaseServices } from '$lib/firebase';
+  import CourseBoard from '$lib/components/CourseBoard.svelte';
+  import { riskyExchangeConfig } from '$lib/game/setup';
   import {
     MAX_ROOM_PLAYERS,
     ROBOTS,
@@ -35,6 +37,8 @@
   let formError = '';
   let pending = false;
   let copied = false;
+  let setupSeed = 'RISKY-2005';
+  let setupLives: 3 | 4 = 3;
   const buildHash = (import.meta.env.VITE_GIT_HASH ?? 'local-development').slice(0, 8);
 
   $: currentPlayer = services
@@ -42,6 +46,10 @@
     : undefined;
   $: unavailableRobots = new Set(roomState.players.map((player) => player.robotId));
   $: roomIsFull = roomState.players.length >= MAX_ROOM_PLAYERS;
+  $: currentPlayerReady = currentPlayer
+    ? roomState.readyPlayerUids.includes(currentPlayer.uid)
+    : false;
+  $: isHost = currentPlayer?.uid === roomState.hostUid;
   $: normalizedName = normalizePlayerName(playerName);
   $: canSubmit =
     !!normalizedName &&
@@ -195,6 +203,41 @@
     copied = true;
   }
 
+  async function configureRiskyExchange() {
+    if (!services || !roomService || !isHost || roomState.players.length < 2) return;
+    pending = true;
+    formError = '';
+    try {
+      await roomService.configureRace(services.db, services.user, roomCode, {
+        config: riskyExchangeConfig(setupSeed.trim() || 'RISKY-2005', setupLives)
+      });
+    } catch (error) {
+      console.error(error);
+      formError = 'The race configuration event could not be written.';
+    } finally {
+      pending = false;
+    }
+  }
+
+  async function becomeReady() {
+    if (!services || !roomService || !roomState.configurationEventId || currentPlayerReady) return;
+    pending = true;
+    formError = '';
+    try {
+      await roomService.markReady(
+        services.db,
+        services.user,
+        roomCode,
+        roomState.configurationEventId
+      );
+    } catch (error) {
+      console.error(error);
+      formError = 'The readiness event could not be written.';
+    } finally {
+      pending = false;
+    }
+  }
+
   const cards = [
     { label: 'Move 3', priority: '840', mark: '↑↑↑' },
     { label: 'Rotate left', priority: '390', mark: '↶' },
@@ -221,7 +264,39 @@
     </div>
   </header>
 
-  {#if mode === 'room' && currentPlayer}
+  {#if mode === 'room' && currentPlayer && roomState.setup && roomState.configuration}
+    <section class="configured-race" aria-labelledby="race-heading">
+      <CourseBoard setup={roomState.setup} />
+      <aside class="setup-summary">
+        <p class="eyebrow"><span>03</span> SEEDED RACE SETUP</p>
+        <h1 id="race-heading">Ready.<br /><em>Race.</em></h1>
+        <p class="lede">
+          The readiness barrier is closed. This exact setup is derived from seed
+          <strong>{roomState.configuration.seed}</strong> and immutable manifest versions.
+        </p>
+        <dl class="setup-facts">
+          <div><dt>{roomState.configuration.lives}</dt><dd>Lives each</dd></div>
+          <div><dt>{roomState.setup.players.length}</dt><dd>robots</dd></div>
+          <div><dt>3</dt><dd>flags</dd></div>
+        </dl>
+        <ol class="setup-order" aria-label="Original Dock order">
+          {#each roomState.setup.players as player}
+            {@const robot = ROBOTS.find((entry) => entry.id === player.robotId)}
+            <li>
+              <span>D{player.dock}</span>
+              <strong>{player.name}</strong>
+              <small>{robot?.name} · row {player.position.y}, column {player.position.x} · facing north</small>
+              {#if player.uid === roomState.setup.firstPlayerUid}<em>first player</em>{/if}
+            </li>
+          {/each}
+        </ol>
+        <p class="archive-note">
+          Every robot’s archive begins on its Dock cell. Option cards remain disabled until their
+          complete 2005 manifest is reviewed.
+        </p>
+      </aside>
+    </section>
+  {:else if mode === 'room' && currentPlayer}
     <section class="lobby" aria-labelledby="room-heading">
       <div class="room-console">
         <p class="eyebrow"><span>02</span> IMMUTABLE RACE CONTROL</p>
@@ -240,6 +315,38 @@
           <div><dt>{roomState.diagnostics.length}</dt><dd>replay diagnostics</dd></div>
         </dl>
         <p class="identity">Identity <strong>{identityLabel}</strong> · Seat {currentPlayer.seat}</p>
+        {#if roomState.players.length >= 2}
+          <div class="race-config" aria-label="Risky Exchange configuration">
+            {#if isHost}
+              <label>
+                Setup seed
+                <input bind:value={setupSeed} maxlength="64" aria-label="Setup seed" />
+              </label>
+              <label>
+                Lives
+                <select bind:value={setupLives} aria-label="Starting Lives">
+                  <option value={3}>3 Lives</option>
+                  <option value={4} disabled={roomState.players.length < 5}>4 Lives (5+ players)</option>
+                </select>
+              </label>
+              <button type="button" onclick={configureRiskyExchange} disabled={pending}>
+                {roomState.configuration ? 'Replace configuration' : 'Configure Risky Exchange'}
+              </button>
+            {:else if !roomState.configuration}
+              <p>Host is configuring Risky Exchange.</p>
+            {/if}
+            {#if roomState.configuration}
+              <p class="configuration-lock">
+                Risky Exchange · seed {roomState.configuration.seed} ·
+                {roomState.configuration.lives} Lives
+              </p>
+              <button type="button" onclick={becomeReady} disabled={pending || currentPlayerReady}>
+                {currentPlayerReady ? 'Ready event written' : 'Ready for race'}
+              </button>
+            {/if}
+          </div>
+        {/if}
+        {#if formError}<p class="form-error" role="alert">{formError}</p>{/if}
       </div>
 
       <div class="seat-console">
@@ -259,7 +366,9 @@
                   <strong>{player.name}</strong>
                   <small>{robot?.name} {player.uid === roomState.hostUid ? '· host' : ''}</small>
                 </span>
-                <span class="seat-state">linked</span>
+                <span class="seat-state">
+                  {roomState.readyPlayerUids.includes(player.uid) ? 'ready' : 'linked'}
+                </span>
               {:else}
                 <span class="robot-token empty" aria-hidden="true">--</span>
                 <span class="seat-name"><strong>Open dock</strong><small>Waiting for racer</small></span>
@@ -268,8 +377,14 @@
             </li>
           {/each}
         </ol>
-        <p class="room-ready" class:full={roomIsFull}>
-          {roomIsFull ? 'All eight robots linked — configuration unlocks in Step 3.' : 'Waiting for at least two racers.'}
+        <p class="room-ready" class:full={roomState.readyPlayerUids.length === roomState.players.length && roomState.players.length >= 2}>
+          {#if roomState.configuration}
+            {roomState.readyPlayerUids.length}/{roomState.players.length} racers ready for the immutable setup barrier.
+          {:else if roomState.players.length >= 2}
+            Host may configure the reviewed Risky Exchange course.
+          {:else}
+            Waiting for at least two racers.
+          {/if}
         </p>
       </div>
     </section>
@@ -899,6 +1014,91 @@
     text-transform: uppercase;
   }
   .room-ready.full { border-color: #72892c; color: #d2ff37; }
+  .race-config {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    margin-top: 12px;
+    padding: 10px;
+    border: 1px solid #3d494b;
+    background: #0e1415;
+  }
+  .race-config label {
+    display: grid;
+    gap: 4px;
+    color: #819093;
+    font: 8px 'Space Mono', monospace;
+    text-transform: uppercase;
+  }
+  .race-config input, .race-config select {
+    min-width: 0;
+    height: 34px;
+    padding: 0 7px;
+    border: 1px solid #465356;
+    border-radius: 0;
+    color: #edf3ed;
+    background: #101718;
+    font: 9px 'Space Mono', monospace;
+  }
+  .race-config button, .race-config p { grid-column: 1 / -1; }
+  .race-config p {
+    margin: 0;
+    color: #839194;
+    font: 8px/1.4 'Space Mono', monospace;
+    text-transform: uppercase;
+  }
+  .race-config .configuration-lock { color: #d2ff37; }
+  .configured-race {
+    display: grid;
+    min-height: 0;
+    grid-template-columns: minmax(500px, 1.3fr) minmax(300px, .7fr);
+    gap: clamp(20px, 4vw, 54px);
+    padding: 20px 0;
+  }
+  .setup-summary {
+    align-self: center;
+    min-width: 0;
+  }
+  .setup-summary h1 { font-size: clamp(42px, 4.6vw, 64px); }
+  .setup-summary h1 em { color: #d2ff37; -webkit-text-stroke: 0; }
+  .setup-summary .lede strong { color: #eef4ee; font-family: 'Space Mono', monospace; }
+  .setup-facts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin: 17px 0 0;
+    border-top: 1px solid #344043;
+    border-bottom: 1px solid #344043;
+  }
+  .setup-facts div { padding: 9px 4px; }
+  .setup-facts dt { color: #d2ff37; font: 700 16px 'Space Mono', monospace; }
+  .setup-facts dd { margin: 2px 0 0; color: #718083; font-size: 8px; text-transform: uppercase; }
+  .setup-order {
+    display: grid;
+    gap: 4px;
+    max-height: 210px;
+    margin: 12px 0 0;
+    padding: 0;
+    overflow: auto;
+    list-style: none;
+  }
+  .setup-order li {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    gap: 3px 7px;
+    padding: 7px;
+    border: 1px solid #354245;
+    background: #101617;
+  }
+  .setup-order li > span { grid-row: 1 / 3; color: #d2ff37; font: 700 10px 'Space Mono', monospace; }
+  .setup-order strong { color: #e7ede8; font-size: 11px; }
+  .setup-order small { grid-column: 2 / 4; color: #778487; font: 7px 'Space Mono', monospace; text-transform: uppercase; }
+  .setup-order em { color: #ffcf4b; font: 7px 'Space Mono', monospace; font-style: normal; text-transform: uppercase; }
+  .archive-note {
+    margin: 10px 0 0;
+    color: #778487;
+    font-size: 10px;
+    line-height: 1.4;
+  }
 
   footer {
     border-top: 1px solid #344043;
@@ -975,6 +1175,21 @@
       padding: 9px;
       box-shadow: 10px 12px 0 rgba(0,0,0,.16);
     }
+    .configured-race {
+      grid-template-columns: minmax(0, 1fr) 190px;
+      gap: 10px;
+      padding: 10px 0;
+    }
+    .setup-summary .eyebrow { margin-bottom: 7px; }
+    .setup-summary h1 { font-size: 28px; }
+    .setup-summary .lede { max-width: none; margin: 8px 0 0; font-size: 9px; }
+    .setup-facts { margin-top: 8px; }
+    .setup-facts div { padding: 5px 2px; }
+    .setup-facts dt { font-size: 12px; }
+    .setup-order { max-height: 155px; margin-top: 7px; }
+    .setup-order li { grid-template-columns: 24px minmax(0, 1fr); padding: 5px; }
+    .setup-order em { grid-column: 2; }
+    .archive-note { margin-top: 6px; font-size: 8px; }
     .seats { grid-template-rows: repeat(4, 1fr); gap: 4px; }
     .seats li {
       min-height: 0;
@@ -992,6 +1207,14 @@
     .lede, .facts { display: none; }
     .copy { grid-template-columns: 1fr; }
     .actions { margin-top: 9px; }
+  }
+  @media (max-width: 560px) {
+    .configured-race {
+      grid-template-columns: minmax(0, 1fr) 145px;
+    }
+    .setup-summary h1 { font-size: 22px; }
+    .setup-summary .lede { font-size: 8px; }
+    .setup-order small { display: none; }
   }
 
   @media (prefers-reduced-motion: reduce) {

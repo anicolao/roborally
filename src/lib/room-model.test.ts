@@ -7,6 +7,7 @@ import {
   replayRoom,
   type RoomEvent
 } from './room-model';
+import { riskyExchangeConfig } from './game/setup';
 
 function event(
   actorUid: string,
@@ -140,5 +141,100 @@ describe('immutable room replay', () => {
     expect(firstReplay.players).toHaveLength(MAX_ROOM_PLAYERS);
     expect(firstReplay.diagnostics.at(-1)?.code).toBe('room-full');
     expect(secondReplay).toEqual(firstReplay);
+  });
+
+  it('closes a configuration-scoped readiness barrier into the exact seeded setup', () => {
+    const joinedHost = event('host', 2, 'player/joined', {
+      uid: 'host',
+      name: 'Ada',
+      robotId: 'axle'
+    }, 2);
+    const joinedGuest = event('guest', 1, 'player/joined', {
+      uid: 'guest',
+      name: 'Grace',
+      robotId: 'bit'
+    }, 3);
+    const configured = event('host', 3, 'race/configured', {
+      config: riskyExchangeConfig('RISKY-6')
+    }, 4);
+    const hostReady = event('host', 4, 'player/ready', {
+      uid: 'host',
+      configurationEventId: configured.id
+    }, 5);
+    const guestReady = event('guest', 2, 'player/ready', {
+      uid: 'guest',
+      configurationEventId: configured.id
+    }, 6);
+
+    const state = replayRoom([
+      guestReady,
+      hostReady,
+      configured,
+      joinedGuest,
+      joinedHost,
+      created
+    ]);
+
+    expect(state.diagnostics).toEqual([]);
+    expect(state.readyPlayerUids).toEqual(['host', 'guest']);
+    expect(state.setup?.firstPlayerUid).toBe('guest');
+    expect(state.setup?.players.map(({ uid, dock, facing, lives }) => ({
+      uid,
+      dock,
+      facing,
+      lives
+    }))).toEqual([
+      { uid: 'guest', dock: 1, facing: 'north', lives: 3 },
+      { uid: 'host', dock: 2, facing: 'north', lives: 3 }
+    ]);
+  });
+
+  it('invalidates readiness on reconfiguration and rejects unsupported manifests', () => {
+    const joinedHost = event('host', 2, 'player/joined', {
+      uid: 'host',
+      name: 'Ada',
+      robotId: 'axle'
+    }, 2);
+    const joinedGuest = event('guest', 1, 'player/joined', {
+      uid: 'guest',
+      name: 'Grace',
+      robotId: 'bit'
+    }, 3);
+    const configured = event('host', 3, 'race/configured', {
+      config: riskyExchangeConfig('first')
+    }, 4);
+    const ready = event('guest', 2, 'player/ready', {
+      uid: 'guest',
+      configurationEventId: configured.id
+    }, 5);
+    const replacement = event('host', 4, 'race/configured', {
+      config: riskyExchangeConfig('replacement')
+    }, 6);
+    const staleReady = event('guest', 3, 'player/ready', {
+      uid: 'guest',
+      configurationEventId: configured.id
+    }, 7);
+    const unsupported = event('host', 5, 'race/configured', {
+      config: { ...riskyExchangeConfig('bad'), boardManifestVersion: 'future' }
+    } as never, 8);
+
+    const state = replayRoom([
+      created,
+      joinedHost,
+      joinedGuest,
+      configured,
+      ready,
+      replacement,
+      staleReady,
+      unsupported
+    ]);
+
+    expect(state.configuration?.seed).toBe('replacement');
+    expect(state.readyPlayerUids).toEqual([]);
+    expect(state.setup).toBeNull();
+    expect(state.diagnostics.map(({ code }) => code)).toEqual([
+      'stale-configuration',
+      'invalid-configuration'
+    ]);
   });
 });

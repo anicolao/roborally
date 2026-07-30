@@ -66,9 +66,10 @@ All players draw from the same 84-card deck:
 | U-Turn | 6 | Turn 180° in place. |
 
 Each physical card has one unique numeric priority. Higher numbers execute
-first. The implementation must transcribe and review all 84 card instances,
-including the exact priority and turn direction, before multiplayer programming
-can be considered complete; action counts alone are not a sufficient manifest.
+first. All 84 instances now have reviewed stable IDs, exact priorities, and
+directions in the initial
+[manifest review](docs/data/avalon-hill-2005-step3-review.md); action counts
+alone are not treated as a sufficient manifest.
 
 Cards in locked registers remain out of the available deck. At the start of
 each turn, shuffle the available Program cards and deal the required hands face
@@ -96,6 +97,11 @@ or re-entry.
 for the optional four-life rule. The versioned PRNG derives the first player,
 deck shuffles, and every later random fill. Deal cards round-robin in original
 Dock order so every client consumes randomness identically.
+
+Readiness is configuration-scoped. Replacing a lobby configuration invalidates
+every prior ready event. The first event prefix in which all currently seated
+players are ready closes the barrier and derives the immutable setup. A race
+cannot be reconfigured or joined after that point.
 
 ## Turn overview
 

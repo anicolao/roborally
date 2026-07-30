@@ -392,6 +392,8 @@ commits.
 
 ### 3. Reviewed 2005 setup and Risky Exchange
 
+**Status:** Implemented as the third vertical tracer.
+
 - Transcribe and review the 84-card Program manifest, Exchange board, required
   Docking Bay face, and Risky Exchange diagram.
 - Implement edition/course versions, seeded first player, original Dock order,
