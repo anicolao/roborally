@@ -60,6 +60,13 @@ Exchange and Docking Bay A print neither curved belts nor pushers, so the
 browser asserts their absence and exhaustive pure fixtures cover both curve
 rotations and every register-gated pusher behavior.
 
+Scenario 008 uses four ordinary player contexts to produce repeated,
+simultaneous robot fire and a six-damage lock state. It asserts the same public
+damage and register locks in owner and observer views. Board-beam obstruction,
+all ten damage rows, exact locked-card IDs, tenth-damage destruction, and a
+five-register repeated locked Program remain exhaustive reducer fixtures until
+the complete-race browser history supplies multiple live turns.
+
 ## Scenario layout
 
 Use the next three-digit sequence and a short kebab-case capability name:

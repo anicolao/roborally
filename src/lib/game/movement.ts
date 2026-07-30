@@ -11,6 +11,12 @@ import type { ProgrammingState } from './programming';
 import type { RaceSetup } from './setup';
 
 export type RobotBoardStatus = 'active' | 'destroyed' | 'eliminated';
+export type RegisterNumber = 1 | 2 | 3 | 4 | 5;
+
+export interface LockedRegisterState {
+  register: RegisterNumber;
+  cardId: ProgramCard['id'];
+}
 
 export interface RaceRobotPosition {
   uid: string;
@@ -22,6 +28,7 @@ export interface RaceRobotPosition {
   archive: { x: number; y: number };
   lives: number;
   damage: number;
+  lockedRegisters: LockedRegisterState[];
   status: RobotBoardStatus;
   destructionOrder: number | null;
   optionLossPending: boolean;
@@ -46,7 +53,11 @@ export type ResolutionTraceKind =
   | 'conveyor-conflict'
   | 'pusher'
   | 'pusher-blocked'
-  | 'gear';
+  | 'gear'
+  | 'board-laser'
+  | 'robot-laser'
+  | 'damage'
+  | 'destroyed-damage';
 
 export interface ResolutionTraceEntry {
   id: string;
@@ -180,7 +191,7 @@ function activeRobotAt(
 function destroyRobot(
   robots: RaceRobotPosition[],
   robot: RaceRobotPosition,
-  hazard: 'pit' | 'edge',
+  hazard: 'pit' | 'edge' | 'damage',
   register: number,
   card: ProgramCard | null,
   trace: ResolutionTraceEntry[]
@@ -190,6 +201,7 @@ function destroyRobot(
     Math.max(0, ...robots.map(({ destructionOrder }) => destructionOrder ?? 0)) + 1;
   robot.lives -= 1;
   robot.damage = 0;
+  robot.lockedRegisters = [];
   robot.optionLossPending = false;
   robot.status = robot.lives > 0 ? 'destroyed' : 'eliminated';
   addTrace(
@@ -197,8 +209,14 @@ function destroyRobot(
     register,
     robot.uid,
     card,
-    hazard === 'pit' ? 'destroyed-pit' : 'destroyed-edge',
-    `${robot.name} was destroyed ${hazard === 'pit' ? 'by a pit' : 'off course'} ` +
+    hazard === 'pit'
+      ? 'destroyed-pit'
+      : hazard === 'edge'
+        ? 'destroyed-edge'
+        : 'destroyed-damage',
+    `${robot.name} was destroyed ${
+      hazard === 'pit' ? 'by a pit' : hazard === 'edge' ? 'off course' : 'by tenth damage'
+    } ` +
       `as destruction ${robot.destructionOrder}.`
   );
   addTrace(
@@ -539,6 +557,142 @@ export function resolveBoardElements(
   }
 }
 
+export function lockedRegisterNumbersForDamage(damage: number): RegisterNumber[] {
+  if (!Number.isInteger(damage) || damage < 0 || damage > 9) {
+    throw new Error('Lockable damage must be an integer from zero through nine.');
+  }
+  const lockedCount = Math.max(0, damage - 4);
+  return Array.from(
+    { length: lockedCount },
+    (_, index) => (5 - index) as RegisterNumber
+  ).sort((left, right) => left - right);
+}
+
+function synchronizeLockedRegisters(
+  robot: RaceRobotPosition,
+  programming: ProgrammingState
+) {
+  const player = programming.players.find(({ uid }) => uid === robot.uid);
+  if (!player || robot.status !== 'active') return;
+  const expected = lockedRegisterNumbersForDamage(robot.damage);
+  robot.lockedRegisters = expected.flatMap((register) => {
+    const cardId = player.registers[register - 1].cardId;
+    return cardId ? [{ register, cardId }] : [];
+  });
+}
+
+interface LaserHit {
+  sourceUid: string | null;
+  targetUid: string;
+  kind: 'board-laser' | 'robot-laser';
+}
+
+export function resolveLaserSnapshot(
+  robots: RaceRobotPosition[],
+  register: number,
+  trace: ResolutionTraceEntry[],
+  programming: ProgrammingState,
+  cells: readonly BoardCell[] = worldBoardCells
+) {
+  const activeSnapshot = robots.filter(({ status }) => status === 'active');
+  const hits: LaserHit[] = [];
+
+  const laserSegments = cells.flatMap((cell) =>
+    cell.elements
+      .filter(
+        (element): element is Extract<BoardElement, { kind: 'laser' }> =>
+          element.kind === 'laser'
+      )
+      .map((laser) => ({ cell, laser }))
+  );
+  const segmentAt = (
+    x: number,
+    y: number,
+    direction: Direction,
+    beamCount: 1 | 2 | 3
+  ) =>
+    laserSegments.find(
+      ({ cell, laser }) =>
+        cell.x === x &&
+        cell.y === y &&
+        laser.direction === direction &&
+        laser.beamCount === beamCount
+    );
+  const laserSources = laserSegments.filter(({ cell, laser }) => {
+    const [dx, dy] = steps[laser.direction];
+    return !segmentAt(cell.x - dx, cell.y - dy, laser.direction, laser.beamCount);
+  });
+  for (const { cell, laser } of laserSources) {
+    const [dx, dy] = steps[laser.direction];
+    let cursorX = cell.x;
+    let cursorY = cell.y;
+    while (segmentAt(cursorX, cursorY, laser.direction, laser.beamCount)) {
+      const target = activeRobotAt(activeSnapshot, cursorX, cursorY);
+      if (target) {
+        for (let beam = 0; beam < laser.beamCount; beam += 1) {
+          hits.push({ sourceUid: null, targetUid: target.uid, kind: 'board-laser' });
+        }
+        break;
+      }
+      if (movementBlockedByWall(cursorX, cursorY, laser.direction)) break;
+      cursorX += dx;
+      cursorY += dy;
+    }
+  }
+
+  for (const shooter of activeSnapshot) {
+    let cursorX = shooter.x;
+    let cursorY = shooter.y;
+    const [dx, dy] = steps[shooter.facing];
+    while (courseContains(cursorX, cursorY)) {
+      if (movementBlockedByWall(cursorX, cursorY, shooter.facing)) break;
+      cursorX += dx;
+      cursorY += dy;
+      if (!courseContains(cursorX, cursorY)) break;
+      const target = activeRobotAt(activeSnapshot, cursorX, cursorY, shooter.uid);
+      if (!target) continue;
+      hits.push({
+        sourceUid: shooter.uid,
+        targetUid: target.uid,
+        kind: 'robot-laser'
+      });
+      break;
+    }
+  }
+
+  for (const hit of hits) {
+    const target = robots.find(({ uid }) => uid === hit.targetUid);
+    if (!target || target.status !== 'active') continue;
+    const shooter = hit.sourceUid
+      ? robots.find(({ uid }) => uid === hit.sourceUid)
+      : undefined;
+    addTrace(
+      trace,
+      register,
+      hit.sourceUid ?? target.uid,
+      null,
+      hit.kind,
+      hit.kind === 'board-laser'
+        ? `A board laser hit ${target.name} at (${target.x},${target.y}).`
+        : `${shooter?.name ?? 'A robot'} fired through clear line of sight and hit ${target.name}.`
+    );
+    target.damage += 1;
+    addTrace(
+      trace,
+      register,
+      target.uid,
+      null,
+      'damage',
+      `${target.name} took one damage and now has ${target.damage}.`
+    );
+    if (target.damage >= 10) {
+      destroyRobot(robots, target, 'damage', register, null, trace);
+    } else {
+      synchronizeLockedRegisters(target, programming);
+    }
+  }
+}
+
 function nextDestroyedRobot(robots: readonly RaceRobotPosition[]) {
   return [...robots]
     .filter(({ status }) => status === 'destroyed')
@@ -617,7 +771,8 @@ export function applyReentryChoice(
     ...current,
     robots: current.robots.map((robot) => ({
       ...robot,
-      archive: { ...robot.archive }
+      archive: { ...robot.archive },
+      lockedRegisters: robot.lockedRegisters.map((locked) => ({ ...locked }))
     })),
     trace: [...current.trace]
   };
@@ -666,6 +821,7 @@ export function createRaceRobotPositions(setup: RaceSetup): RaceRobotPosition[] 
     archive: { ...player.archive },
     lives: player.lives,
     damage: 0,
+    lockedRegisters: [],
     status: 'active',
     destructionOrder: null,
     optionLossPending: false
@@ -678,7 +834,11 @@ export function resolveProgrammedTurn(
   initialRobots = createRaceRobotPositions(setup)
 ): ProgramResolution | null {
   if (programming.phase !== 'programmed') return null;
-  const robots = initialRobots.map((robot) => ({ ...robot, archive: { ...robot.archive } }));
+  const robots = initialRobots.map((robot) => ({
+    ...robot,
+    archive: { ...robot.archive },
+    lockedRegisters: robot.lockedRegisters.map((locked) => ({ ...locked }))
+  }));
   const trace: ResolutionTraceEntry[] = [];
   const cards = new Map(PROGRAM_CARDS.map((card) => [card.id, card]));
 
@@ -693,6 +853,7 @@ export function resolveProgrammedTurn(
       .sort((left, right) => right.card.priority - left.card.priority);
     for (const entry of queue) applyProgramCard(robots, entry.uid, entry.card, register, trace);
     resolveBoardElements(robots, register, trace);
+    resolveLaserSnapshot(robots, register, trace, programming);
   }
 
   const resolution: ProgramResolution = {

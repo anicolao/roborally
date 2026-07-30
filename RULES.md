@@ -288,6 +288,11 @@ position, then apply their hits, so damage from one beam does not retroactively
 change another beam's target. Option cards can replace or modify fire and may
 create ordered decisions; their printed timing controls.
 
+The current implementation uses that exact snapshot policy. Board beam lanes
+and robot rays stop at walls or the nearest robot, each beam applies one hit,
+and damage immediately projects retained locked-card IDs or tenth-damage
+destruction.
+
 ### Flags and archives
 
 After lasers:
