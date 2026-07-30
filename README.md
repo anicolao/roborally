@@ -91,6 +91,14 @@ and walls are checked from both adjacent cells across factory-board seams. The
 same reducer trace drives final robot geometry, a reduced-motion-safe visual
 feed, and a complete text equivalent.
 
+Robot movement now resolves chained pushes as one transaction: a wall anywhere
+in the chain cancels it, while pits and course edges destroy robots
+immediately. Destruction records exact order, runs the future Option-loss hook,
+spends a Life, and either eliminates the robot or pauses cleanup for an
+owner-authored re-entry cell and facing. Re-entry restores the robot with two
+damage; shared archives use empty adjacent cells and the published three-space
+line-of-sight restriction.
+
 The generated browser walkthroughs cover
 [application readiness](tests/e2e/001-app-shell-and-deployment/README.md) and
 [create, join, full-room, and reload behavior](tests/e2e/002-create-join-and-replay-room/README.md),
@@ -99,8 +107,10 @@ plus the
 and
 [shared-deck programming and timeout behavior](tests/e2e/004-shared-deck-deal-and-program/README.md),
 and
-[priority movement, rotations, seams, and walls](tests/e2e/005-program-priority-movement-and-walls/README.md).
-Pushing, pits, destruction, Lives, and re-entry are the next slice in
+[priority movement, rotations, seams, and walls](tests/e2e/005-program-priority-movement-and-walls/README.md),
+and
+[pushing, destruction, Lives, and ordered re-entry](tests/e2e/006-pushing-destruction-lives-and-reentry/README.md).
+Conveyors, pushers, and gears are the next slice in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 Nix is always available and is the mandatory entry point for every tooling,

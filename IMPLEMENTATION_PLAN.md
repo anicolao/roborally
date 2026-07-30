@@ -429,6 +429,8 @@ commits.
 
 ### 6. Pushing, pits, edges, destruction, and re-entry
 
+**Status:** Implemented as the sixth vertical tracer.
+
 - Implement push chains, transactional wall blocking, pits, off-course
   destruction, Option-loss placeholder, Lives, elimination, and destruction
   order.

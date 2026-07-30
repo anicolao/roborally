@@ -17,11 +17,13 @@
   let panX = $state(0);
   let panY = $state(0);
   const displayedRobots = $derived(
-    robots?.map((robot) => ({
-      ...robot,
-      name: setup.players.find(({ uid }) => uid === robot.uid)?.name ?? robot.uid,
-      position: { x: robot.x, y: robot.y }
-    })) ?? setup.players
+    robots
+      ?.filter(({ status }) => status === 'active')
+      .map((robot) => ({
+        ...robot,
+        name: setup.players.find(({ uid }) => uid === robot.uid)?.name ?? robot.uid,
+        position: { x: robot.x, y: robot.y }
+      })) ?? setup.players
   );
 
   const cells = Array.from({ length: 16 * 12 }, (_, index) => ({

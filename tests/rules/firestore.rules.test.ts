@@ -162,4 +162,43 @@ describe('append-only game stream rules', () => {
       })
     );
   });
+
+  it('allows only the owner to append a shaped re-entry choice', async () => {
+    const db = environment.authenticatedContext('robot-a').firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'games/room/events/robot-a-000001'), {
+        ...eventData('robot-a'),
+        type: 'effect/chosen',
+        payload: {
+          uid: 'robot-a',
+          turnId: 'turn-001',
+          choice: { kind: 'reentry', x: 6, y: 15, facing: 'north' }
+        }
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, 'games/room/events/robot-a-000002'), {
+        ...eventData('robot-a'),
+        type: 'effect/chosen',
+        clientSeq: 2,
+        payload: {
+          uid: 'robot-b',
+          turnId: 'turn-001',
+          choice: { kind: 'reentry', x: 7, y: 15, facing: 'north' }
+        }
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, 'games/room/events/robot-a-000003'), {
+        ...eventData('robot-a'),
+        type: 'effect/chosen',
+        clientSeq: 3,
+        payload: {
+          uid: 'robot-a',
+          turnId: 'turn-001',
+          choice: { kind: 'reentry', x: 6, y: 15, facing: 'diagonal' }
+        }
+      })
+    );
+  });
 });

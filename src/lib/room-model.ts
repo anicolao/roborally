@@ -15,7 +15,12 @@ import {
   timeOutProgram,
   type ProgrammingState
 } from './game/programming';
-import { resolveProgrammedTurn, type ProgramResolution } from './game/movement';
+import {
+  applyReentryChoice,
+  resolveProgrammedTurn,
+  type ProgramResolution,
+  type ReentryChoice
+} from './game/movement';
 
 export const ROOM_SCHEMA_VERSION = 1;
 export const ROOM_REDUCER_VERSION = 'room-v1';
@@ -39,7 +44,8 @@ export type RoomEventType =
   | 'race/configured'
   | 'player/ready'
   | 'program/submitted'
-  | 'program/timed-out';
+  | 'program/timed-out'
+  | 'effect/chosen';
 
 export interface GameCreatedPayload {
   gameId: string;
@@ -73,13 +79,20 @@ export interface ProgramTimedOutPayload {
   turnId: 'turn-001';
 }
 
+export interface EffectChosenPayload {
+  uid: string;
+  turnId: 'turn-001';
+  choice: ReentryChoice & { kind: 'reentry' };
+}
+
 export type RoomEventPayload =
   | GameCreatedPayload
   | PlayerJoinedPayload
   | RaceConfiguredPayload
   | PlayerReadyPayload
   | ProgramSubmittedPayload
-  | ProgramTimedOutPayload;
+  | ProgramTimedOutPayload
+  | EffectChosenPayload;
 
 export interface RoomEvent {
   id: string;
@@ -121,7 +134,8 @@ export interface ReplayDiagnostic {
     | 'already-ready'
     | 'race-already-started'
     | 'invalid-program'
-    | 'invalid-timeout';
+    | 'invalid-timeout'
+    | 'invalid-effect';
   message: string;
 }
 
@@ -419,6 +433,29 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       }
       state.programming = next;
       state.resolution = state.setup ? resolveProgrammedTurn(next, state.setup) : null;
+    } else if (event.type === 'effect/chosen') {
+      const payload = event.payload as EffectChosenPayload;
+      if (
+        !payload ||
+        payload.uid !== event.actorUid ||
+        payload.turnId !== 'turn-001' ||
+        payload.choice?.kind !== 'reentry' ||
+        !state.resolution
+      ) {
+        diagnostic(state, event, 'invalid-effect', 'The effect choice is malformed.');
+        continue;
+      }
+      const next = applyReentryChoice(state.resolution, event.actorUid, payload.choice);
+      if (next === state.resolution) {
+        diagnostic(
+          state,
+          event,
+          'invalid-effect',
+          'The re-entry cell or facing is not currently legal.'
+        );
+        continue;
+      }
+      state.resolution = next;
     } else {
       diagnostic(state, event, 'invalid-event', `Event ${event.id} has an unknown type.`);
       continue;

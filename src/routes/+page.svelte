@@ -9,6 +9,7 @@
   import type { FirebaseServices } from '$lib/firebase';
   import CourseBoard from '$lib/components/CourseBoard.svelte';
   import { PROGRAM_CARDS, type ProgramCard } from '$lib/game/program-manifest';
+  import { legalReentryChoices } from '$lib/game/movement';
   import { previewProgram, programCardZones } from '$lib/game/programming';
   import { riskyExchangeConfig } from '$lib/game/setup';
   import {
@@ -45,6 +46,7 @@
   let clockNow = Date.now();
   let clockInterval: ReturnType<typeof setInterval> | undefined;
   let showProgramming = false;
+  let selectedReentryChoice = '';
   const buildHash = (import.meta.env.VITE_GIT_HASH ?? 'local-development').slice(0, 8);
 
   $: currentPlayer = services
@@ -65,6 +67,10 @@
   $: deadlineSeconds = roomState.programming?.deadline
     ? Math.max(0, Math.ceil((roomState.programming.deadline - clockNow) / 1000))
     : null;
+  $: reentryChoices =
+    currentPlayer && roomState.resolution
+      ? legalReentryChoices(roomState.resolution, currentPlayer.uid)
+      : [];
   $: normalizedName = normalizePlayerName(playerName);
   $: canSubmit =
     !!normalizedName &&
@@ -299,6 +305,27 @@
     }
   }
 
+  async function submitReentryChoice() {
+    if (!services || !roomService || !selectedReentryChoice) return;
+    const [x, y, facing] = selectedReentryChoice.split(',');
+    if (!x || !y || !['north', 'east', 'south', 'west'].includes(facing)) return;
+    pending = true;
+    try {
+      await roomService.chooseEffect(services.db, services.user, roomCode, {
+        kind: 'reentry',
+        x: Number(x),
+        y: Number(y),
+        facing: facing as 'north' | 'east' | 'south' | 'west'
+      });
+      selectedReentryChoice = '';
+    } catch (error) {
+      console.error(error);
+      formError = 'The re-entry choice could not be written.';
+    } finally {
+      pending = false;
+    }
+  }
+
   function cardForId(cardId: ProgramCard['id'] | null) {
     return PROGRAM_CARDS.find((card) => card.id === cardId);
   }
@@ -443,11 +470,49 @@
             {/if}
             {#if roomState.resolution}
               <section class="resolution-console" aria-labelledby="resolution-heading">
-                <h2 id="resolution-heading">Turn 1 complete · {roomState.resolution.trace.length} microsteps</h2>
+                <h2 id="resolution-heading">
+                  Turn 1 {roomState.resolution.phase === 'turn-complete' ? 'complete' : 'awaiting re-entry'}
+                  · {roomState.resolution.trace.length} microsteps
+                </h2>
+                <ul class="robot-state" aria-label="Robot Life and damage state">
+                  {#each roomState.resolution.robots as robot}
+                    <li>
+                      <strong>{robot.name}</strong>
+                      <span>{robot.status} · {robot.lives} Lives · {robot.damage} Damage</span>
+                    </li>
+                  {/each}
+                </ul>
+                <p class="reentry-policy">
+                  Shared archive safety: later destructions choose an empty adjacent cell and a
+                  facing with no robot in line of sight within three spaces.
+                </p>
+                {#if reentryChoices.length > 0}
+                  <div class="reentry-choice">
+                    <label>
+                      Re-entry cell and facing
+                      <select bind:value={selectedReentryChoice} aria-label="Re-entry cell and facing">
+                        <option value="">Choose a legal placement</option>
+                        {#each reentryChoices as choice}
+                          <option value={`${choice.x},${choice.y},${choice.facing}`}>
+                            ({choice.x},{choice.y}) facing {choice.facing}
+                          </option>
+                        {/each}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      onclick={submitReentryChoice}
+                      disabled={pending || !selectedReentryChoice}
+                    >Confirm re-entry</button>
+                  </div>
+                {:else if roomState.resolution.nextReentryUid}
+                  {@const nextReentryPlayer = roomState.players.find(({ uid }) => uid === roomState.resolution?.nextReentryUid)}
+                  <p class="reentry-wait">Waiting for {nextReentryPlayer?.name} to choose re-entry.</p>
+                {/if}
                 <ol aria-label="Resolution feed" aria-live="polite">
                   {#each roomState.resolution.trace.slice(-5) as entry, index}
                     <li style={`--trace-index:${index}`}>
-                      <span>R{entry.register} · {entry.priority}</span>
+                      <span>{entry.register <= 5 ? `R${entry.register}` : 'CLEANUP'} · {entry.priority ?? 'SYS'}</span>
                       {entry.text}
                     </li>
                   {/each}
@@ -456,7 +521,7 @@
                   <summary>Full resolution text</summary>
                   <ol aria-label="Full resolution feed">
                     {#each roomState.resolution.trace as entry}
-                      <li><span>R{entry.register} · {entry.priority}</span>{entry.text}</li>
+                      <li><span>{entry.register <= 5 ? `R${entry.register}` : 'CLEANUP'} · {entry.priority ?? 'SYS'}</span>{entry.text}</li>
                     {/each}
                   </ol>
                 </details>
@@ -1410,6 +1475,52 @@
     font: 700 8px 'Space Mono', monospace;
     text-transform: uppercase;
   }
+  .robot-state {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 3px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .robot-state li {
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+    min-width: 0;
+    padding: 3px 5px;
+    border: 1px solid #354245;
+    color: #91a09f;
+    font: 7px 'Space Mono', monospace;
+    animation: none;
+  }
+  .robot-state strong { color: #eef4ee; }
+  .reentry-choice {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 5px;
+    align-items: end;
+    padding: 5px;
+    border: 1px solid #8b7130;
+  }
+  .reentry-policy { margin: 0; color: #778487; font-size: 7px; line-height: 1.3; }
+  .reentry-choice label {
+    display: grid;
+    gap: 2px;
+    color: #ffcf4b;
+    font: 7px 'Space Mono', monospace;
+    text-transform: uppercase;
+  }
+  .reentry-choice select {
+    min-width: 0;
+    min-height: 28px;
+    border: 1px solid #536164;
+    color: #eef4ee;
+    background: #11191a;
+    font: 8px 'Space Mono', monospace;
+  }
+  .reentry-choice button { min-height: 28px; padding: 0 6px; font-size: 7px; }
+  .reentry-wait { margin: 0; color: #ffcf4b; font-size: 8px; }
   .resolution-console ol {
     display: grid;
     gap: 2px;
