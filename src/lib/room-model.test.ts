@@ -295,7 +295,50 @@ describe('immutable room replay', () => {
     expect(state.programming?.phase).toBe('programmed');
     expect(state.programming?.players.every(({ submitted }) => submitted)).toBe(true);
     expect(state.programming?.currentTurnDiscard).toHaveLength(8);
+    expect(state.nextProgramming).toMatchObject({
+      turnId: 'turn-002',
+      turnNumber: 2,
+      phase: 'programming'
+    });
     expect(state.diagnostics).toEqual([]);
+
+    const hostTurnTwo = state.nextProgramming!.players.find(({ uid }) => uid === 'host')!;
+    const guestTurnTwo = state.nextProgramming!.players.find(({ uid }) => uid === 'guest')!;
+    const turnTwoEvents = [
+      event('host', 6, 'program/submitted', {
+        uid: 'host',
+        turnId: 'turn-002',
+        cardIds: hostTurnTwo.hand.slice(
+          0,
+          hostTurnTwo.registers.filter(({ locked }) => !locked).length
+        )
+      }, 3_000),
+      event('guest', 4, 'program/submitted', {
+        uid: 'guest',
+        turnId: 'turn-002',
+        cardIds: guestTurnTwo.hand.slice(
+          0,
+          guestTurnTwo.registers.filter(({ locked }) => !locked).length
+        )
+      }, 4_000)
+    ];
+    const secondTurn = replayRoom([
+      created,
+      joinedHost,
+      joinedGuest,
+      configured,
+      hostReady,
+      guestReady,
+      hostProgram,
+      guestProgram,
+      ...turnTwoEvents
+    ]);
+    expect(secondTurn.programming).toMatchObject({
+      turnId: 'turn-002',
+      phase: 'programmed'
+    });
+    expect(secondTurn.resolution?.turnNumber).toBe(2);
+    expect(secondTurn.diagnostics).toEqual([]);
   });
 
   it('pauses for owner-authored re-entry choices after ordinary Program destruction', () => {

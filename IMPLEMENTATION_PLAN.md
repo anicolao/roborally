@@ -477,11 +477,20 @@ the later complete-race tracer will exercise that repetition across live turns.
 
 ### 9. Flags, archives, repairs, and victory
 
+**Status:** Implemented as the ninth vertical tracer.
+
 - Add ordered flag progress, per-register archive updates, single-wrench
   repair, crossed-site repair, and the Option-draw placeholder.
 - Add terminal winner and optional runners-up mode, immutable summary, and
   rematch epoch.
 - Add `009-flags-archives-repairs-and-victory`.
+
+Scenario 009 plays ten ordinary, immutable turns through both browser clients:
+it archives on a repair site, reaches all three flags in order, pauses for an
+owner-authored re-entry, publishes a frozen winner summary, and begins rematch
+epoch 2 while retaining epoch 1. Pure fixtures cover out-of-order flags,
+same-checkpoint runners-up, crossed-site Option placeholders, and exact
+register-1-to-register-5 repair unlock order.
 
 ### 10. Complete power down
 

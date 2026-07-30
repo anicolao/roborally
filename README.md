@@ -114,6 +114,12 @@ locks registers 5 back through 1 with their exact card IDs; ten damage enters
 the same Life-loss and re-entry pipeline as pits and edges. A fully locked
 robot executes all five retained cards in the pure repeated-Program fixture.
 
+Races now continue across deterministic shared-deck turns. Flags only count in
+order, every flag or repair checkpoint moves the Archive after that register,
+and repair benefits wait for register-5 cleanup. Flag 3 freezes winner and
+optional runner-up standings; a host-authored rematch starts a new epoch while
+the prior summary remains in the append-only projection.
+
 The generated browser walkthroughs cover
 [application readiness](tests/e2e/001-app-shell-and-deployment/README.md) and
 [create, join, full-room, and reload behavior](tests/e2e/002-create-join-and-replay-room/README.md),
@@ -128,8 +134,10 @@ and
 and
 [atomic conveyors and gears](tests/e2e/007-conveyors-pushers-and-gears/README.md),
 and
-[laser snapshots, damage, and locked registers](tests/e2e/008-lasers-damage-and-locked-registers/README.md).
-Flags, archives, repairs, and victory are the next slice in
+[laser snapshots, damage, and locked registers](tests/e2e/008-lasers-damage-and-locked-registers/README.md),
+and
+[a ten-turn race through repairs, flags, victory, and rematch](tests/e2e/009-flags-archives-repairs-and-victory/README.md).
+Complete power down is the next slice in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 Nix is always available and is the mandatory entry point for every tooling,

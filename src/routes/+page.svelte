@@ -46,6 +46,7 @@
   let clockNow = Date.now();
   let clockInterval: ReturnType<typeof setInterval> | undefined;
   let showProgramming = false;
+  let requestedTurnNumber = 1;
   let selectedReentryChoice = '';
   const buildHash = (import.meta.env.VITE_GIT_HASH ?? 'local-development').slice(0, 8);
 
@@ -58,14 +59,20 @@
     ? roomState.readyPlayerUids.includes(currentPlayer.uid)
     : false;
   $: isHost = currentPlayer?.uid === roomState.hostUid;
-  $: programmingPlayer = currentPlayer && roomState.programming
-    ? roomState.programming.players.find((player) => player.uid === currentPlayer.uid)
+  $: activeProgramming =
+    roomState.nextProgramming?.turnNumber === requestedTurnNumber
+      ? roomState.nextProgramming
+      : roomState.programming;
+  $: programmingPlayer = currentPlayer && activeProgramming
+    ? activeProgramming.players.find((player) => player.uid === currentPlayer.uid)
     : undefined;
+  $: openRegisterCount =
+    programmingPlayer?.registers.filter(({ locked }) => !locked).length ?? 0;
   $: programPreview = programmingPlayer
     ? previewProgram(programmingPlayer, selectedProgramCardIds)
     : [];
-  $: deadlineSeconds = roomState.programming?.deadline
-    ? Math.max(0, Math.ceil((roomState.programming.deadline - clockNow) / 1000))
+  $: deadlineSeconds = activeProgramming?.deadline
+    ? Math.max(0, Math.ceil((activeProgramming.deadline - clockNow) / 1000))
     : null;
   $: reentryChoices =
     currentPlayer && roomState.resolution
@@ -267,7 +274,7 @@
     if (programmingPlayer?.submitted) return;
     if (selectedProgramCardIds.includes(cardId)) {
       selectedProgramCardIds = selectedProgramCardIds.filter((selected) => selected !== cardId);
-    } else if (selectedProgramCardIds.length < 5) {
+    } else if (selectedProgramCardIds.length < openRegisterCount) {
       selectedProgramCardIds = [...selectedProgramCardIds, cardId];
     }
   }
@@ -276,12 +283,18 @@
     if (
       !services ||
       !roomService ||
-      selectedProgramCardIds.length !== 5 ||
+      selectedProgramCardIds.length !== openRegisterCount ||
       programmingPlayer?.submitted
     ) return;
     pending = true;
     try {
-      await roomService.submitProgram(services.db, services.user, roomCode, selectedProgramCardIds);
+      await roomService.submitProgram(
+        services.db,
+        services.user,
+        roomCode,
+        selectedProgramCardIds,
+        activeProgramming?.turnId
+      );
       selectedProgramCardIds = [];
     } catch (error) {
       console.error(error);
@@ -292,11 +305,17 @@
   }
 
   async function claimTimeout() {
-    const targetUid = roomState.programming?.deadlinePlayerUid;
+    const targetUid = activeProgramming?.deadlinePlayerUid;
     if (!services || !roomService || !targetUid || deadlineSeconds !== 0) return;
     pending = true;
     try {
-      await roomService.claimProgramTimeout(services.db, services.user, roomCode, targetUid);
+      await roomService.claimProgramTimeout(
+        services.db,
+        services.user,
+        roomCode,
+        targetUid,
+        activeProgramming?.turnId
+      );
     } catch (error) {
       console.error(error);
       formError = 'The timeout claim could not be written.';
@@ -311,16 +330,44 @@
     if (!x || !y || !['north', 'east', 'south', 'west'].includes(facing)) return;
     pending = true;
     try {
-      await roomService.chooseEffect(services.db, services.user, roomCode, {
-        kind: 'reentry',
-        x: Number(x),
-        y: Number(y),
-        facing: facing as 'north' | 'east' | 'south' | 'west'
-      });
+      await roomService.chooseEffect(
+        services.db,
+        services.user,
+        roomCode,
+        {
+          kind: 'reentry',
+          x: Number(x),
+          y: Number(y),
+          facing: facing as 'north' | 'east' | 'south' | 'west'
+        },
+        `turn-${String(roomState.resolution?.turnNumber ?? 1).padStart(3, '0')}`
+      );
       selectedReentryChoice = '';
     } catch (error) {
       console.error(error);
       formError = 'The re-entry choice could not be written.';
+    } finally {
+      pending = false;
+    }
+  }
+
+  async function rematchRace() {
+    if (!services || !roomService || !isHost || roomState.resolution?.phase !== 'race-finished') {
+      return;
+    }
+    pending = true;
+    try {
+      await roomService.rematchGame(services.db, services.user, roomCode, {
+        epoch: roomState.raceEpoch + 1,
+        seed: `${roomState.configuration?.seed ?? 'RISKY-2005'}:rematch-${
+          roomState.raceEpoch + 1
+        }`
+      });
+      requestedTurnNumber = 1;
+      selectedProgramCardIds = [];
+    } catch (error) {
+      console.error(error);
+      formError = 'The immutable rematch event could not be written.';
     } finally {
       pending = false;
     }
@@ -366,7 +413,11 @@
       >
         <p class="eyebrow">
           <span>{roomState.resolution ? '05' : showProgramming ? '04' : '03'}</span>
-          {roomState.resolution ? 'PRIORITY RESOLUTION' : showProgramming ? 'SHARED DECK / TURN 1' : 'SEEDED RACE SETUP'}
+          {roomState.resolution
+            ? 'PRIORITY RESOLUTION'
+            : showProgramming
+              ? `SHARED DECK / TURN ${activeProgramming?.turnNumber ?? 1}`
+              : 'SEEDED RACE SETUP'}
         </p>
         <h1 id="race-heading">
           {showProgramming ? 'Program.' : 'Ready.'}<br />
@@ -386,6 +437,10 @@
           <div><dt>{roomState.setup.players.length}</dt><dd>robots</dd></div>
           <div><dt>3</dt><dd>flags</dd></div>
         </dl>
+        <p class="epoch-state">
+          Race epoch {roomState.raceEpoch} · {roomState.raceSummaries.length} retained
+          {roomState.raceSummaries.length === 1 ? 'summary' : 'summaries'}
+        </p>
         <ol class="setup-order compact" aria-label="Original Dock order">
           {#each roomState.setup.players as player}
             {@const robot = ROBOTS.find((entry) => entry.id === player.robotId)}
@@ -397,16 +452,16 @@
             </li>
           {/each}
         </ol>
-        {#if showProgramming && programmingPlayer && roomState.programming}
+        {#if showProgramming && programmingPlayer && activeProgramming}
           <section class="program-console" aria-labelledby="hand-heading">
             <div class="program-head">
               <h2 id="hand-heading">Your hand · {programmingPlayer.hand.length || 'submitted'}</h2>
-              <span>{selectedProgramCardIds.length}/5 registers</span>
+              <span>{selectedProgramCardIds.length}/{openRegisterCount} open</span>
             </div>
             <p class="conservation" data-testid="program-conservation">
-              {programCardZones(roomState.programming).size}/84 cards accounted ·
-              {roomState.programming.drawPile.length} undealt ·
-              {roomState.programming.currentTurnDiscard.length} turn discard
+              {programCardZones(activeProgramming).size}/84 cards accounted ·
+              {activeProgramming.drawPile.length} undealt ·
+              {activeProgramming.currentTurnDiscard.length} turn discard
             </p>
             {#if programmingPlayer.submitted}
               <p class="submission-state">Program committed. It cannot be inspected or changed.</p>
@@ -429,8 +484,17 @@
               </div>
               <ol class="chosen-registers" aria-label="Chosen registers">
                 {#each Array(5) as _, index}
-                  {@const card = cardForId(selectedProgramCardIds[index] ?? null)}
-                  <li><span>R{index + 1}</span>{card ? `${card.action} ${card.priority}` : 'empty'}</li>
+                  {@const register = programmingPlayer.registers[index]}
+                  {@const openIndex = programmingPlayer.registers
+                    .slice(0, index)
+                    .filter(({ locked }) => !locked).length}
+                  {@const card = cardForId(
+                    register.locked ? register.cardId : (selectedProgramCardIds[openIndex] ?? null)
+                  )}
+                  <li>
+                    <span>R{index + 1}</span>
+                    {card ? `${card.action} ${card.priority}${register.locked ? ' · locked' : ''}` : 'empty'}
+                  </li>
                 {/each}
               </ol>
               <p class="preview-note">
@@ -440,17 +504,17 @@
               <button
                 type="button"
                 onclick={submitProgramCards}
-                disabled={pending || selectedProgramCardIds.length !== 5}
+                disabled={pending || selectedProgramCardIds.length !== openRegisterCount}
               >Submit immutable program</button>
             {/if}
 
             <ul class="opponent-programs" aria-label="Program submission status">
-              {#each roomState.programming.players as player}
+              {#each activeProgramming.players as player}
                 {#if player.uid !== currentPlayer.uid}
                   {@const roomPlayer = roomState.players.find(({ uid }) => uid === player.uid)}
                   <li>
                     <strong>{roomPlayer?.name}</strong>
-                    {#if roomState.programming.phase === 'programmed'}
+                    {#if activeProgramming.phase === 'programmed'}
                       <span>
                         {player.registers.map(({ cardId }) => cardForId(cardId)?.priority).join(' · ')}
                       </span>
@@ -463,8 +527,8 @@
                 {/if}
               {/each}
             </ul>
-            {#if roomState.programming.deadlinePlayerUid}
-              {@const timedPlayer = roomState.players.find(({ uid }) => uid === roomState.programming?.deadlinePlayerUid)}
+            {#if activeProgramming.deadlinePlayerUid}
+              {@const timedPlayer = roomState.players.find(({ uid }) => uid === activeProgramming.deadlinePlayerUid)}
               <div class="deadline" role="timer">
                 <span>{timedPlayer?.name} has {deadlineSeconds} seconds</span>
                 <button type="button" onclick={claimTimeout} disabled={deadlineSeconds !== 0 || pending}>
@@ -475,18 +539,27 @@
             {#if roomState.resolution}
               <section class="resolution-console" aria-labelledby="resolution-heading">
                 <h2 id="resolution-heading">
-                  Turn 1 {roomState.resolution.phase === 'turn-complete' ? 'complete' : 'awaiting re-entry'}
+                  Turn {roomState.resolution.turnNumber}
+                  {roomState.resolution.phase === 'turn-complete'
+                    ? 'complete'
+                    : roomState.resolution.phase === 'race-finished'
+                      ? 'finished'
+                      : 'awaiting re-entry'}
                   · {roomState.resolution.trace.length} microsteps
                 </h2>
                 <ul class="robot-state" aria-label="Robot Life and damage state">
                   {#each roomState.resolution.robots as robot}
                     <li>
                       <strong>{robot.name}</strong>
-                      <span>
+                      <span class="robot-vitals">
                         {robot.status} · {robot.lives} Lives · {robot.damage} Damage
                         {robot.lockedRegisters.length
                           ? ` · Locked ${robot.lockedRegisters.map(({ register }) => `R${register}`).join('/')}`
                           : ''}
+                      </span>
+                      <span class="robot-progress">
+                        Flags {robot.touchedFlags.length ? robot.touchedFlags.join('→') : 'none'} ·
+                        Archive ({robot.archive.x},{robot.archive.y})
                       </span>
                     </li>
                   {/each}
@@ -522,6 +595,34 @@
                 {:else if roomState.resolution.nextReentryUid}
                   {@const nextReentryPlayer = roomState.players.find(({ uid }) => uid === roomState.resolution?.nextReentryUid)}
                   <p class="reentry-wait">Waiting for {nextReentryPlayer?.name} to choose re-entry.</p>
+                {/if}
+                {#if roomState.nextProgramming && requestedTurnNumber < roomState.nextProgramming.turnNumber}
+                  <button
+                    type="button"
+                    onclick={() => {
+                      requestedTurnNumber = roomState.nextProgramming?.turnNumber ?? requestedTurnNumber;
+                      selectedProgramCardIds = [];
+                    }}
+                  >
+                    Begin Turn {roomState.nextProgramming.turnNumber}
+                  </button>
+                {/if}
+                {#if roomState.resolution.summary}
+                  {@const winner = roomState.players.find(
+                    ({ uid }) => uid === roomState.resolution?.summary?.winnerUid
+                  )}
+                  <section class="race-summary" aria-label="Immutable race summary">
+                    <strong>{winner?.name} wins Risky Exchange</strong>
+                    <span>
+                      Epoch {roomState.raceEpoch} ·
+                      {roomState.resolution.summary.standings.length} final standings retained
+                    </span>
+                    {#if isHost}
+                      <button type="button" onclick={rematchRace} disabled={pending}>
+                        Start rematch epoch {roomState.raceEpoch + 1}
+                      </button>
+                    {/if}
+                  </section>
                 {/if}
                 <ol aria-label="Resolution feed" aria-live="polite">
                   {#each roomState.resolution.trace.slice(-5) as entry, index}
@@ -1322,6 +1423,13 @@
   .setup-summary h1 { font-size: clamp(42px, 4.6vw, 64px); }
   .setup-summary h1 em { color: #d2ff37; -webkit-text-stroke: 0; }
   .setup-summary .lede strong { color: #eef4ee; font-family: 'Space Mono', monospace; }
+  .setup-summary.resolution-active .setup-order.compact { display: none; }
+  .epoch-state {
+    margin: 5px 0 0;
+    color: #718083;
+    font: 7px 'Space Mono', monospace;
+    text-transform: uppercase;
+  }
   .setup-facts {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -1536,6 +1644,17 @@
   }
   .reentry-choice button { min-height: 28px; padding: 0 6px; font-size: 7px; }
   .reentry-wait { margin: 0; color: #ffcf4b; font-size: 8px; }
+  .race-summary {
+    display: grid;
+    gap: 4px;
+    padding: 5px;
+    border: 1px solid #d2ff37;
+    color: #91a09f;
+    font: 7px 'Space Mono', monospace;
+    text-transform: uppercase;
+  }
+  .race-summary strong { color: #d2ff37; font-size: 9px; }
+  .race-summary button { min-height: 28px; padding: 0 6px; font-size: 7px; }
   .resolution-console ol {
     display: grid;
     gap: 2px;
@@ -1661,10 +1780,25 @@
     .setup-order em { grid-column: 2; }
     .archive-note { margin-top: 6px; font-size: 8px; }
     .program-console { margin-top: 6px; padding-top: 6px; }
+    .program-head { gap: 4px; min-width: 0; }
+    .program-head h2 { min-width: 0; }
+    .program-head span { flex: none; white-space: nowrap; }
     .setup-summary.resolution-active .lede,
     .setup-summary.resolution-active > .archive-note { display: none; }
+    .setup-summary.resolution-active .epoch-state { display: none; }
     .setup-summary.resolution-active .setup-order.compact { display: none; }
     .setup-summary.resolution-active .resolution-console ol { max-height: 70px; }
+    .robot-state { grid-template-columns: minmax(0, 1fr); }
+    .robot-state li { flex-wrap: wrap; overflow: hidden; }
+    .robot-progress { min-width: 0; overflow-wrap: anywhere; }
+    .setup-summary.resolution-active.many-robots .robot-state {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .setup-summary.resolution-active.many-robots .setup-facts,
+    .setup-summary.resolution-active.many-robots .robot-progress,
+    .setup-summary.resolution-active.many-robots .reentry-policy {
+      display: none;
+    }
     .setup-summary.resolution-active.many-robots
       .resolution-console > ol[aria-label='Resolution feed'] li:nth-child(-n + 2) {
       display: none;
