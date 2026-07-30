@@ -1,6 +1,8 @@
 import {
   DOCKING_BAY_A,
   EXCHANGE_BOARD,
+  type BoardCell,
+  type BoardElement,
   type Direction,
   type Wall
 } from './course-manifest';
@@ -38,7 +40,13 @@ export type ResolutionTraceKind =
   | 'life-lost'
   | 'eliminated'
   | 'reentry-required'
-  | 'reentered';
+  | 'reentered'
+  | 'express-conveyor'
+  | 'conveyor'
+  | 'conveyor-conflict'
+  | 'pusher'
+  | 'pusher-blocked'
+  | 'gear';
 
 export interface ResolutionTraceEntry {
   id: string;
@@ -97,6 +105,11 @@ const pitKeys = new Set(
     .filter(({ elements }) => elements.some(({ kind }) => kind === 'pit'))
     .map(({ x, y }) => `${x},${y}`)
 );
+
+const worldBoardCells: BoardCell[] = [
+  ...EXCHANGE_BOARD.cells,
+  ...DOCKING_BAY_A.cells.map((entry) => ({ ...entry, y: entry.y + 12 }))
+];
 
 export function movementBlockedByWall(
   x: number,
@@ -169,7 +182,7 @@ function destroyRobot(
   robot: RaceRobotPosition,
   hazard: 'pit' | 'edge',
   register: number,
-  card: ProgramCard,
+  card: ProgramCard | null,
   trace: ResolutionTraceEntry[]
 ) {
   if (robot.status !== 'active') return;
@@ -227,8 +240,9 @@ function translateOneCell(
   direction: Direction,
   stepNumber: number,
   register: number,
-  card: ProgramCard,
-  trace: ResolutionTraceEntry[]
+  card: ProgramCard | null,
+  trace: ResolutionTraceEntry[],
+  source: 'program' | 'pusher' = 'program'
 ): TranslationResult {
   const chain: RaceRobotPosition[] = [actor];
   let cursor = actor;
@@ -239,8 +253,14 @@ function translateOneCell(
         register,
         actor.uid,
         card,
-        chain.length === 1 ? 'blocked-wall' : 'push-blocked-wall',
-        chain.length === 1
+        source === 'pusher'
+          ? 'pusher-blocked'
+          : chain.length === 1
+            ? 'blocked-wall'
+            : 'push-blocked-wall',
+        source === 'pusher'
+          ? `The register ${register} pusher under ${actor.name} was blocked by a wall.`
+          : chain.length === 1
           ? `${actor.name} stopped at (${actor.x},${actor.y}); a wall blocks ${direction}.`
           : `${actor.name}'s ${chain.length - 1}-robot push was cancelled; ` +
               `a wall blocks ${cursor.name} to the ${direction}.`
@@ -273,8 +293,11 @@ function translateOneCell(
       register,
       moving.uid,
       card,
-      moving.uid === actor.uid ? 'move' : 'pushed',
-      moving.uid === actor.uid
+      moving.uid === actor.uid ? (source === 'pusher' ? 'pusher' : 'move') : 'pushed',
+      moving.uid === actor.uid && source === 'pusher'
+        ? `${moving.name} was moved ${direction} by a register ${register} pusher to ` +
+          `(${moving.x},${moving.y}).`
+        : moving.uid === actor.uid
         ? `${moving.name} completed step ${stepNumber} at (${moving.x},${moving.y}) ` +
             `facing ${moving.facing}.`
         : `${moving.name} was pushed ${direction} to (${moving.x},${moving.y}).`
@@ -328,6 +351,191 @@ export function applyProgramCard(
   for (let step = 1; step <= Math.abs(signedDistance); step += 1) {
     const result = translateOneCell(robots, robot, direction, step, register, card, trace);
     if (!result.moved || result.actorDestroyed) return;
+  }
+}
+
+interface ConveyorIntent {
+  robot: RaceRobotPosition;
+  conveyor: Extract<BoardElement, { kind: 'conveyor' }>;
+  nextX: number;
+  nextY: number;
+}
+
+function elementAt(
+  cells: readonly BoardCell[],
+  x: number,
+  y: number,
+  kind: BoardElement['kind']
+) {
+  return cells
+    .find((cell) => cell.x === x && cell.y === y)
+    ?.elements.find((element) => element.kind === kind);
+}
+
+function resolveConveyorSubstep(
+  robots: RaceRobotPosition[],
+  register: number,
+  trace: ResolutionTraceEntry[],
+  expressOnly: boolean,
+  cells: readonly BoardCell[]
+) {
+  const intents: ConveyorIntent[] = [];
+  for (const robot of robots.filter(({ status }) => status === 'active')) {
+    const conveyor = elementAt(cells, robot.x, robot.y, 'conveyor') as
+      | Extract<BoardElement, { kind: 'conveyor' }>
+      | undefined;
+    if (!conveyor || (expressOnly && !conveyor.express)) continue;
+    const [dx, dy] = steps[conveyor.direction];
+    if (movementBlockedByWall(robot.x, robot.y, conveyor.direction)) {
+      addTrace(
+        trace,
+        register,
+        robot.uid,
+        null,
+        'conveyor-conflict',
+        `${robot.name}'s ${expressOnly ? 'express ' : ''}conveyor move was blocked by a wall.`
+      );
+      continue;
+    }
+    intents.push({
+      robot,
+      conveyor,
+      nextX: robot.x + dx,
+      nextY: robot.y + dy
+    });
+  }
+
+  const rejected = new Set<string>();
+  const destinations = new Map<string, ConveyorIntent[]>();
+  for (const intent of intents) {
+    const key = `${intent.nextX},${intent.nextY}`;
+    destinations.set(key, [...(destinations.get(key) ?? []), intent]);
+  }
+  for (const destinationIntents of destinations.values()) {
+    if (destinationIntents.length > 1) {
+      for (const { robot } of destinationIntents) rejected.add(robot.uid);
+    }
+  }
+
+  for (const origin of intents) {
+    const path: string[] = [];
+    let current: ConveyorIntent | undefined = origin;
+    while (current && !rejected.has(current.robot.uid)) {
+      const repeatedAt = path.indexOf(current.robot.uid);
+      if (repeatedAt >= 0) {
+        for (const uid of path.slice(repeatedAt)) rejected.add(uid);
+        break;
+      }
+      path.push(current.robot.uid);
+      const occupant = activeRobotAt(
+        robots,
+        current.nextX,
+        current.nextY,
+        current.robot.uid
+      );
+      current = occupant
+        ? intents.find(({ robot }) => robot.uid === occupant.uid)
+        : undefined;
+    }
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const intent of intents) {
+      if (rejected.has(intent.robot.uid)) continue;
+      const occupant = activeRobotAt(robots, intent.nextX, intent.nextY, intent.robot.uid);
+      if (!occupant) continue;
+      const occupantIntent = intents.find(({ robot }) => robot.uid === occupant.uid);
+      if (!occupantIntent || rejected.has(occupant.uid)) {
+        rejected.add(intent.robot.uid);
+        changed = true;
+      }
+    }
+  }
+
+  for (const intent of intents.filter(({ robot }) => rejected.has(robot.uid))) {
+    addTrace(
+      trace,
+      register,
+      intent.robot.uid,
+      null,
+      'conveyor-conflict',
+      `${intent.robot.name}'s ${expressOnly ? 'express ' : ''}conveyor intent to ` +
+        `(${intent.nextX},${intent.nextY}) conflicted; the robot stayed still.`
+    );
+  }
+
+  for (const { robot, conveyor, nextX, nextY } of intents.filter(
+    ({ robot }) => !rejected.has(robot.uid)
+  )) {
+    if (!courseContains(nextX, nextY)) {
+      destroyRobot(robots, robot, 'edge', register, null, trace);
+      continue;
+    }
+    if (courseHasPit(nextX, nextY)) {
+      destroyRobot(robots, robot, 'pit', register, null, trace);
+      continue;
+    }
+    robot.x = nextX;
+    robot.y = nextY;
+    if (conveyor.turn === 'left') robot.facing = rotate(robot.facing, -1);
+    if (conveyor.turn === 'right') robot.facing = rotate(robot.facing, 1);
+    addTrace(
+      trace,
+      register,
+      robot.uid,
+      null,
+      expressOnly ? 'express-conveyor' : 'conveyor',
+      `${robot.name} rode the ${expressOnly ? 'express ' : ''}conveyor to ` +
+        `(${robot.x},${robot.y})${conveyor.turn ? ` and turned ${conveyor.turn}` : ''}.`
+    );
+  }
+}
+
+export function resolveBoardElements(
+  robots: RaceRobotPosition[],
+  register: number,
+  trace: ResolutionTraceEntry[],
+  cells: readonly BoardCell[] = worldBoardCells
+) {
+  resolveConveyorSubstep(robots, register, trace, true, cells);
+  resolveConveyorSubstep(robots, register, trace, false, cells);
+
+  for (const robot of [...robots]) {
+    if (robot.status !== 'active') continue;
+    const pusher = elementAt(cells, robot.x, robot.y, 'pusher') as
+      | Extract<BoardElement, { kind: 'pusher' }>
+      | undefined;
+    if (!pusher?.activeRegisters.includes(register)) continue;
+    translateOneCell(
+      robots,
+      robot,
+      pusher.direction,
+      1,
+      register,
+      null,
+      trace,
+      'pusher'
+    );
+  }
+
+  for (const robot of robots) {
+    if (robot.status !== 'active') continue;
+    const gear = elementAt(cells, robot.x, robot.y, 'gear') as
+      | Extract<BoardElement, { kind: 'gear' }>
+      | undefined;
+    if (!gear) continue;
+    const before = robot.facing;
+    robot.facing = rotate(robot.facing, gear.rotation === 'clockwise' ? 1 : -1);
+    addTrace(
+      trace,
+      register,
+      robot.uid,
+      null,
+      'gear',
+      `${robot.name} rotated ${gear.rotation} from ${before} to ${robot.facing}.`
+    );
   }
 }
 
@@ -484,6 +692,7 @@ export function resolveProgrammedTurn(
       .filter((entry): entry is { uid: string; card: ProgramCard } => entry !== null)
       .sort((left, right) => right.card.priority - left.card.priority);
     for (const entry of queue) applyProgramCard(robots, entry.uid, entry.card, register, trace);
+    resolveBoardElements(robots, register, trace);
   }
 
   const resolution: ProgramResolution = {

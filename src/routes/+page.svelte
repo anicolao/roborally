@@ -359,7 +359,11 @@
   {#if mode === 'room' && currentPlayer && roomState.setup && roomState.configuration}
     <section class="configured-race" aria-labelledby="race-heading">
       <CourseBoard setup={roomState.setup} robots={roomState.resolution?.robots} />
-      <aside class="setup-summary">
+      <aside
+        class:resolution-active={!!roomState.resolution}
+        class:many-robots={roomState.setup.players.length >= 3}
+        class="setup-summary"
+      >
         <p class="eyebrow">
           <span>{roomState.resolution ? '05' : showProgramming ? '04' : '03'}</span>
           {roomState.resolution ? 'PRIORITY RESOLUTION' : showProgramming ? 'SHARED DECK / TURN 1' : 'SEEDED RACE SETUP'}
@@ -485,6 +489,10 @@
                 <p class="reentry-policy">
                   Shared archive safety: later destructions choose an empty adjacent cell and a
                   facing with no robot in line of sight within three spaces.
+                </p>
+                <p class="board-phase">
+                  Board phase: express conveyors → all conveyors → register pushers → gears.
+                  Exchange prints no pushers; register fixtures still cover that solver.
                 </p>
                 {#if reentryChoices.length > 0}
                   <div class="reentry-choice">
@@ -1504,6 +1512,7 @@
     border: 1px solid #8b7130;
   }
   .reentry-policy { margin: 0; color: #778487; font-size: 7px; line-height: 1.3; }
+  .board-phase { margin: 0; color: #6e9691; font-size: 7px; line-height: 1.3; }
   .reentry-choice label {
     display: grid;
     gap: 2px;
@@ -1646,6 +1655,14 @@
     .setup-order em { grid-column: 2; }
     .archive-note { margin-top: 6px; font-size: 8px; }
     .program-console { margin-top: 6px; padding-top: 6px; }
+    .setup-summary.resolution-active .lede,
+    .setup-summary.resolution-active > .archive-note { display: none; }
+    .setup-summary.resolution-active .setup-order.compact { display: none; }
+    .setup-summary.resolution-active .resolution-console ol { max-height: 70px; }
+    .setup-summary.resolution-active.many-robots
+      .resolution-console > ol[aria-label='Resolution feed'] li:nth-child(-n + 2) {
+      display: none;
+    }
     .program-hand { grid-template-columns: repeat(3, 1fr); }
     .program-hand button { min-height: 37px; padding: 10px 2px 2px; }
     .chosen-registers li { min-height: 23px; }

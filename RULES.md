@@ -265,6 +265,12 @@ pit, and board-edge consequences.
 A gear rotates a robot on its cell 90° in the direction shown. Gears do not
 move robots between cells.
 
+The current implementation runs this complete board phase after every
+register. Reviewed Exchange has 68 straight conveyor cells and five gears;
+Exchange and Docking Bay A have no printed curved belts or pushers. Those
+generic rules are still executable and exhaustively fixture-tested, but the
+selected course renderer truthfully shows none.
+
 ### Lasers
 
 Lasers fire after every board element has finished. Each board beam travels in

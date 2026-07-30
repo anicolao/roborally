@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import {
+  DOCKING_BAY_A,
+  EXCHANGE_BOARD,
+  type BoardCell
+} from './course-manifest';
 import { PROGRAM_CARDS, type ProgramAction } from './program-manifest';
 import {
   applyProgramCard,
   applyReentryChoice,
   legalReentryChoices,
   movementBlockedByWall,
+  resolveBoardElements,
   resolveProgrammedTurn,
   type ProgramResolution,
   type RaceRobotPosition,
@@ -277,5 +283,155 @@ describe('priority Program movement', () => {
         expect.objectContaining({ uid: 'second', x: 5, y: 9, damage: 2, status: 'active' })
       ])
     );
+  });
+
+  it('has movement fixtures for every conveyor and gear on the selected course', () => {
+    const cells = [
+      ...EXCHANGE_BOARD.cells,
+      ...DOCKING_BAY_A.cells.map((entry) => ({ ...entry, y: entry.y + 12 }))
+    ];
+    const conveyors = cells.filter(({ elements }) =>
+      elements.some(({ kind }) => kind === 'conveyor')
+    );
+    const gears = cells.filter(({ elements }) => elements.some(({ kind }) => kind === 'gear'));
+    expect(conveyors).toHaveLength(68);
+    expect(gears).toHaveLength(5);
+
+    for (const [index, cell] of [...conveyors, ...gears].entries()) {
+      const robot = raceRobot({
+        uid: `fixture-${index}`,
+        name: `Fixture ${index}`,
+        x: cell.x,
+        y: cell.y
+      });
+      const trace: ResolutionTraceEntry[] = [];
+      resolveBoardElements([robot], 1, trace);
+      expect(trace.length, `element fixture at ${cell.x},${cell.y}`).toBeGreaterThan(0);
+    }
+  });
+
+  it('moves express then normal conveyors, rotates curves, and follows dependencies', () => {
+    const cells: BoardCell[] = [
+      {
+        x: 1,
+        y: 1,
+        elements: [{ kind: 'conveyor', direction: 'east', express: true, turn: 'right' }]
+      },
+      {
+        x: 2,
+        y: 1,
+        elements: [{ kind: 'conveyor', direction: 'south', express: false }]
+      },
+      {
+        x: 8,
+        y: 8,
+        elements: [{ kind: 'conveyor', direction: 'east', express: true, turn: 'left' }]
+      },
+      {
+        x: 9,
+        y: 8,
+        elements: [{ kind: 'conveyor', direction: 'north', express: false }]
+      },
+      {
+        x: 4,
+        y: 4,
+        elements: [{ kind: 'conveyor', direction: 'east', express: false }]
+      },
+      {
+        x: 5,
+        y: 4,
+        elements: [{ kind: 'conveyor', direction: 'east', express: false }]
+      }
+    ];
+    const curve = raceRobot({ uid: 'curve', name: 'Curve', x: 1, y: 1 });
+    const leftCurve = raceRobot({ uid: 'left-curve', name: 'Left Curve', x: 8, y: 8 });
+    const follower = raceRobot({ uid: 'follower', name: 'Follower', x: 4, y: 4 });
+    const leader = raceRobot({ uid: 'leader', name: 'Leader', x: 5, y: 4 });
+    const trace: ResolutionTraceEntry[] = [];
+    resolveBoardElements([curve, leftCurve, follower, leader], 1, trace, cells);
+
+    expect(curve).toMatchObject({ x: 2, y: 2, facing: 'east' });
+    expect(leftCurve).toMatchObject({ x: 9, y: 7, facing: 'west' });
+    expect(follower).toMatchObject({ x: 5, y: 4 });
+    expect(leader).toMatchObject({ x: 6, y: 4 });
+    expect(trace.map(({ kind }) => kind)).toEqual(
+      expect.arrayContaining(['express-conveyor', 'conveyor'])
+    );
+  });
+
+  it('rejects converging conveyor destinations atomically', () => {
+    const cells: BoardCell[] = [
+      {
+        x: 1,
+        y: 2,
+        elements: [{ kind: 'conveyor', direction: 'east', express: false }]
+      },
+      {
+        x: 3,
+        y: 2,
+        elements: [{ kind: 'conveyor', direction: 'west', express: false }]
+      }
+    ];
+    const left = raceRobot({ uid: 'left', name: 'Left', x: 1, y: 2 });
+    const right = raceRobot({ uid: 'right', name: 'Right', x: 3, y: 2 });
+    const trace: ResolutionTraceEntry[] = [];
+    resolveBoardElements([left, right], 1, trace, cells);
+
+    expect([left.x, left.y, right.x, right.y]).toEqual([1, 2, 3, 2]);
+    expect(trace.filter(({ kind }) => kind === 'conveyor-conflict')).toHaveLength(2);
+  });
+
+  it('rejects ambiguous conveyor swaps and dependency cycles', () => {
+    const cells: BoardCell[] = [
+      {
+        x: 5,
+        y: 6,
+        elements: [{ kind: 'conveyor', direction: 'east', express: false }]
+      },
+      {
+        x: 6,
+        y: 6,
+        elements: [{ kind: 'conveyor', direction: 'west', express: false }]
+      }
+    ];
+    const left = raceRobot({ uid: 'left', name: 'Left', x: 5, y: 6 });
+    const right = raceRobot({ uid: 'right', name: 'Right', x: 6, y: 6 });
+    const trace: ResolutionTraceEntry[] = [];
+    resolveBoardElements([left, right], 1, trace, cells);
+
+    expect([left.x, right.x]).toEqual([5, 6]);
+    expect(trace.filter(({ kind }) => kind === 'conveyor-conflict')).toHaveLength(2);
+  });
+
+  it('activates only register-numbered pushers and rotates both gear directions', () => {
+    const cells: BoardCell[] = [
+      {
+        x: 4,
+        y: 6,
+        elements: [{ kind: 'pusher', direction: 'east', activeRegisters: [2, 4] }]
+      },
+      {
+        x: 7,
+        y: 6,
+        elements: [{ kind: 'gear', rotation: 'clockwise' }]
+      },
+      {
+        x: 8,
+        y: 6,
+        elements: [{ kind: 'gear', rotation: 'counterclockwise' }]
+      }
+    ];
+    const pushed = raceRobot({ uid: 'pushed', name: 'Pushed', x: 4, y: 6 });
+    const clockwise = raceRobot({ uid: 'clockwise', name: 'Clockwise', x: 7, y: 6 });
+    const counter = raceRobot({ uid: 'counter', name: 'Counter', x: 8, y: 6 });
+    const trace: ResolutionTraceEntry[] = [];
+
+    resolveBoardElements([pushed, clockwise, counter], 1, trace, cells);
+    expect(pushed.x).toBe(4);
+    expect(clockwise.facing).toBe('east');
+    expect(counter.facing).toBe('west');
+    resolveBoardElements([pushed], 2, trace, cells);
+    expect(pushed.x).toBe(5);
+    expect(trace).toContainEqual(expect.objectContaining({ kind: 'pusher' }));
   });
 });

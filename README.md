@@ -99,6 +99,14 @@ owner-authored re-entry cell and facing. Re-entry restores the robot with two
 damage; shared archives use empty adjacent cells and the published three-space
 line-of-sight restriction.
 
+After each Program register, robots now resolve express conveyors, all
+conveyors, active register-numbered pushers, and gears in printed order.
+Conveyor intents share one snapshot: converging destinations and unresolved
+occupancy dependencies remain still, while accepted moves apply atomically.
+The selected reviewed course has 68 conveyor cells, five gears, and no printed
+pushers or curved belts; generic semantic fixtures cover the latter two rules
+without adding fictional Exchange geometry.
+
 The generated browser walkthroughs cover
 [application readiness](tests/e2e/001-app-shell-and-deployment/README.md) and
 [create, join, full-room, and reload behavior](tests/e2e/002-create-join-and-replay-room/README.md),
@@ -109,8 +117,10 @@ and
 and
 [priority movement, rotations, seams, and walls](tests/e2e/005-program-priority-movement-and-walls/README.md),
 and
-[pushing, destruction, Lives, and ordered re-entry](tests/e2e/006-pushing-destruction-lives-and-reentry/README.md).
-Conveyors, pushers, and gears are the next slice in
+[pushing, destruction, Lives, and ordered re-entry](tests/e2e/006-pushing-destruction-lives-and-reentry/README.md),
+and
+[atomic conveyors and gears](tests/e2e/007-conveyors-pushers-and-gears/README.md).
+Lasers, damage, and locked registers are the next slice in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 Nix is always available and is the mandatory entry point for every tooling,
