@@ -125,7 +125,9 @@ export class TestStepHelper {
     });
 
     const paddedIndex = String(this.stepCount++).padStart(3, '0');
-    const filename = `${paddedIndex}-${id.replaceAll('_', '-')}-${this.testInfo.project.name}.png`;
+    const platform = process.platform === 'linux' ? '-linux' : '';
+    const filename =
+      `${paddedIndex}-${id.replaceAll('_', '-')}-${this.testInfo.project.name}${platform}.png`;
     await expect(this.page).toHaveScreenshot(filename);
 
     this.steps.push({
