@@ -1,0 +1,43 @@
+{
+  "name": "roborally",
+  "private": true,
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "prepare": "svelte-kit sync && husky",
+    "dev": "vite dev --host 127.0.0.1 --port 5187 --strictPort",
+    "dev:e2e": "vite dev --host 127.0.0.1 --port 5187 --strictPort",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4187 --strictPort",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:workflow": "actionlint",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "test:rules": "firebase emulators:exec --project roborally-e2e --only firestore \"vitest run --config vitest.rules.config.ts\"",
+    "test:e2e": "firebase emulators:exec --project roborally-e2e --only auth,firestore \"playwright test\"",
+    "test:e2e:update-snapshots": "firebase emulators:exec --project roborally-e2e --only auth,firestore \"playwright test --update-snapshots\"",
+    "emulators": "firebase emulators:start --project roborally-e2e",
+    "verify:change": "bash scripts/verify-change.sh"
+  },
+  "dependencies": {
+    "@fontsource/atkinson-hyperlegible": "^5.2.8",
+    "@fontsource/space-mono": "^5.2.9",
+    "firebase": "^12.16.0"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
+    "@playwright/test": "^1.61.1",
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.69.3",
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "@types/node": "^26.1.1",
+    "firebase-tools": "15.25.0",
+    "husky": "^9.1.7",
+    "jsdom": "^29.1.1",
+    "svelte": "^5.56.5",
+    "svelte-check": "^4.7.2",
+    "typescript": "^5.9.3",
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10"
+  }
+}
