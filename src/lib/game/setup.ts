@@ -5,6 +5,7 @@ import {
   type Direction
 } from './course-manifest';
 import { PROGRAM_MANIFEST_VERSION } from './program-manifest';
+import { OPTION_MANIFEST_VERSION } from './option-manifest';
 
 export const EDITION_ID = 'avalon-hill-2005';
 export const PRNG_VERSION = 'xorshift32-v1';
@@ -15,7 +16,7 @@ export interface RaceConfig {
   reducerVersion: typeof RACE_REDUCER_VERSION;
   prngVersion: typeof PRNG_VERSION;
   programManifestVersion: typeof PROGRAM_MANIFEST_VERSION;
-  optionManifestVersion: null;
+  optionManifestVersion: typeof OPTION_MANIFEST_VERSION;
   boardManifestVersion: typeof BOARD_MANIFEST_VERSION;
   courseManifestVersion: typeof COURSE_MANIFEST_VERSION;
   courseId: typeof RISKY_EXCHANGE.id;
@@ -48,7 +49,7 @@ export function riskyExchangeConfig(seed: string, lives: 3 | 4 = 3): RaceConfig 
     reducerVersion: RACE_REDUCER_VERSION,
     prngVersion: PRNG_VERSION,
     programManifestVersion: PROGRAM_MANIFEST_VERSION,
-    optionManifestVersion: null,
+    optionManifestVersion: OPTION_MANIFEST_VERSION,
     boardManifestVersion: BOARD_MANIFEST_VERSION,
     courseManifestVersion: COURSE_MANIFEST_VERSION,
     courseId: RISKY_EXCHANGE.id,

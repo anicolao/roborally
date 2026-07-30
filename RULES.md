@@ -330,10 +330,10 @@ When multiple Option decisions share a timing window, the original Dock 1
 player decides first, followed clockwise. Each player receives one opportunity
 to say whether and how they use an Option.
 
-Single-wrench and crossed-site repair now remove exactly one damage during
-cleanup. A falling lock threshold discards the newly unlocked register from 1
-toward 5; crossed sites preserve a deterministic face-up Option-draw
-placeholder until the reviewed deck is enabled.
+Single-wrench and crossed-site repair remove exactly one damage during cleanup.
+A falling lock threshold discards the newly unlocked register from 1 toward 5.
+Crossed sites draw without replacement from the reviewed, versioned 26-card
+2005 Option deck; ownership and discards remain public.
 
 ## Damage and locked registers
 
@@ -462,8 +462,10 @@ work starts.
 The rules engine cannot be declared 2005-complete until these source-data tasks
 are reviewed:
 
-1. all 84 Program-card IDs, priorities, and directions;
-2. all 26 Option cards and effects;
+1. ~~all 84 Program-card IDs, priorities, and directions~~ — reviewed in the
+   Step 3 manifest;
+2. ~~all 26 Option cards and effects~~ — reviewed and executable in
+   `avalon-hill-2005-options-v1`;
 3. every wall, pit, conveyor, pusher, gear, laser, and repair cell on all eight
    board faces;
 4. both Docking Bay faces; and

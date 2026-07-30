@@ -6,6 +6,7 @@ import {
 } from './course-manifest';
 import { PROGRAM_CARDS, type ProgramAction } from './program-manifest';
 import {
+  applyOptionLossChoice,
   applyProgramCard,
   applyReentryChoice,
   beginNextTurnPowerDowns,
@@ -24,6 +25,7 @@ import {
 } from './movement';
 import { createProgrammingState, submitProgram } from './programming';
 import { deriveRaceSetup, riskyExchangeConfig } from './setup';
+import { createOptionDeck } from './options';
 
 function card(action: ProgramAction) {
   return PROGRAM_CARDS.find((candidate) => candidate.action === action)!;
@@ -42,11 +44,13 @@ function raceRobot(
     touchedFlags: [],
     nextFlag: 1,
     pendingOptionDraws: 0,
+    options: [],
     poweredDown: false,
     powerDownNextTurn: false,
     status: 'active',
     destructionOrder: null,
     optionLossPending: false,
+    superiorArchivePending: false,
     ...overrides
   };
 }
@@ -222,11 +226,11 @@ describe('priority Program movement', () => {
     expect(trace.map(({ kind }) => kind)).toEqual([
       'reveal',
       'destroyed-pit',
-      'option-loss-placeholder',
+      'option-loss',
       'life-lost',
       'reveal',
       'destroyed-edge',
-      'option-loss-placeholder',
+      'option-loss',
       'life-lost'
     ]);
   });
@@ -272,6 +276,8 @@ describe('priority Program movement', () => {
       phase: 'awaiting-reentry',
       robots: [first, second],
       trace: [] as ResolutionTraceEntry[],
+      optionDeck: createOptionDeck('reentry-order'),
+      nextOptionChoiceUid: null,
       nextReentryUid: 'first',
       winnerUid: null,
       runnersUpUids: [],
@@ -319,6 +325,8 @@ describe('priority Program movement', () => {
       phase: 'awaiting-reentry',
       robots: [destroyed],
       trace: [],
+      optionDeck: createOptionDeck('destroyed-announcer'),
+      nextOptionChoiceUid: null,
       nextReentryUid: destroyed.uid,
       winnerUid: null,
       runnersUpUids: [],
@@ -718,6 +726,230 @@ describe('priority Program movement', () => {
     expect(trace).toContainEqual(expect.objectContaining({ kind: 'destroyed-damage' }));
   });
 
+  it('discards exactly one precommitted Option to prevent one damage packet', () => {
+    const config = riskyExchangeConfig('OPTION-PREVENTION');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'target', name: 'Target', robotId: 'axle' },
+        { uid: 'observer', name: 'Observer', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const target = raceRobot({
+      uid: 'target',
+      name: 'Target',
+      x: 10,
+      y: 3,
+      damage: 4,
+      options: [{ cardId: 'brakes', spent: 0, storedProgramCardId: null }]
+    });
+    const optionDeck = createOptionDeck('OPTION-PREVENTION');
+    const trace: ResolutionTraceEntry[] = [];
+
+    resolveLaserSnapshot(
+      [target],
+      1,
+      trace,
+      programming,
+      [
+        {
+          x: 10,
+          y: 3,
+          elements: [{ kind: 'laser', direction: 'east', beamCount: 1 }]
+        }
+      ],
+      optionDeck,
+      { target: ['brakes'] }
+    );
+
+    expect(target.damage).toBe(4);
+    expect(target.options).toEqual([]);
+    expect(optionDeck.discardPile).toContain('brakes');
+    expect(trace).toContainEqual(
+      expect.objectContaining({ kind: 'option-damage-prevented' })
+    );
+  });
+
+  it('applies reviewed movement and factory-rotation Option hooks', () => {
+    const mover = raceRobot({
+      uid: 'mover',
+      name: 'Mover',
+      x: 6,
+      y: 10,
+      options: [{ cardId: 'fourth-gear', spent: 0, storedProgramCardId: null }]
+    });
+    const trace: ResolutionTraceEntry[] = [];
+    applyProgramCard(
+      [mover],
+      mover.uid,
+      card('move-3'),
+      1,
+      trace,
+      {
+        kind: 'option-plan',
+        preventDamageWith: [],
+        activations: [
+          {
+            cardId: 'fourth-gear',
+            register: 1,
+            mode: 'activate',
+            targetUid: null,
+            targetOptionId: null
+          }
+        ]
+      }
+    );
+    expect(mover).toMatchObject({ x: 6, y: 6 });
+    expect(trace).toContainEqual(expect.objectContaining({ kind: 'option-effect' }));
+
+    const stable = raceRobot({
+      uid: 'stable',
+      name: 'Stable',
+      x: 1,
+      y: 1,
+      options: [
+        { cardId: 'gyroscopic-stabilizer', spent: 0, storedProgramCardId: null }
+      ]
+    });
+    resolveBoardElements(
+      [stable],
+      1,
+      trace,
+      [{ x: 1, y: 1, elements: [{ kind: 'gear', rotation: 'clockwise' }] }],
+      {
+        stable: {
+          kind: 'option-plan',
+          preventDamageWith: [],
+          activations: [
+            {
+              cardId: 'gyroscopic-stabilizer',
+              register: null,
+              mode: 'activate',
+              targetUid: null,
+              targetOptionId: null
+            }
+          ]
+        }
+      }
+    );
+    expect(stable.facing).toBe('north');
+  });
+
+  it('applies armor, laser, circuit-breaker, and archive-copy hooks', () => {
+    const config = riskyExchangeConfig('OPTION-HOOKS');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'shooter', name: 'Shooter', robotId: 'axle' },
+        { uid: 'target', name: 'Target', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const shooter = raceRobot({
+      uid: 'shooter',
+      name: 'Shooter',
+      x: 1,
+      y: 6,
+      facing: 'east',
+      options: [
+        { cardId: 'double-barrel-laser', spent: 0, storedProgramCardId: null }
+      ]
+    });
+    const target = raceRobot({
+      uid: 'target',
+      name: 'Target',
+      x: 3,
+      y: 6,
+      options: [{ cardId: 'ablative-coat', spent: 2, storedProgramCardId: null }]
+    });
+    const optionDeck = createOptionDeck('OPTION-HOOKS');
+    const trace: ResolutionTraceEntry[] = [];
+    resolveLaserSnapshot(
+      [shooter, target],
+      1,
+      trace,
+      programming,
+      [],
+      optionDeck
+    );
+    expect(target.damage).toBe(1);
+    expect(target.options).toEqual([]);
+    expect(optionDeck.discardPile).toContain('ablative-coat');
+
+    target.options = [
+      { cardId: 'circuit-breaker', spent: 0, storedProgramCardId: null }
+    ];
+    target.damage = 3;
+    resolveRepairCleanup([target], trace, []);
+    expect(target.powerDownNextTurn).toBe(true);
+
+    target.status = 'destroyed';
+    target.destructionOrder = 1;
+    target.archive = { x: 3, y: 6 };
+    target.optionLossPending = false;
+    target.superiorArchivePending = true;
+    const awaiting: ProgramResolution = {
+      turnNumber: 2,
+      phase: 'awaiting-reentry',
+      robots: [target],
+      trace,
+      optionDeck,
+      nextOptionChoiceUid: null,
+      nextReentryUid: target.uid,
+      winnerUid: null,
+      runnersUpUids: [],
+      summary: null
+    };
+    const reentered = applyReentryChoice(awaiting, target.uid, {
+      x: 3,
+      y: 6,
+      facing: 'north'
+    });
+    expect(reentered.robots[0]).toMatchObject({
+      damage: 3,
+      superiorArchivePending: false
+    });
+  });
+
+  it('requires named Option loss before the destroyed robot may re-enter', () => {
+    const destroyed = raceRobot({
+      uid: 'owner',
+      name: 'Owner',
+      x: 8,
+      y: 8,
+      archive: { x: 6, y: 10 },
+      status: 'destroyed',
+      destructionOrder: 1,
+      lives: 2,
+      optionLossPending: true,
+      options: [
+        { cardId: 'brakes', spent: 0, storedProgramCardId: null },
+        { cardId: 'rear-laser', spent: 0, storedProgramCardId: null }
+      ]
+    });
+    const awaiting: ProgramResolution = {
+      turnNumber: 3,
+      phase: 'awaiting-option',
+      robots: [destroyed],
+      trace: [],
+      optionDeck: createOptionDeck('OPTION-LOSS'),
+      nextOptionChoiceUid: 'owner',
+      nextReentryUid: null,
+      winnerUid: null,
+      runnersUpUids: [],
+      summary: null
+    };
+
+    expect(applyOptionLossChoice(awaiting, 'other', 'brakes')).toBe(awaiting);
+    const discarded = applyOptionLossChoice(awaiting, 'owner', 'rear-laser');
+    expect(discarded).not.toBe(awaiting);
+    expect(discarded.phase).toBe('awaiting-reentry');
+    expect(discarded.nextReentryUid).toBe('owner');
+    expect(discarded.robots[0].options.map(({ cardId }) => cardId)).toEqual(['brakes']);
+    expect(discarded.optionDeck.discardPile).toContain('rear-laser');
+  });
+
   it('updates archives every register but only touches flags in order', () => {
     const robot = raceRobot({ uid: 'runner', name: 'Runner', x: 10, y: 8 });
     const trace: ResolutionTraceEntry[] = [];
@@ -771,8 +1003,10 @@ describe('priority Program movement', () => {
       lockedRegisters: [{ register: 5, cardId: 'program-060' }]
     });
     const trace: ResolutionTraceEntry[] = [];
+    const optionDeck = createOptionDeck('repair-draw');
+    const drawnCardId = optionDeck.drawPile[0];
 
-    resolveRepairCleanup([single, crossed], trace);
+    resolveRepairCleanup([single, crossed], trace, undefined, optionDeck);
     expect(single).toMatchObject({
       damage: 8,
       pendingOptionDraws: 0,
@@ -785,7 +1019,8 @@ describe('priority Program movement', () => {
     });
     expect(crossed).toMatchObject({
       damage: 4,
-      pendingOptionDraws: 1,
+      pendingOptionDraws: 0,
+      options: [{ cardId: drawnCardId, spent: 0, storedProgramCardId: null }],
       lockedRegisters: []
     });
     expect(trace).toContainEqual(
@@ -794,7 +1029,7 @@ describe('priority Program movement', () => {
         text: expect.stringContaining('register 1')
       })
     );
-    expect(trace).toContainEqual(expect.objectContaining({ kind: 'option-draw-placeholder' }));
+    expect(trace).toContainEqual(expect.objectContaining({ kind: 'option-drawn' }));
   });
 
   it('ends immediately on Flag 3 with frozen winner and optional runner-up standings', () => {
