@@ -212,6 +212,11 @@ A wall blocks movement across its edge. Hitting a wall causes no damage. A pit
 or course edge does not block movement: entering a pit or leaving the board
 destroys the moving robot immediately.
 
+The implemented semantic wall graph stores undirected edges and checks both the
+departing and destination cell, including transformed board seams. Program
+resolution emits a deterministic microstep trace; animation and the textual
+feed are projections of that trace and never additional canonical events.
+
 ### Pushing
 
 When movement enters an occupied space, it pushes that robot one space in the
