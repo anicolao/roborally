@@ -8,8 +8,20 @@ import {
   type Wall
 } from './course-manifest';
 import { PROGRAM_CARDS, type ProgramAction, type ProgramCard } from './program-manifest';
+import type { OptionCardId } from './option-manifest';
+import {
+  cloneOptionDeck,
+  createOptionDeck,
+  discardOwnedOption,
+  drawOption,
+  optionPlanFor,
+  type OptionDeckState,
+  type OptionTurnPlan,
+  type OwnedOption
+} from './options';
 import type { ProgrammingState } from './programming';
 import type { RaceSetup } from './setup';
+import { applyOptionEffect } from './option-effects';
 
 export type RobotBoardStatus = 'active' | 'destroyed' | 'eliminated';
 export type RegisterNumber = 1 | 2 | 3 | 4 | 5;
@@ -33,11 +45,13 @@ export interface RaceRobotPosition {
   touchedFlags: (1 | 2 | 3)[];
   nextFlag: 1 | 2 | 3 | null;
   pendingOptionDraws: number;
+  options: OwnedOption[];
   poweredDown: boolean;
   powerDownNextTurn: boolean;
   status: RobotBoardStatus;
   destructionOrder: number | null;
   optionLossPending: boolean;
+  superiorArchivePending: boolean;
 }
 
 export type ResolutionTraceKind =
@@ -49,7 +63,7 @@ export type ResolutionTraceKind =
   | 'push-blocked-wall'
   | 'destroyed-pit'
   | 'destroyed-edge'
-  | 'option-loss-placeholder'
+  | 'option-loss'
   | 'life-lost'
   | 'eliminated'
   | 'reentry-required'
@@ -63,12 +77,14 @@ export type ResolutionTraceKind =
   | 'board-laser'
   | 'robot-laser'
   | 'damage'
+  | 'option-damage-prevented'
+  | 'option-effect'
   | 'destroyed-damage'
   | 'flag-touched'
   | 'archive-updated'
   | 'repair'
   | 'register-unlocked'
-  | 'option-draw-placeholder'
+  | 'option-drawn'
   | 'winner';
 
 export interface ResolutionTraceEntry {
@@ -90,9 +106,11 @@ export interface ReentryChoice {
 
 export interface ProgramResolution {
   turnNumber: number;
-  phase: 'awaiting-reentry' | 'turn-complete' | 'race-finished';
+  phase: 'awaiting-option' | 'awaiting-reentry' | 'turn-complete' | 'race-finished';
   robots: RaceRobotPosition[];
   trace: ResolutionTraceEntry[];
+  optionDeck: OptionDeckState;
+  nextOptionChoiceUid: string | null;
   nextReentryUid: string | null;
   winnerUid: string | null;
   runnersUpUids: string[];
@@ -231,7 +249,10 @@ function destroyRobot(
   robot.lives -= 1;
   robot.damage = 0;
   robot.lockedRegisters = [];
-  robot.optionLossPending = false;
+  robot.optionLossPending = robot.options.length > 0;
+  robot.superiorArchivePending =
+    robot.superiorArchivePending ||
+    robot.options.some(({ cardId }) => cardId === 'superior-archive-copy');
   robot.status = robot.lives > 0 ? 'destroyed' : 'eliminated';
   addTrace(
     trace,
@@ -248,14 +269,16 @@ function destroyRobot(
     } ` +
       `as destruction ${robot.destructionOrder}.`
   );
-  addTrace(
-    trace,
-    register,
-    robot.uid,
-    card,
-    'option-loss-placeholder',
-    `${robot.name} has no reviewed Option card to discard; the mandatory loss hook is preserved.`
-  );
+  if (robot.options.length === 0) {
+    addTrace(
+      trace,
+      register,
+      robot.uid,
+      card,
+      'option-loss',
+      `${robot.name} owned no Option card, so destruction caused no Option loss.`
+    );
+  }
   addTrace(
     trace,
     register,
@@ -358,7 +381,8 @@ export function applyProgramCard(
   actorUid: string,
   card: ProgramCard,
   register: number,
-  trace: ResolutionTraceEntry[]
+  trace: ResolutionTraceEntry[],
+  optionPlan?: OptionTurnPlan
 ) {
   const robot = robots.find(({ uid }) => uid === actorUid);
   if (!robot || robot.status !== 'active' || robot.poweredDown) return;
@@ -393,11 +417,77 @@ export function applyProgramCard(
     return;
   }
 
-  const signedDistance = movementDistance(card.action);
-  const direction = signedDistance < 0 ? opposite[robot.facing] : robot.facing;
+  let signedDistance = movementDistance(card.action);
+  let direction = signedDistance < 0 ? opposite[robot.facing] : robot.facing;
+  let rotationAfterMovement: -1 | 1 | 2 | undefined;
+  for (const cardId of ['brakes', 'fourth-gear', 'reverse-gears'] as const) {
+    const activation = optionPlan?.activations.find(
+      (candidate) =>
+        candidate.cardId === cardId &&
+        candidate.register === register &&
+        robot.options.some((option) => option.cardId === cardId)
+    );
+    if (!activation) continue;
+    const effect = applyOptionEffect(cardId, { action: card.action });
+    if (!effect.active || effect.movementDistance === undefined) continue;
+    signedDistance = effect.movementDistance;
+    direction = signedDistance < 0 ? opposite[robot.facing] : robot.facing;
+    addTrace(
+      trace,
+      register,
+      robot.uid,
+      card,
+      'option-effect',
+      `${robot.name} used ${cardId.replaceAll('-', ' ')} for ${Math.abs(signedDistance)} movement.`
+    );
+  }
+  const combined = optionPlan?.activations.find(
+    (candidate) =>
+      candidate.cardId === 'dual-processor' &&
+      candidate.register === register &&
+      robot.options.some((option) => option.cardId === 'dual-processor')
+  );
+  if (combined) {
+    const effect = applyOptionEffect('dual-processor', {
+      action: card.action,
+      pairedAction: combined.pairedAction as ProgramAction
+    });
+    if (effect.active && effect.movementDistance !== undefined) {
+      signedDistance = effect.movementDistance;
+      rotationAfterMovement = effect.rotationAfterMovement;
+    }
+  }
+  const crab = optionPlan?.activations.find(
+    (candidate) =>
+      candidate.cardId === 'crab-legs' &&
+      candidate.register === register &&
+      robot.options.some((option) => option.cardId === 'crab-legs')
+  );
+  if (crab) {
+    const effect = applyOptionEffect('crab-legs', {
+      action: card.action,
+      pairedAction: crab.pairedAction as ProgramAction
+    });
+    if (effect.active && effect.sideStep) {
+      direction = rotate(robot.facing, effect.sideStep === 'left' ? -1 : 1);
+      signedDistance = 1;
+    }
+  }
   for (let step = 1; step <= Math.abs(signedDistance); step += 1) {
     const result = translateOneCell(robots, robot, direction, step, register, card, trace);
     if (!result.moved || result.actorDestroyed) return;
+  }
+  if (rotationAfterMovement) {
+    const before = robot.facing;
+    robot.facing = rotate(robot.facing, rotationAfterMovement);
+    addTrace(
+      trace,
+      register,
+      robot.uid,
+      card,
+      'option-effect',
+      `${robot.name}'s dual processor rotated from ${before} to ${robot.facing}.`
+    );
   }
 }
 
@@ -424,7 +514,8 @@ function resolveConveyorSubstep(
   register: number,
   trace: ResolutionTraceEntry[],
   expressOnly: boolean,
-  cells: readonly BoardCell[]
+  cells: readonly BoardCell[],
+  optionPlans: Readonly<Record<string, OptionTurnPlan>>
 ) {
   const intents: ConveyorIntent[] = [];
   for (const robot of robots.filter(({ status }) => status === 'active')) {
@@ -526,8 +617,17 @@ function resolveConveyorSubstep(
     }
     robot.x = nextX;
     robot.y = nextY;
-    if (conveyor.turn === 'left') robot.facing = rotate(robot.facing, -1);
-    if (conveyor.turn === 'right') robot.facing = rotate(robot.facing, 1);
+    const gyroscopeActive =
+      robot.options.some(({ cardId }) => cardId === 'gyroscopic-stabilizer') &&
+      optionPlanFor(optionPlans, robot.uid).activations.some(
+        ({ cardId }) => cardId === 'gyroscopic-stabilizer'
+      );
+    if (!gyroscopeActive && conveyor.turn === 'left') {
+      robot.facing = rotate(robot.facing, -1);
+    }
+    if (!gyroscopeActive && conveyor.turn === 'right') {
+      robot.facing = rotate(robot.facing, 1);
+    }
     addTrace(
       trace,
       register,
@@ -544,10 +644,11 @@ export function resolveBoardElements(
   robots: RaceRobotPosition[],
   register: number,
   trace: ResolutionTraceEntry[],
-  cells: readonly BoardCell[] = worldBoardCells
+  cells: readonly BoardCell[] = worldBoardCells,
+  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {}
 ) {
-  resolveConveyorSubstep(robots, register, trace, true, cells);
-  resolveConveyorSubstep(robots, register, trace, false, cells);
+  resolveConveyorSubstep(robots, register, trace, true, cells, optionPlans);
+  resolveConveyorSubstep(robots, register, trace, false, cells, optionPlans);
 
   for (const robot of [...robots]) {
     if (robot.status !== 'active') continue;
@@ -573,6 +674,22 @@ export function resolveBoardElements(
       | Extract<BoardElement, { kind: 'gear' }>
       | undefined;
     if (!gear) continue;
+    if (
+      robot.options.some(({ cardId }) => cardId === 'gyroscopic-stabilizer') &&
+      optionPlanFor(optionPlans, robot.uid).activations.some(
+        ({ cardId }) => cardId === 'gyroscopic-stabilizer'
+      )
+    ) {
+      addTrace(
+        trace,
+        register,
+        robot.uid,
+        null,
+        'option-effect',
+        `${robot.name}'s gyroscopic stabilizer ignored the gear rotation.`
+      );
+      continue;
+    }
     const before = robot.facing;
     robot.facing = rotate(robot.facing, gear.rotation === 'clockwise' ? 1 : -1);
     addTrace(
@@ -620,12 +737,69 @@ interface LaserHit {
   kind: 'board-laser' | 'robot-laser';
 }
 
+function dealOneDamage(
+  robots: RaceRobotPosition[],
+  target: RaceRobotPosition,
+  register: number,
+  trace: ResolutionTraceEntry[],
+  programming: ProgrammingState,
+  optionDeck?: OptionDeckState,
+  preventionQueues: Record<string, OptionCardId[]> = {}
+) {
+  const cardId = preventionQueues[target.uid]?.shift();
+  if (cardId && optionDeck && discardOwnedOption(target.options, optionDeck, cardId)) {
+    addTrace(
+      trace,
+      register,
+      target.uid,
+      null,
+      'option-damage-prevented',
+      `${target.name} discarded ${cardId.replaceAll('-', ' ')} to prevent one damage.`
+    );
+    return;
+  }
+  const ablative = target.options.find(({ cardId }) => cardId === 'ablative-coat');
+  if (ablative && optionDeck) {
+    const effect = applyOptionEffect('ablative-coat', {
+      payloadSpent: ablative.spent
+    });
+    ablative.spent = effect.payloadSpent ?? ablative.spent;
+    addTrace(
+      trace,
+      register,
+      target.uid,
+      null,
+      'option-damage-prevented',
+      `${target.name}'s ablative coat absorbed one damage (${ablative.spent}/3).`
+    );
+    if (effect.discard) discardOwnedOption(target.options, optionDeck, 'ablative-coat');
+    return;
+  }
+  target.damage += 1;
+  addTrace(
+    trace,
+    register,
+    target.uid,
+    null,
+    'damage',
+    `${target.name} took one damage and now has ${target.damage}.`
+  );
+  if (target.damage >= 10) {
+    destroyRobot(robots, target, 'damage', register, null, trace);
+  } else {
+    synchronizeLockedRegisters(target, programming);
+  }
+}
+
 export function resolveLaserSnapshot(
   robots: RaceRobotPosition[],
   register: number,
   trace: ResolutionTraceEntry[],
   programming: ProgrammingState,
-  cells: readonly BoardCell[] = worldBoardCells
+  cells: readonly BoardCell[] = worldBoardCells,
+  optionDeck?: OptionDeckState,
+  preventionQueues?: Record<string, OptionCardId[]>,
+  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {}
 ) {
   const activeSnapshot = robots.filter(({ status }) => status === 'active');
   const hits: LaserHit[] = [];
@@ -674,22 +848,49 @@ export function resolveLaserSnapshot(
   }
 
   for (const shooter of activeSnapshot.filter(({ poweredDown }) => !poweredDown)) {
-    let cursorX = shooter.x;
-    let cursorY = shooter.y;
-    const [dx, dy] = steps[shooter.facing];
-    while (courseContains(cursorX, cursorY)) {
-      if (movementBlockedByWall(cursorX, cursorY, shooter.facing)) break;
-      cursorX += dx;
-      cursorY += dy;
-      if (!courseContains(cursorX, cursorY)) break;
-      const target = activeRobotAt(activeSnapshot, cursorX, cursorY, shooter.uid);
-      if (!target) continue;
-      hits.push({
-        sourceUid: shooter.uid,
-        targetUid: target.uid,
-        kind: 'robot-laser'
-      });
-      break;
+    const directions = [
+      shooter.facing,
+      ...(shooter.options.some(({ cardId }) => cardId === 'rear-laser')
+        ? [opposite[shooter.facing]]
+        : [])
+    ];
+    for (const firingDirection of directions) {
+      let cursorX = shooter.x;
+      let cursorY = shooter.y;
+      const [dx, dy] = steps[firingDirection];
+      let passBudget =
+        shooter.options.some(({ cardId }) => cardId === 'high-power-laser') &&
+        optionPlanFor(optionPlans, shooter.uid).activations.some(
+          ({ cardId, register: activeRegister }) =>
+            cardId === 'high-power-laser' && activeRegister === register
+        )
+          ? 1
+          : 0;
+      const beamDamage = shooter.options.some(
+        ({ cardId }) => cardId === 'double-barrel-laser'
+      )
+        ? 2
+        : 1;
+      while (courseContains(cursorX, cursorY)) {
+        if (movementBlockedByWall(cursorX, cursorY, firingDirection)) {
+          if (passBudget === 0) break;
+          passBudget -= 1;
+        }
+        cursorX += dx;
+        cursorY += dy;
+        if (!courseContains(cursorX, cursorY)) break;
+        const target = activeRobotAt(activeSnapshot, cursorX, cursorY, shooter.uid);
+        if (!target) continue;
+        for (let beam = 0; beam < beamDamage; beam += 1) {
+          hits.push({
+            sourceUid: shooter.uid,
+            targetUid: target.uid,
+            kind: 'robot-laser'
+          });
+        }
+        if (passBudget === 0) break;
+        passBudget -= 1;
+      }
     }
   }
 
@@ -709,20 +910,15 @@ export function resolveLaserSnapshot(
         ? `A board laser hit ${target.name} at (${target.x},${target.y}).`
         : `${shooter?.name ?? 'A robot'} fired through clear line of sight and hit ${target.name}.`
     );
-    target.damage += 1;
-    addTrace(
-      trace,
+    dealOneDamage(
+      robots,
+      target,
       register,
-      target.uid,
-      null,
-      'damage',
-      `${target.name} took one damage and now has ${target.damage}.`
+      trace,
+      programming,
+      optionDeck,
+      preventionQueues
     );
-    if (target.damage >= 10) {
-      destroyRobot(robots, target, 'damage', register, null, trace);
-    } else {
-      synchronizeLockedRegisters(target, programming);
-    }
   }
 }
 
@@ -736,7 +932,37 @@ export function resolveFlagsAndArchives(
   const finishers: string[] = [];
   for (const robot of robots) {
     if (robot.status !== 'active') continue;
-    const flag = flags.find(({ x, y }) => x === robot.x && y === robot.y);
+    const flag =
+      flags.find(({ x, y }) => x === robot.x && y === robot.y) ??
+      (robot.options.some(({ cardId }) => cardId === 'mechanical-arm')
+        ? flags.find(({ x, y }) => {
+            const dx = x - robot.x;
+            const dy = y - robot.y;
+            if (Math.max(Math.abs(dx), Math.abs(dy)) !== 1) return false;
+            if (dx === 0) {
+              return !movementBlockedByWall(
+                robot.x,
+                robot.y,
+                dy < 0 ? 'north' : 'south'
+              );
+            }
+            if (dy === 0) {
+              return !movementBlockedByWall(
+                robot.x,
+                robot.y,
+                dx < 0 ? 'west' : 'east'
+              );
+            }
+            const horizontal = dx < 0 ? 'west' : 'east';
+            const vertical = dy < 0 ? 'north' : 'south';
+            return (
+              (!movementBlockedByWall(robot.x, robot.y, horizontal) &&
+                !movementBlockedByWall(robot.x + dx, robot.y, vertical)) ||
+              (!movementBlockedByWall(robot.x, robot.y, vertical) &&
+                !movementBlockedByWall(robot.x, robot.y + dy, horizontal))
+            );
+          })
+        : undefined);
     const repair = elementAt(cells, robot.x, robot.y, 'repair') as
       | Extract<BoardElement, { kind: 'repair' }>
       | undefined;
@@ -772,7 +998,8 @@ export function resolveFlagsAndArchives(
 export function resolveRepairCleanup(
   robots: RaceRobotPosition[],
   trace: ResolutionTraceEntry[],
-  cells: readonly BoardCell[] = worldBoardCells
+  cells: readonly BoardCell[] = worldBoardCells,
+  optionDeck?: OptionDeckState
 ) {
   for (const robot of robots) {
     if (robot.status !== 'active') continue;
@@ -810,13 +1037,35 @@ export function resolveRepairCleanup(
     }
     if (repair.option) {
       robot.pendingOptionDraws += 1;
+      const option = optionDeck ? drawOption(optionDeck) : null;
+      if (option) {
+        robot.options.push(option);
+        robot.pendingOptionDraws -= 1;
+        addTrace(
+          trace,
+          6,
+          robot.uid,
+          null,
+          'option-drawn',
+          `${robot.name} drew ${option.cardId.replaceAll('-', ' ')} face up.`
+        );
+      }
+    }
+  }
+  for (const robot of robots) {
+    if (
+      robot.status === 'active' &&
+      robot.options.some(({ cardId }) => cardId === 'circuit-breaker') &&
+      applyOptionEffect('circuit-breaker', { damage: robot.damage }).forcePowerDown
+    ) {
+      robot.powerDownNextTurn = true;
       addTrace(
         trace,
         6,
         robot.uid,
         null,
-        'option-draw-placeholder',
-        `${robot.name} earned one face-up Option draw; the reviewed deck gate remains closed.`
+        'option-effect',
+        `${robot.name}'s circuit breaker forced power down next turn.`
       );
     }
   }
@@ -854,12 +1103,30 @@ function nextDestroyedRobot(robots: readonly RaceRobotPosition[]) {
     )[0];
 }
 
+function nextOptionLossRobot(robots: readonly RaceRobotPosition[]) {
+  return [...robots]
+    .filter(({ optionLossPending }) => optionLossPending)
+    .sort(
+      (left, right) =>
+        (left.destructionOrder ?? Number.MAX_SAFE_INTEGER) -
+        (right.destructionOrder ?? Number.MAX_SAFE_INTEGER)
+    )[0];
+}
+
 function updateResolutionPhase(resolution: ProgramResolution) {
   if (resolution.winnerUid) {
     resolution.nextReentryUid = null;
     resolution.phase = 'race-finished';
     return;
   }
+  const optionLoss = nextOptionLossRobot(resolution.robots);
+  resolution.nextOptionChoiceUid = optionLoss?.uid ?? null;
+  if (optionLoss) {
+    resolution.nextReentryUid = null;
+    resolution.phase = 'awaiting-option';
+    return;
+  }
+  resolution.nextOptionChoiceUid = null;
   const next = nextDestroyedRobot(resolution.robots);
   resolution.nextReentryUid = next?.uid ?? null;
   resolution.phase = next ? 'awaiting-reentry' : 'turn-complete';
@@ -928,10 +1195,12 @@ export function applyReentryChoice(
     robots: current.robots.map((robot) => ({
       ...robot,
       archive: { ...robot.archive },
+      options: robot.options.map((option) => ({ ...option })),
       lockedRegisters: robot.lockedRegisters.map((locked) => ({ ...locked })),
       touchedFlags: [...robot.touchedFlags]
     })),
-    trace: [...current.trace]
+    trace: [...current.trace],
+    optionDeck: cloneOptionDeck(current.optionDeck)
   };
   const legal = legalReentryChoices(resolution, uid);
   if (!legal.some(({ x, y, facing }) => x === choice.x && y === choice.y && facing === choice.facing)) {
@@ -941,7 +1210,9 @@ export function applyReentryChoice(
   robot.x = choice.x;
   robot.y = choice.y;
   robot.facing = choice.facing;
-  robot.damage += 2;
+  const reentryDamage = robot.superiorArchivePending ? 0 : 2;
+  robot.damage += reentryDamage;
+  robot.superiorArchivePending = false;
   robot.powerDownNextTurn = Boolean(choice.poweredDown && robot.powerDownNextTurn);
   robot.poweredDown = false;
   robot.status = 'active';
@@ -969,6 +1240,45 @@ export function applyReentryChoice(
   return resolution;
 }
 
+export function applyOptionLossChoice(
+  current: ProgramResolution,
+  uid: string,
+  cardId: OptionCardId
+): ProgramResolution {
+  if (current.nextOptionChoiceUid !== uid) return current;
+  const resolution: ProgramResolution = {
+    ...current,
+    robots: current.robots.map((robot) => ({
+      ...robot,
+      archive: { ...robot.archive },
+      options: robot.options.map((option) => ({ ...option })),
+      lockedRegisters: robot.lockedRegisters.map((locked) => ({ ...locked })),
+      touchedFlags: [...robot.touchedFlags]
+    })),
+    trace: [...current.trace],
+    optionDeck: cloneOptionDeck(current.optionDeck)
+  };
+  const robot = resolution.robots.find((candidate) => candidate.uid === uid);
+  if (
+    !robot ||
+    !robot.optionLossPending ||
+    !discardOwnedOption(robot.options, resolution.optionDeck, cardId)
+  ) {
+    return current;
+  }
+  robot.optionLossPending = false;
+  addTrace(
+    resolution.trace,
+    6,
+    uid,
+    null,
+    'option-loss',
+    `${robot.name} discarded ${cardId.replaceAll('-', ' ')} after being destroyed.`
+  );
+  updateResolutionPhase(resolution);
+  return resolution;
+}
+
 export function createRaceRobotPositions(setup: RaceSetup): RaceRobotPosition[] {
   return setup.players.map((player) => ({
     uid: player.uid,
@@ -984,11 +1294,13 @@ export function createRaceRobotPositions(setup: RaceSetup): RaceRobotPosition[] 
     touchedFlags: [],
     nextFlag: 1,
     pendingOptionDraws: 0,
+    options: [],
     poweredDown: false,
     powerDownNextTurn: false,
     status: 'active',
     destructionOrder: null,
-    optionLossPending: false
+    optionLossPending: false,
+    superiorArchivePending: false
   }));
 }
 
@@ -999,6 +1311,7 @@ export function beginNextTurnPowerDowns(
     const next = {
       ...robot,
       archive: { ...robot.archive },
+      options: robot.options.map((option) => ({ ...option })),
       lockedRegisters: robot.lockedRegisters.map((locked) => ({ ...locked })),
       touchedFlags: [...robot.touchedFlags]
     };
@@ -1019,16 +1332,28 @@ export function resolveProgrammedTurn(
   programming: ProgrammingState,
   setup: RaceSetup,
   initialRobots = createRaceRobotPositions(setup),
-  includeRunnersUp = false
+  includeRunnersUp = false,
+  initialOptionDeck?: OptionDeckState,
+  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {}
 ): ProgramResolution | null {
   if (programming.phase !== 'programmed') return null;
   const robots = initialRobots.map((robot) => ({
     ...robot,
     archive: { ...robot.archive },
+    options: robot.options.map((option) => ({ ...option })),
     lockedRegisters: robot.lockedRegisters.map((locked) => ({ ...locked })),
     touchedFlags: [...robot.touchedFlags]
   }));
+  const optionDeck = cloneOptionDeck(
+    initialOptionDeck ?? createOptionDeck(`standalone-turn-${programming.turnNumber}`)
+  );
   const trace: ResolutionTraceEntry[] = [];
+  const preventionQueues = Object.fromEntries(
+    robots.map(({ uid }) => [
+      uid,
+      [...optionPlanFor(optionPlans, uid).preventDamageWith]
+    ])
+  );
   const cards = new Map(PROGRAM_CARDS.map((card) => [card.id, card]));
 
   for (let register = 1; register <= 5; register += 1) {
@@ -1040,9 +1365,27 @@ export function resolveProgrammedTurn(
       })
       .filter((entry): entry is { uid: string; card: ProgramCard } => entry !== null)
       .sort((left, right) => right.card.priority - left.card.priority);
-    for (const entry of queue) applyProgramCard(robots, entry.uid, entry.card, register, trace);
-    resolveBoardElements(robots, register, trace);
-    resolveLaserSnapshot(robots, register, trace, programming);
+    for (const entry of queue) {
+      applyProgramCard(
+        robots,
+        entry.uid,
+        entry.card,
+        register,
+        trace,
+        optionPlanFor(optionPlans, entry.uid)
+      );
+    }
+    resolveBoardElements(robots, register, trace, worldBoardCells, optionPlans);
+    resolveLaserSnapshot(
+      robots,
+      register,
+      trace,
+      programming,
+      worldBoardCells,
+      optionDeck,
+      preventionQueues,
+      optionPlans
+    );
     const finishers = resolveFlagsAndArchives(robots, register, trace);
     if (finishers.length > 0) {
       const winnerUid = finishers[0];
@@ -1061,6 +1404,8 @@ export function resolveProgrammedTurn(
         phase: 'race-finished',
         robots,
         trace,
+        optionDeck,
+        nextOptionChoiceUid: null,
         nextReentryUid: null,
         winnerUid,
         runnersUpUids,
@@ -1069,13 +1414,15 @@ export function resolveProgrammedTurn(
     }
   }
 
-  resolveRepairCleanup(robots, trace);
+  resolveRepairCleanup(robots, trace, worldBoardCells, optionDeck);
 
   const resolution: ProgramResolution = {
     turnNumber: programming.turnNumber,
     phase: 'turn-complete',
     robots,
     trace,
+    optionDeck,
+    nextOptionChoiceUid: null,
     nextReentryUid: null,
     winnerUid: null,
     runnersUpUids: [],

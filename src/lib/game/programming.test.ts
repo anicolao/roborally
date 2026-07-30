@@ -183,4 +183,21 @@ describe('shared Program deck', () => {
       'move-1 (590); board elements and robots excluded'
     ]);
   });
+
+  it('deals Extra Memory exactly one additional Program without changing damage locks', () => {
+    const ordinary = createProgrammingState(setup, config);
+    const ownerUid = setup.players[0].uid;
+    const enhanced = createProgrammingState(
+      setup,
+      config,
+      {},
+      {},
+      1,
+      new Set(setup.players.map(({ uid }) => uid)),
+      { [ownerUid]: ['extra-memory'] }
+    );
+    expect(enhanced.players.find(({ uid }) => uid === ownerUid)?.hand).toHaveLength(10);
+    expect(ordinary.players.find(({ uid }) => uid === ownerUid)?.hand).toHaveLength(9);
+    expect(enhanced.players.find(({ uid }) => uid !== ownerUid)?.hand).toHaveLength(9);
+  });
 });

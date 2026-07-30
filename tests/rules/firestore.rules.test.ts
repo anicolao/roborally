@@ -247,4 +247,38 @@ describe('append-only game stream rules', () => {
       })
     );
   });
+
+  it('allows the owner to append a shaped Option-loss choice', async () => {
+    const db = environment.authenticatedContext('robot-a').firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'games/room/events/robot-a-000001'), {
+        ...eventData('robot-a'),
+        type: 'effect/chosen',
+        payload: {
+          uid: 'robot-a',
+          turnId: 'turn-003',
+          choice: { kind: 'option-loss', cardId: 'brakes' }
+        }
+      })
+    );
+  });
+
+  it('allows the owner to append a finite Option plan', async () => {
+    const db = environment.authenticatedContext('robot-a').firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'games/room/events/robot-a-000001'), {
+        ...eventData('robot-a'),
+        type: 'effect/chosen',
+        payload: {
+          uid: 'robot-a',
+          turnId: 'turn-004',
+          choice: {
+            kind: 'option-plan',
+            preventDamageWith: ['brakes'],
+            activations: []
+          }
+        }
+      })
+    );
+  });
 });

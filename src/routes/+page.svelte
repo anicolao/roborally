@@ -9,6 +9,11 @@
   import type { FirebaseServices } from '$lib/firebase';
   import CourseBoard from '$lib/components/CourseBoard.svelte';
   import { PROGRAM_CARDS, type ProgramCard } from '$lib/game/program-manifest';
+  import {
+    OPTION_CARDS,
+    OPTION_CARDS_BY_ID,
+    type OptionCardId
+  } from '$lib/game/option-manifest';
   import { beginNextTurnPowerDowns, legalReentryChoices } from '$lib/game/movement';
   import {
     previewProgram,
@@ -53,6 +58,7 @@
   let requestedTurnNumber = 1;
   let selectedReentryChoice = '';
   let reentryPoweredDown = false;
+  let selectedOptionPreventionIds: OptionCardId[] = [];
   const buildHash = (import.meta.env.VITE_GIT_HASH ?? 'local-development').slice(0, 8);
 
   $: currentPlayer = services
@@ -129,6 +135,14 @@
   $: reentryRobot = roomState.resolution?.robots.find(
     ({ uid }) => uid === roomState.resolution?.nextReentryUid
   );
+  $: optionLossRobot = roomState.resolution?.robots.find(
+    ({ uid }) => uid === roomState.resolution?.nextOptionChoiceUid
+  );
+  $: optionPlanRobot =
+    currentPlayer && activeProgramming
+      ? (roomState.resolution?.robots.find(({ uid }) => uid === currentPlayer.uid) ??
+        undefined)
+      : undefined;
   $: normalizedName = normalizePlayerName(playerName);
   $: canSubmit =
     !!normalizedName &&
@@ -406,6 +420,55 @@
     }
   }
 
+  async function discardDestroyedOption(cardId: OptionCardId) {
+    if (!services || !roomService || !activeProgramming) return;
+    pending = true;
+    try {
+      await roomService.chooseEffect(
+        services.db,
+        services.user,
+        roomCode,
+        { kind: 'option-loss', cardId },
+        activeProgramming.turnId
+      );
+    } catch (error) {
+      console.error(error);
+      formError = 'The Option loss choice could not be written.';
+    } finally {
+      pending = false;
+    }
+  }
+
+  function toggleOptionPrevention(cardId: OptionCardId) {
+    selectedOptionPreventionIds = selectedOptionPreventionIds.includes(cardId)
+      ? selectedOptionPreventionIds.filter((id) => id !== cardId)
+      : [...selectedOptionPreventionIds, cardId];
+  }
+
+  async function submitOptionPlan() {
+    if (!services || !roomService || !activeProgramming) return;
+    pending = true;
+    try {
+      await roomService.chooseEffect(
+        services.db,
+        services.user,
+        roomCode,
+        {
+          kind: 'option-plan',
+          preventDamageWith: selectedOptionPreventionIds,
+          activations: []
+        },
+        activeProgramming.turnId
+      );
+      selectedOptionPreventionIds = [];
+    } catch (error) {
+      console.error(error);
+      formError = 'The ordered Option plan could not be written.';
+    } finally {
+      pending = false;
+    }
+  }
+
   async function rematchRace() {
     if (!services || !roomService || !isHost || roomState.resolution?.phase !== 'race-finished') {
       return;
@@ -537,6 +600,18 @@
               {activeProgramming.drawPile.length} undealt ·
               {activeProgramming.currentTurnDiscard.length} turn discard
             </p>
+            <details class="option-catalog" aria-label="2005 Option catalog">
+              <summary>26-card Option catalog · executable rules</summary>
+              <ol>
+                {#each OPTION_CARDS as option}
+                  <li data-option-id={option.id}>
+                    <strong>{option.name}</strong>
+                    <span>{option.kind} · {option.timing.join(' / ')}</span>
+                    <small>{option.summary}</small>
+                  </li>
+                {/each}
+              </ol>
+            </details>
             <div
               class="power-control"
               aria-label="Ordered power-down control"
@@ -641,6 +716,37 @@
                 {/if}
               {/each}
             </ul>
+            {#if roomState.pendingOptionUid}
+              <section class="option-plan" aria-label="Ordered Option decision window">
+                {#if roomState.pendingOptionUid === currentPlayer.uid && optionPlanRobot}
+                  <strong>Commit Option choices in original Dock order</strong>
+                  <p>
+                    Select cards in the order they should be discarded to prevent one damage each.
+                    Unselected cards are retained.
+                  </p>
+                  <div>
+                    {#each optionPlanRobot.options as option}
+                      <button
+                        type="button"
+                        class:selected={selectedOptionPreventionIds.includes(option.cardId)}
+                        aria-pressed={selectedOptionPreventionIds.includes(option.cardId)}
+                        onclick={() => toggleOptionPrevention(option.cardId)}
+                      >
+                        {OPTION_CARDS_BY_ID.get(option.cardId)?.name ?? option.cardId}
+                      </button>
+                    {/each}
+                  </div>
+                  <button type="button" disabled={pending} onclick={submitOptionPlan}>
+                    Commit finite Option plan
+                  </button>
+                {:else}
+                  {@const pendingOptionPlayer = roomState.players.find(
+                    ({ uid }) => uid === roomState.pendingOptionUid
+                  )}
+                  <span>Waiting for {pendingOptionPlayer?.name} in original Dock order</span>
+                {/if}
+              </section>
+            {/if}
             {#if activeProgramming.deadlinePlayerUid}
               {@const timedPlayer = roomState.players.find(({ uid }) => uid === activeProgramming.deadlinePlayerUid)}
               <div class="deadline" role="timer">
@@ -680,6 +786,13 @@
                         Flags {robot.touchedFlags.length ? robot.touchedFlags.join('→') : 'none'} ·
                         Archive ({robot.archive.x},{robot.archive.y})
                       </span>
+                      {#if robot.options.length > 0}
+                        <span class="robot-options-owned">
+                          Options {robot.options
+                            .map(({ cardId }) => OPTION_CARDS_BY_ID.get(cardId)?.name ?? cardId)
+                            .join(' · ')}
+                        </span>
+                      {/if}
                     </li>
                   {/each}
                 </ul>
@@ -692,6 +805,26 @@
                   one laser snapshot. Exchange prints no pushers; fixtures cover that stage.
                   Damage 9 repeats all five locked registers.
                 </p>
+                {#if optionLossRobot}
+                  {#if optionLossRobot.uid === currentPlayer?.uid}
+                    <div class="option-loss-choice" aria-label="Destroyed robot Option loss">
+                      <strong>Discard one Option before re-entry</strong>
+                      {#each optionLossRobot.options as option}
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onclick={() => discardDestroyedOption(option.cardId)}
+                        >
+                          Discard {OPTION_CARDS_BY_ID.get(option.cardId)?.name ?? option.cardId}
+                        </button>
+                      {/each}
+                    </div>
+                  {:else}
+                    <p class="reentry-wait">
+                      Waiting for {optionLossRobot.name} to discard one Option in destruction order.
+                    </p>
+                  {/if}
+                {/if}
                 {#if reentryChoices.length > 0}
                   <div class="reentry-choice">
                     <label>
@@ -1602,6 +1735,7 @@
   .setup-order.compact { max-height: 105px; }
   .setup-order.compact li { padding: 5px 7px; }
   .program-console {
+    position: relative;
     display: grid;
     gap: 6px;
     margin-top: 10px;
@@ -1689,6 +1823,37 @@
     font: 7px 'Space Mono', monospace;
     text-transform: uppercase;
   }
+  .option-catalog {
+    position: absolute;
+    z-index: 4;
+    top: 0;
+    right: 46px;
+    width: 46%;
+    border: 1px solid #465356;
+    color: #91a09f;
+    font: 7px 'Space Mono', monospace;
+  }
+  .option-catalog summary { padding: 5px; color: #d2ff37; cursor: pointer; text-transform: uppercase; }
+  .option-catalog ol {
+    position: absolute;
+    z-index: 5;
+    top: 100%;
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 3px;
+    max-height: 190px;
+    margin: 0;
+    padding: 5px;
+    overflow: auto;
+    border: 1px solid #465356;
+    background: #0d1314;
+    list-style: none;
+  }
+  .option-catalog:not([open]) ol { display: none; }
+  .option-catalog li { display: grid; gap: 1px; padding: 4px; border: 1px solid #293437; }
+  .option-catalog strong { color: #eef4ee; }
+  .option-catalog small { color: #778487; line-height: 1.25; }
   .power-control {
     display: grid;
     gap: 3px;

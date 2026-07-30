@@ -1,5 +1,6 @@
 import { PROGRAM_CARDS, type ProgramCard } from './program-manifest';
 import { createPrng, type RaceConfig, type RaceSetup } from './setup';
+import type { OptionCardId } from './option-manifest';
 
 export const PROGRAMMING_DURATION_MS = 30_000;
 export const REGISTER_COUNT = 5;
@@ -31,11 +32,11 @@ export interface ProgrammingState {
   diagnostics: string[];
 }
 
-export function handSizeForDamage(damage: number): number {
+export function handSizeForDamage(damage: number, extraMemory = false): number {
   if (!Number.isInteger(damage) || damage < 0 || damage > 9) {
     throw new Error('Damage must be an integer from zero through nine.');
   }
-  return 9 - damage;
+  return 9 - damage + (extraMemory ? 1 : 0);
 }
 
 function shuffledProgramDeck(
@@ -67,7 +68,8 @@ export function createProgrammingState(
     Record<string, Readonly<Partial<Record<1 | 2 | 3 | 4 | 5, ProgramCard['id']>>>>
   > = {},
   turnNumber = 1,
-  eligibleUids: ReadonlySet<string> = new Set(setup.players.map(({ uid }) => uid))
+  eligibleUids: ReadonlySet<string> = new Set(setup.players.map(({ uid }) => uid)),
+  optionIdsByUid: Readonly<Record<string, readonly OptionCardId[]>> = {}
 ): ProgrammingState {
   if (!Number.isInteger(turnNumber) || turnNumber < 1) {
     throw new Error('Turn number must be a positive integer.');
@@ -97,11 +99,23 @@ export function createProgrammingState(
 
   const largestHand =
     players.length > 0
-      ? Math.max(...players.map(({ damage }) => handSizeForDamage(damage)))
+      ? Math.max(
+          ...players.map(({ uid, damage }) =>
+            handSizeForDamage(damage, optionIdsByUid[uid]?.includes('extra-memory'))
+          )
+        )
       : 0;
   for (let round = 0; round < largestHand; round += 1) {
     for (const player of players) {
-      if (round >= handSizeForDamage(player.damage)) continue;
+      if (
+        round >=
+        handSizeForDamage(
+          player.damage,
+          optionIdsByUid[player.uid]?.includes('extra-memory')
+        )
+      ) {
+        continue;
+      }
       const cardId = deck.shift();
       if (!cardId) throw new Error('The shared Program deck cannot satisfy the deal.');
       player.hand.push(cardId);

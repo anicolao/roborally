@@ -8,7 +8,14 @@ import {
 } from './game/setup';
 import { BOARD_MANIFEST_VERSION, COURSE_MANIFEST_VERSION } from './game/course-manifest';
 import { PROGRAM_MANIFEST_VERSION } from './game/program-manifest';
+import { OPTION_MANIFEST_VERSION } from './game/option-manifest';
 import type { ProgramCard } from './game/program-manifest';
+import type { OptionCardId } from './game/option-manifest';
+import {
+  createOptionDeck,
+  validateOptionPlan,
+  type OptionTurnPlan
+} from './game/options';
 import {
   createProgrammingState,
   submitProgram,
@@ -18,6 +25,7 @@ import {
 } from './game/programming';
 import {
   applyReentryChoice,
+  applyOptionLossChoice,
   beginNextTurnPowerDowns,
   createRaceRobotPositions,
   resolveProgrammedTurn,
@@ -87,7 +95,10 @@ export interface ProgramTimedOutPayload {
 export interface EffectChosenPayload {
   uid: string;
   turnId: TurnId;
-  choice: ReentryChoice & { kind: 'reentry' };
+  choice:
+    | (ReentryChoice & { kind: 'reentry' })
+    | { kind: 'option-loss'; cardId: OptionCardId }
+    | OptionTurnPlan;
 }
 
 export interface GameRematchedPayload {
@@ -175,6 +186,8 @@ export interface RoomState {
   raceSummaries: { epoch: number; summary: NonNullable<ProgramResolution['summary']> }[];
   powerDownResponses: PowerDownRespondedPayload[];
   pendingPowerDownUid: string | null;
+  optionPlans: (OptionTurnPlan & { uid: string; turnId: TurnId })[];
+  pendingOptionUid: string | null;
   acceptedEventIds: string[];
   diagnostics: ReplayDiagnostic[];
 }
@@ -196,6 +209,8 @@ export function emptyRoomState(): RoomState {
     raceSummaries: [],
     powerDownResponses: [],
     pendingPowerDownUid: null,
+    optionPlans: [],
+    pendingOptionUid: null,
     acceptedEventIds: [],
     diagnostics: []
   };
@@ -238,7 +253,7 @@ function isSupportedConfiguration(value: unknown, playerCount: number): value is
     config.reducerVersion === RACE_REDUCER_VERSION &&
     config.prngVersion === PRNG_VERSION &&
     config.programManifestVersion === PROGRAM_MANIFEST_VERSION &&
-    config.optionManifestVersion === null &&
+    config.optionManifestVersion === OPTION_MANIFEST_VERSION &&
     config.boardManifestVersion === BOARD_MANIFEST_VERSION &&
     config.courseManifestVersion === COURSE_MANIFEST_VERSION &&
     config.courseId === 'risky-exchange' &&
@@ -292,6 +307,28 @@ function refreshPowerDownPending(state: RoomState) {
     )?.uid ?? null;
 }
 
+function refreshOptionPending(state: RoomState, robots = state.programming
+  ? turnStartRobots(state, state.programming)
+  : []) {
+  if (!state.programming || state.programming.phase !== 'programmed' || !state.setup) {
+    state.pendingOptionUid = null;
+    return;
+  }
+  const eligible = new Set(
+    robots
+      .filter(({ status, options }) => status === 'active' && options.length > 0)
+      .map(({ uid }) => uid)
+  );
+  state.pendingOptionUid =
+    state.setup.players.find(
+      ({ uid }) =>
+        eligible.has(uid) &&
+        !state.optionPlans.some(
+          (plan) => plan.uid === uid && plan.turnId === state.programming?.turnId
+        )
+    )?.uid ?? null;
+}
+
 function projectNextProgramming(state: RoomState) {
   if (
     !state.setup ||
@@ -319,13 +356,20 @@ function projectNextProgramming(state: RoomState) {
       .filter(({ status, poweredDown }) => status === 'active' && !poweredDown)
       .map(({ uid }) => uid)
   );
+  const optionIdsByUid = Object.fromEntries(
+    nextRobots.map(({ uid, options }) => [
+      uid,
+      options.map(({ cardId }) => cardId)
+    ])
+  );
   state.nextProgramming = createProgrammingState(
     state.setup,
     state.configuration,
     damageByUid,
     lockedRegistersByUid,
     state.resolution.turnNumber + 1,
-    eligibleUids
+    eligibleUids,
+    optionIdsByUid
   );
 }
 
@@ -350,6 +394,8 @@ function resolveReadyProgramming(state: RoomState) {
     refreshPowerDownPending(state);
     return;
   }
+  refreshOptionPending(state, robots);
+  if (state.pendingOptionUid) return;
   for (const robot of robots) {
     robot.powerDownNextTurn =
       state.powerDownResponses.find(
@@ -358,7 +404,19 @@ function resolveReadyProgramming(state: RoomState) {
       )?.powerDownNextTurn ?? false;
   }
   state.pendingPowerDownUid = null;
-  state.resolution = resolveProgrammedTurn(state.programming, state.setup, robots);
+  const optionPlans = Object.fromEntries(
+    state.optionPlans
+      .filter(({ turnId }) => turnId === state.programming?.turnId)
+      .map(({ uid, ...plan }) => [uid, plan])
+  );
+  state.resolution = resolveProgrammedTurn(
+    state.programming,
+    state.setup,
+    robots,
+    false,
+    state.resolution?.optionDeck ?? createOptionDeck(state.configuration?.seed ?? state.gameId),
+    optionPlans
+  );
   projectNextProgramming(state);
 }
 
@@ -526,6 +584,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         state.nextProgramming = null;
         state.raceEpoch = 1;
         state.powerDownResponses = [];
+        state.optionPlans = [];
         refreshPowerDownPending(state);
       }
     } else if (event.type === 'program/submitted') {
@@ -557,6 +616,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         continue;
       }
       if (activatesNextTurn) state.powerDownResponses = [];
+      if (activatesNextTurn) state.optionPlans = [];
       state.programming = next;
       state.nextProgramming = null;
       if (next.phase === 'programmed') {
@@ -593,6 +653,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         continue;
       }
       if (activatesNextTurn) state.powerDownResponses = [];
+      if (activatesNextTurn) state.optionPlans = [];
       state.programming = next;
       state.nextProgramming = null;
       if (next.phase === 'programmed') {
@@ -639,6 +700,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         state.programming = eventProgramming;
         state.nextProgramming = null;
         state.powerDownResponses = [];
+        state.optionPlans = [];
         refreshPowerDownPending(state);
       }
       if (
@@ -666,18 +728,66 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       if (
         !payload ||
         payload.uid !== event.actorUid ||
-        payload.turnId !==
-          `turn-${String(state.resolution?.turnNumber ?? 0).padStart(3, '0')}` ||
-        payload.choice?.kind !== 'reentry' ||
-        (payload.choice.poweredDown !== undefined &&
-          typeof payload.choice.poweredDown !== 'boolean') ||
+        (payload.choice?.kind === 'option-plan'
+          ? payload.turnId !== state.programming?.turnId
+          : payload.turnId !==
+            `turn-${String(state.resolution?.turnNumber ?? 0).padStart(3, '0')}`) ||
         !state.resolution
       ) {
         diagnostic(state, event, 'invalid-effect', 'The effect choice is malformed.');
         continue;
       }
-      const next = applyReentryChoice(state.resolution, event.actorUid, payload.choice);
-      if (next === state.resolution) {
+      const next =
+        payload.choice?.kind === 'reentry' &&
+        (payload.choice.poweredDown === undefined ||
+          typeof payload.choice.poweredDown === 'boolean')
+          ? applyReentryChoice(state.resolution, event.actorUid, payload.choice)
+          : payload.choice?.kind === 'option-loss' &&
+              typeof payload.choice.cardId === 'string'
+            ? applyOptionLossChoice(
+                state.resolution,
+                event.actorUid,
+                payload.choice.cardId
+              )
+            : payload.choice?.kind === 'option-plan' &&
+                payload.turnId === state.programming?.turnId &&
+                state.programming.phase === 'programmed' &&
+                state.pendingOptionUid === event.actorUid
+              ? (() => {
+                  const robot = turnStartRobots(state, state.programming!).find(
+                    ({ uid }) => uid === event.actorUid
+                  );
+                  if (
+                    !robot ||
+                    validateOptionPlan(robot.options, payload.choice).length > 0
+                  ) {
+                    return state.resolution!;
+                  }
+                  state.optionPlans.push({
+                    ...payload.choice,
+                    uid: event.actorUid,
+                    turnId: payload.turnId
+                  });
+                  refreshOptionPending(state);
+                  resolveReadyProgramming(state);
+                  return state.resolution!;
+                })()
+            : state.resolution;
+      if (payload.choice?.kind === 'option-plan') {
+        if (
+          !state.optionPlans.some(
+            ({ uid, turnId }) => uid === event.actorUid && turnId === payload.turnId
+          )
+        ) {
+          diagnostic(
+            state,
+            event,
+            'invalid-effect',
+            'Option plans must follow original Dock order and name owned cards.'
+          );
+          continue;
+        }
+      } else if (next === state.resolution) {
         diagnostic(
           state,
           event,
@@ -720,6 +830,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       state.nextProgramming = null;
       state.resolution = null;
       state.powerDownResponses = [];
+      state.optionPlans = [];
       refreshPowerDownPending(state);
     } else {
       diagnostic(state, event, 'invalid-event', `Event ${event.id} has an unknown type.`);

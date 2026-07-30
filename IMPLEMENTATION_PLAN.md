@@ -521,6 +521,13 @@ focused reducer and room-protocol fixtures.
 - Add `011-option-card-framework` with concurrent choices and deterministic
   order.
 
+Scenario 011 plays five ordinary turns in two browser contexts. Both robots
+reach the crossed repair site on successive turns, expose two without-
+replacement draws, then close the next shared Option plan in original Dock
+order. The same slice replaces the transcription placeholder with a versioned
+26-card deck, face-up ownership/discards, immutable finite choices, one-card
+damage prevention, and mandatory destruction loss before re-entry.
+
 ### 12. Every Option card
 
 - Implement each card's movement, weapon, priority, damage, persistent, and
@@ -529,6 +536,14 @@ focused reducer and room-protocol fixtures.
   repair sites, power down, and course variants.
 - Extend `012-all-option-cards` until every card has visible proof and focused
   pure fixtures.
+
+Scenario 012 inspects all 26 edition-specific cards from the in-product
+manifest. An exhaustive keyed fixture executes every active behavior and
+explicit non-activation cases, while integration fixtures cover Extra Memory,
+movement modifiers, factory rotation immunity, armor, doubled/rear/penetrating
+lasers, Mechanical Arm flag reach, Circuit Breaker shutdown, and Superior
+Archive Copy re-entry. Scenario 011 supplies the real multiplayer ownership and
+decision proof.
 
 ### 13. Complete Risky Exchange race
 

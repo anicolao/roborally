@@ -80,15 +80,30 @@ service cloud.firestore {
             && request.resource.data.payload.uid == request.auth.uid
             && request.resource.data.payload.turnId.matches('turn-[0-9]+')
             && request.resource.data.payload.choice is map
-            && request.resource.data.payload.choice.kind == 'reentry'
-            && request.resource.data.payload.choice.x is int
-            && request.resource.data.payload.choice.y is int
-            && request.resource.data.payload.choice.facing in [
-              'north',
-              'east',
-              'south',
-              'west'
-            ]
+            && (
+              (
+                request.resource.data.payload.choice.kind == 'reentry'
+                && request.resource.data.payload.choice.x is int
+                && request.resource.data.payload.choice.y is int
+                && request.resource.data.payload.choice.facing in [
+                  'north',
+                  'east',
+                  'south',
+                  'west'
+                ]
+              )
+              ||
+              (
+                request.resource.data.payload.choice.kind == 'option-loss'
+                && request.resource.data.payload.choice.cardId is string
+              )
+              ||
+              (
+                request.resource.data.payload.choice.kind == 'option-plan'
+                && request.resource.data.payload.choice.preventDamageWith is list
+                && request.resource.data.payload.choice.activations is list
+              )
+            )
           )
           ||
           (
