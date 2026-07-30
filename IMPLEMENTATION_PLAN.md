@@ -382,6 +382,8 @@ commits.
 
 ### 2. Identity, two-to-eight-player rooms, and immutable replay
 
+**Status:** Implemented as the second vertical tracer.
+
 - Sign in anonymously and expose deterministic emulator identities in E2E.
 - Implement room codes, create/join links, names, two to eight seats, robot
   uniqueness, event ordering, retries, subscriptions, and replay diagnostics.
