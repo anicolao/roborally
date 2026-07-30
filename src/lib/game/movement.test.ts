@@ -13,8 +13,10 @@ import {
   lockedRegisterNumbersForDamage,
   movementBlockedByWall,
   resolveBoardElements,
+  resolveFlagsAndArchives,
   resolveLaserSnapshot,
   resolveProgrammedTurn,
+  resolveRepairCleanup,
   type ProgramResolution,
   type RaceRobotPosition,
   type ResolutionTraceEntry
@@ -36,6 +38,9 @@ function raceRobot(
     lives: 3,
     damage: 0,
     lockedRegisters: [],
+    touchedFlags: [],
+    nextFlag: 1,
+    pendingOptionDraws: 0,
     status: 'active',
     destructionOrder: null,
     optionLossPending: false,
@@ -260,10 +265,14 @@ describe('priority Program movement', () => {
       lives: 2
     });
     let resolution: ProgramResolution = {
+      turnNumber: 1,
       phase: 'awaiting-reentry',
       robots: [first, second],
       trace: [] as ResolutionTraceEntry[],
-      nextReentryUid: 'first'
+      nextReentryUid: 'first',
+      winnerUid: null,
+      runnersUpUids: [],
+      summary: null
     };
 
     expect(legalReentryChoices(resolution, 'second')).toEqual([]);
@@ -649,5 +658,128 @@ describe('priority Program movement', () => {
     );
     expect(doomed).toMatchObject({ status: 'eliminated', lives: 0, damage: 0 });
     expect(trace).toContainEqual(expect.objectContaining({ kind: 'destroyed-damage' }));
+  });
+
+  it('updates archives every register but only touches flags in order', () => {
+    const robot = raceRobot({ uid: 'runner', name: 'Runner', x: 10, y: 8 });
+    const trace: ResolutionTraceEntry[] = [];
+
+    expect(resolveFlagsAndArchives([robot], 1, trace)).toEqual([]);
+    expect(robot).toMatchObject({
+      archive: { x: 10, y: 8 },
+      touchedFlags: [],
+      nextFlag: 1
+    });
+
+    robot.x = 8;
+    robot.y = 2;
+    resolveFlagsAndArchives([robot], 2, trace);
+    robot.x = 10;
+    robot.y = 8;
+    resolveFlagsAndArchives([robot], 3, trace);
+    robot.x = 2;
+    robot.y = 5;
+    expect(resolveFlagsAndArchives([robot], 4, trace)).toEqual(['runner']);
+    expect(robot).toMatchObject({
+      archive: { x: 2, y: 5 },
+      touchedFlags: [1, 2, 3],
+      nextFlag: null
+    });
+    expect(trace.filter(({ kind }) => kind === 'flag-touched')).toHaveLength(3);
+    expect(trace.filter(({ kind }) => kind === 'archive-updated')).toHaveLength(4);
+  });
+
+  it('repairs once in cleanup, unlocks low registers first, and preserves Option draws', () => {
+    const single = raceRobot({
+      uid: 'single',
+      name: 'Single',
+      x: 1,
+      y: 1,
+      damage: 9,
+      lockedRegisters: [
+        { register: 1, cardId: 'program-010' },
+        { register: 2, cardId: 'program-020' },
+        { register: 3, cardId: 'program-030' },
+        { register: 4, cardId: 'program-040' },
+        { register: 5, cardId: 'program-050' }
+      ]
+    });
+    const crossed = raceRobot({
+      uid: 'crossed',
+      name: 'Crossed',
+      x: 8,
+      y: 8,
+      damage: 5,
+      lockedRegisters: [{ register: 5, cardId: 'program-060' }]
+    });
+    const trace: ResolutionTraceEntry[] = [];
+
+    resolveRepairCleanup([single, crossed], trace);
+    expect(single).toMatchObject({
+      damage: 8,
+      pendingOptionDraws: 0,
+      lockedRegisters: [
+        { register: 2 },
+        { register: 3 },
+        { register: 4 },
+        { register: 5 }
+      ]
+    });
+    expect(crossed).toMatchObject({
+      damage: 4,
+      pendingOptionDraws: 1,
+      lockedRegisters: []
+    });
+    expect(trace).toContainEqual(
+      expect.objectContaining({
+        kind: 'register-unlocked',
+        text: expect.stringContaining('register 1')
+      })
+    );
+    expect(trace).toContainEqual(expect.objectContaining({ kind: 'option-draw-placeholder' }));
+  });
+
+  it('ends immediately on Flag 3 with frozen winner and optional runner-up standings', () => {
+    const config = riskyExchangeConfig('FLAG-FINISH');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'winner', name: 'Winner', robotId: 'axle' },
+        { uid: 'runner-up', name: 'Runner Up', robotId: 'bit' }
+      ],
+      config
+    );
+    let programming = createProgrammingState(setup, config);
+    for (const player of programming.players) {
+      programming = submitProgram(programming, player.uid, player.hand.slice(0, 5), 1_000);
+    }
+    const rotations = PROGRAM_CARDS.filter(({ action }) =>
+      ['rotate-left', 'rotate-right', 'u-turn'].includes(action)
+    );
+    programming.players.forEach((player, playerIndex) => {
+      player.registers.forEach((register, registerIndex) => {
+        register.cardId = rotations[playerIndex * 5 + registerIndex].id;
+      });
+    });
+    const robots = createRaceRobotPositions(setup);
+    for (const robot of robots) {
+      robot.x = 2;
+      robot.y = 5;
+      robot.touchedFlags = [1, 2];
+      robot.nextFlag = 3;
+    }
+
+    const resolution = resolveProgrammedTurn(programming, setup, robots, true)!;
+    expect(resolution).toMatchObject({
+      phase: 'race-finished',
+      winnerUid: robots[0].uid,
+      runnersUpUids: [robots[1].uid],
+      summary: {
+        winnerUid: robots[0].uid,
+        runnersUpUids: [robots[1].uid]
+      }
+    });
+    expect(Object.isFrozen(resolution.summary)).toBe(true);
+    expect(Object.isFrozen(resolution.summary?.standings)).toBe(true);
+    expect(resolution.trace).toContainEqual(expect.objectContaining({ kind: 'winner' }));
   });
 });

@@ -3,6 +3,7 @@ import { createPrng, type RaceConfig, type RaceSetup } from './setup';
 
 export const PROGRAMMING_DURATION_MS = 30_000;
 export const REGISTER_COUNT = 5;
+export type TurnId = `turn-${string}`;
 
 export interface ProgramRegister {
   cardId: ProgramCard['id'] | null;
@@ -19,7 +20,8 @@ export interface ProgrammingPlayer {
 }
 
 export interface ProgrammingState {
-  turnId: 'turn-001';
+  turnId: TurnId;
+  turnNumber: number;
   phase: 'programming' | 'programmed';
   players: ProgrammingPlayer[];
   drawPile: ProgramCard['id'][];
@@ -38,10 +40,17 @@ export function handSizeForDamage(damage: number): number {
 
 function shuffledProgramDeck(
   config: RaceConfig,
-  unavailable: ReadonlySet<ProgramCard['id']> = new Set()
+  unavailable: ReadonlySet<ProgramCard['id']> = new Set(),
+  turnNumber = 1
 ): ProgramCard['id'][] {
-  const random = createPrng(config.seed);
-  random(); // Setup consumes the first value when selecting the first player.
+  const random = createPrng(
+    turnNumber === 1
+      ? config.seed
+      : `${config.seed}:turn-${String(turnNumber).padStart(3, '0')}:program-deck`
+  );
+  if (turnNumber === 1) {
+    random(); // Setup consumes the first value when selecting the first player.
+  }
   const deck = PROGRAM_CARDS.map(({ id }) => id).filter((id) => !unavailable.has(id));
   for (let index = deck.length - 1; index > 0; index -= 1) {
     const selected = Math.floor(random() * (index + 1));
@@ -56,16 +65,21 @@ export function createProgrammingState(
   damageByUid: Readonly<Record<string, number>> = {},
   lockedRegistersByUid: Readonly<
     Record<string, Readonly<Partial<Record<1 | 2 | 3 | 4 | 5, ProgramCard['id']>>>>
-  > = {}
+  > = {},
+  turnNumber = 1,
+  eligibleUids: ReadonlySet<string> = new Set(setup.players.map(({ uid }) => uid))
 ): ProgrammingState {
+  if (!Number.isInteger(turnNumber) || turnNumber < 1) {
+    throw new Error('Turn number must be a positive integer.');
+  }
   const lockedCardIds = Object.values(lockedRegistersByUid).flatMap((registers) =>
     Object.values(registers)
   );
   if (new Set(lockedCardIds).size !== lockedCardIds.length) {
     throw new Error('A locked Program card cannot occupy more than one register.');
   }
-  const deck = shuffledProgramDeck(config, new Set(lockedCardIds));
-  const players = setup.players.map(({ uid }) => {
+  const deck = shuffledProgramDeck(config, new Set(lockedCardIds), turnNumber);
+  const players = setup.players.filter(({ uid }) => eligibleUids.has(uid)).map(({ uid }) => {
     const damage = damageByUid[uid] ?? 0;
     const locked = lockedRegistersByUid[uid] ?? {};
     return {
@@ -92,7 +106,8 @@ export function createProgrammingState(
   }
 
   return {
-    turnId: 'turn-001',
+    turnId: `turn-${String(turnNumber).padStart(3, '0')}`,
+    turnNumber,
     phase: 'programming',
     players,
     drawPile: deck,

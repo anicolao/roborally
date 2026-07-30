@@ -67,6 +67,11 @@ all ten damage rows, exact locked-card IDs, tenth-damage destruction, and a
 five-register repeated locked Program remain exhaustive reducer fixtures until
 the complete-race browser history supplies multiple live turns.
 
+Scenario 009 is the first production-size history: two clients submit ten
+consecutive Programs, including an owner-authored re-entry between turns. It
+proves repair cleanup, ordered flags, moving Archives, the terminal summary,
+and rematch epoch retention entirely through append-only browser actions.
+
 ## Scenario layout
 
 Use the next three-digit sequence and a short kebab-case capability name:

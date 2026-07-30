@@ -32,7 +32,8 @@ service cloud.firestore {
           'player/ready',
           'program/submitted',
           'program/timed-out',
-          'effect/chosen'
+          'effect/chosen',
+          'game/rematched'
         ]
         && request.resource.data.payload is map
         && (
@@ -63,20 +64,20 @@ service cloud.firestore {
           (
             request.resource.data.type == 'program/submitted'
             && request.resource.data.payload.uid == request.auth.uid
-            && request.resource.data.payload.turnId == 'turn-001'
+            && request.resource.data.payload.turnId.matches('turn-[0-9]+')
             && request.resource.data.payload.cardIds is list
           )
           ||
           (
             request.resource.data.type == 'program/timed-out'
             && request.resource.data.payload.targetUid is string
-            && request.resource.data.payload.turnId == 'turn-001'
+            && request.resource.data.payload.turnId.matches('turn-[0-9]+')
           )
           ||
           (
             request.resource.data.type == 'effect/chosen'
             && request.resource.data.payload.uid == request.auth.uid
-            && request.resource.data.payload.turnId == 'turn-001'
+            && request.resource.data.payload.turnId.matches('turn-[0-9]+')
             && request.resource.data.payload.choice is map
             && request.resource.data.payload.choice.kind == 'reentry'
             && request.resource.data.payload.choice.x is int
@@ -87,6 +88,13 @@ service cloud.firestore {
               'south',
               'west'
             ]
+          )
+          ||
+          (
+            request.resource.data.type == 'game/rematched'
+            && request.resource.data.payload.epoch is int
+            && request.resource.data.payload.epoch > 1
+            && request.resource.data.payload.seed is string
           )
         );
       allow update, delete: if false;

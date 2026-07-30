@@ -157,8 +157,27 @@ describe('append-only game stream rules', () => {
         clientSeq: 3,
         payload: {
           targetUid: 'robot-b',
-          turnId: 'turn-001'
+          turnId: 'turn-002'
         }
+      })
+    );
+  });
+
+  it('allows shaped immutable rematch epochs', async () => {
+    const db = environment.authenticatedContext('robot-a').firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'games/room/events/robot-a-000001'), {
+        ...eventData('robot-a'),
+        type: 'game/rematched',
+        payload: { epoch: 2, seed: 'REMATCH-2' }
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, 'games/room/events/robot-a-000002'), {
+        ...eventData('robot-a'),
+        type: 'game/rematched',
+        clientSeq: 2,
+        payload: { epoch: 1, seed: 'STALE' }
       })
     );
   });

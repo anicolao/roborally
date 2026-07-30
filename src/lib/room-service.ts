@@ -18,9 +18,11 @@ import {
   normalizeRoomCode,
   replayRoom,
   type GameCreatedPayload,
+  type GameRematchedPayload,
   type EffectChosenPayload,
   type PlayerJoinedPayload,
   type ProgramSubmittedPayload,
+  type ProgramTimedOutPayload,
   type RaceConfiguredPayload,
   type RoomEvent,
   type RoomEventPayload,
@@ -154,11 +156,12 @@ export async function submitProgram(
   db: Firestore,
   user: User,
   roomCode: string,
-  cardIds: ProgramSubmittedPayload['cardIds']
+  cardIds: ProgramSubmittedPayload['cardIds'],
+  turnId: ProgramSubmittedPayload['turnId'] = 'turn-001'
 ) {
   await appendRoomEvent(db, user, roomCode, 'program/submitted', {
     uid: user.uid,
-    turnId: 'turn-001',
+    turnId,
     cardIds
   });
 }
@@ -167,11 +170,12 @@ export async function claimProgramTimeout(
   db: Firestore,
   user: User,
   roomCode: string,
-  targetUid: string
+  targetUid: string,
+  turnId: ProgramTimedOutPayload['turnId'] = 'turn-001'
 ) {
   await appendRoomEvent(db, user, roomCode, 'program/timed-out', {
     targetUid,
-    turnId: 'turn-001'
+    turnId
   });
 }
 
@@ -179,13 +183,23 @@ export async function chooseEffect(
   db: Firestore,
   user: User,
   roomCode: string,
-  choice: EffectChosenPayload['choice']
+  choice: EffectChosenPayload['choice'],
+  turnId: EffectChosenPayload['turnId'] = 'turn-001'
 ) {
   await appendRoomEvent(db, user, roomCode, 'effect/chosen', {
     uid: user.uid,
-    turnId: 'turn-001',
+    turnId,
     choice
   });
+}
+
+export async function rematchGame(
+  db: Firestore,
+  user: User,
+  roomCode: string,
+  payload: GameRematchedPayload
+) {
+  await appendRoomEvent(db, user, roomCode, 'game/rematched', payload);
 }
 
 export function subscribeRoom(

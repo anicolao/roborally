@@ -1,6 +1,7 @@
 import {
   DOCKING_BAY_A,
   EXCHANGE_BOARD,
+  RISKY_EXCHANGE,
   type BoardCell,
   type BoardElement,
   type Direction,
@@ -29,6 +30,9 @@ export interface RaceRobotPosition {
   lives: number;
   damage: number;
   lockedRegisters: LockedRegisterState[];
+  touchedFlags: (1 | 2 | 3)[];
+  nextFlag: 1 | 2 | 3 | null;
+  pendingOptionDraws: number;
   status: RobotBoardStatus;
   destructionOrder: number | null;
   optionLossPending: boolean;
@@ -57,7 +61,13 @@ export type ResolutionTraceKind =
   | 'board-laser'
   | 'robot-laser'
   | 'damage'
-  | 'destroyed-damage';
+  | 'destroyed-damage'
+  | 'flag-touched'
+  | 'archive-updated'
+  | 'repair'
+  | 'register-unlocked'
+  | 'option-draw-placeholder'
+  | 'winner';
 
 export interface ResolutionTraceEntry {
   id: string;
@@ -76,10 +86,26 @@ export interface ReentryChoice {
 }
 
 export interface ProgramResolution {
-  phase: 'awaiting-reentry' | 'turn-complete';
+  turnNumber: number;
+  phase: 'awaiting-reentry' | 'turn-complete' | 'race-finished';
   robots: RaceRobotPosition[];
   trace: ResolutionTraceEntry[];
   nextReentryUid: string | null;
+  winnerUid: string | null;
+  runnersUpUids: string[];
+  summary: RaceSummary | null;
+}
+
+export interface RaceSummary {
+  winnerUid: string;
+  runnersUpUids: readonly string[];
+  standings: readonly {
+    uid: string;
+    touchedFlags: readonly (1 | 2 | 3)[];
+    lives: number;
+    damage: number;
+    status: RobotBoardStatus;
+  }[];
 }
 
 const directionOrder: Direction[] = ['north', 'east', 'south', 'west'];
@@ -693,6 +719,124 @@ export function resolveLaserSnapshot(
   }
 }
 
+export function resolveFlagsAndArchives(
+  robots: RaceRobotPosition[],
+  register: number,
+  trace: ResolutionTraceEntry[],
+  cells: readonly BoardCell[] = worldBoardCells,
+  flags: readonly { number: 1 | 2 | 3; x: number; y: number }[] = RISKY_EXCHANGE.flags
+): string[] {
+  const finishers: string[] = [];
+  for (const robot of robots) {
+    if (robot.status !== 'active') continue;
+    const flag = flags.find(({ x, y }) => x === robot.x && y === robot.y);
+    const repair = elementAt(cells, robot.x, robot.y, 'repair') as
+      | Extract<BoardElement, { kind: 'repair' }>
+      | undefined;
+    if (flag || repair) {
+      robot.archive = { x: robot.x, y: robot.y };
+      addTrace(
+        trace,
+        register,
+        robot.uid,
+        null,
+        'archive-updated',
+        `${robot.name} moved its Archive marker to (${robot.x},${robot.y}).`
+      );
+    }
+    if (!flag || flag.number !== robot.nextFlag) continue;
+    robot.touchedFlags.push(flag.number);
+    robot.nextFlag = flag.number === 3 ? null : ((flag.number + 1) as 2 | 3);
+    addTrace(
+      trace,
+      register,
+      robot.uid,
+      null,
+      'flag-touched',
+      `${robot.name} touched Flag ${flag.number} in order${
+        robot.nextFlag ? `; Flag ${robot.nextFlag} is next` : ''
+      }.`
+    );
+    if (robot.nextFlag === null) finishers.push(robot.uid);
+  }
+  return finishers;
+}
+
+export function resolveRepairCleanup(
+  robots: RaceRobotPosition[],
+  trace: ResolutionTraceEntry[],
+  cells: readonly BoardCell[] = worldBoardCells
+) {
+  for (const robot of robots) {
+    if (robot.status !== 'active') continue;
+    const repair = elementAt(cells, robot.x, robot.y, 'repair') as
+      | Extract<BoardElement, { kind: 'repair' }>
+      | undefined;
+    if (!repair) continue;
+    const priorDamage = robot.damage;
+    robot.damage = Math.max(0, robot.damage - 1);
+    addTrace(
+      trace,
+      6,
+      robot.uid,
+      null,
+      'repair',
+      `${robot.name} repaired from ${priorDamage} to ${robot.damage} damage at ` +
+        `(${robot.x},${robot.y}).`
+    );
+    const retainedRegisters = new Set(lockedRegisterNumbersForDamage(robot.damage));
+    const unlocked = robot.lockedRegisters.filter(
+      ({ register }) => !retainedRegisters.has(register)
+    );
+    robot.lockedRegisters = robot.lockedRegisters.filter(({ register }) =>
+      retainedRegisters.has(register)
+    );
+    for (const { register, cardId } of unlocked) {
+      addTrace(
+        trace,
+        6,
+        robot.uid,
+        null,
+        'register-unlocked',
+        `${robot.name} unlocked register ${register} and discarded ${cardId}.`
+      );
+    }
+    if (repair.option) {
+      robot.pendingOptionDraws += 1;
+      addTrace(
+        trace,
+        6,
+        robot.uid,
+        null,
+        'option-draw-placeholder',
+        `${robot.name} earned one face-up Option draw; the reviewed deck gate remains closed.`
+      );
+    }
+  }
+}
+
+export function createRaceSummary(
+  robots: readonly RaceRobotPosition[],
+  winnerUid: string,
+  runnersUpUids: readonly string[]
+): RaceSummary {
+  return Object.freeze({
+    winnerUid,
+    runnersUpUids: Object.freeze([...runnersUpUids]),
+    standings: Object.freeze(
+      robots.map((robot) =>
+        Object.freeze({
+          uid: robot.uid,
+          touchedFlags: Object.freeze([...robot.touchedFlags]),
+          lives: robot.lives,
+          damage: robot.damage,
+          status: robot.status
+        })
+      )
+    )
+  });
+}
+
 function nextDestroyedRobot(robots: readonly RaceRobotPosition[]) {
   return [...robots]
     .filter(({ status }) => status === 'destroyed')
@@ -704,6 +848,11 @@ function nextDestroyedRobot(robots: readonly RaceRobotPosition[]) {
 }
 
 function updateResolutionPhase(resolution: ProgramResolution) {
+  if (resolution.winnerUid) {
+    resolution.nextReentryUid = null;
+    resolution.phase = 'race-finished';
+    return;
+  }
   const next = nextDestroyedRobot(resolution.robots);
   resolution.nextReentryUid = next?.uid ?? null;
   resolution.phase = next ? 'awaiting-reentry' : 'turn-complete';
@@ -772,7 +921,8 @@ export function applyReentryChoice(
     robots: current.robots.map((robot) => ({
       ...robot,
       archive: { ...robot.archive },
-      lockedRegisters: robot.lockedRegisters.map((locked) => ({ ...locked }))
+      lockedRegisters: robot.lockedRegisters.map((locked) => ({ ...locked })),
+      touchedFlags: [...robot.touchedFlags]
     })),
     trace: [...current.trace]
   };
@@ -822,6 +972,9 @@ export function createRaceRobotPositions(setup: RaceSetup): RaceRobotPosition[] 
     lives: player.lives,
     damage: 0,
     lockedRegisters: [],
+    touchedFlags: [],
+    nextFlag: 1,
+    pendingOptionDraws: 0,
     status: 'active',
     destructionOrder: null,
     optionLossPending: false
@@ -831,13 +984,15 @@ export function createRaceRobotPositions(setup: RaceSetup): RaceRobotPosition[] 
 export function resolveProgrammedTurn(
   programming: ProgrammingState,
   setup: RaceSetup,
-  initialRobots = createRaceRobotPositions(setup)
+  initialRobots = createRaceRobotPositions(setup),
+  includeRunnersUp = false
 ): ProgramResolution | null {
   if (programming.phase !== 'programmed') return null;
   const robots = initialRobots.map((robot) => ({
     ...robot,
     archive: { ...robot.archive },
-    lockedRegisters: robot.lockedRegisters.map((locked) => ({ ...locked }))
+    lockedRegisters: robot.lockedRegisters.map((locked) => ({ ...locked })),
+    touchedFlags: [...robot.touchedFlags]
   }));
   const trace: ResolutionTraceEntry[] = [];
   const cards = new Map(PROGRAM_CARDS.map((card) => [card.id, card]));
@@ -854,13 +1009,43 @@ export function resolveProgrammedTurn(
     for (const entry of queue) applyProgramCard(robots, entry.uid, entry.card, register, trace);
     resolveBoardElements(robots, register, trace);
     resolveLaserSnapshot(robots, register, trace, programming);
+    const finishers = resolveFlagsAndArchives(robots, register, trace);
+    if (finishers.length > 0) {
+      const winnerUid = finishers[0];
+      const runnersUpUids = includeRunnersUp ? finishers.slice(1) : [];
+      const winner = robots.find(({ uid }) => uid === winnerUid)!;
+      addTrace(
+        trace,
+        register,
+        winnerUid,
+        null,
+        'winner',
+        `${winner.name} touched Flag 3 in order and won the race.`
+      );
+      return {
+        turnNumber: programming.turnNumber,
+        phase: 'race-finished',
+        robots,
+        trace,
+        nextReentryUid: null,
+        winnerUid,
+        runnersUpUids,
+        summary: createRaceSummary(robots, winnerUid, runnersUpUids)
+      };
+    }
   }
 
+  resolveRepairCleanup(robots, trace);
+
   const resolution: ProgramResolution = {
+    turnNumber: programming.turnNumber,
     phase: 'turn-complete',
     robots,
     trace,
-    nextReentryUid: null
+    nextReentryUid: null,
+    winnerUid: null,
+    runnersUpUids: [],
+    summary: null
   };
   updateResolutionPhase(resolution);
   const next = nextDestroyedRobot(robots);

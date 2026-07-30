@@ -13,7 +13,8 @@ import {
   createProgrammingState,
   submitProgram,
   timeOutProgram,
-  type ProgrammingState
+  type ProgrammingState,
+  type TurnId
 } from './game/programming';
 import {
   applyReentryChoice,
@@ -45,7 +46,8 @@ export type RoomEventType =
   | 'player/ready'
   | 'program/submitted'
   | 'program/timed-out'
-  | 'effect/chosen';
+  | 'effect/chosen'
+  | 'game/rematched';
 
 export interface GameCreatedPayload {
   gameId: string;
@@ -70,19 +72,24 @@ export interface PlayerReadyPayload {
 
 export interface ProgramSubmittedPayload {
   uid: string;
-  turnId: 'turn-001';
+  turnId: TurnId;
   cardIds: ProgramCard['id'][];
 }
 
 export interface ProgramTimedOutPayload {
   targetUid: string;
-  turnId: 'turn-001';
+  turnId: TurnId;
 }
 
 export interface EffectChosenPayload {
   uid: string;
-  turnId: 'turn-001';
+  turnId: TurnId;
   choice: ReentryChoice & { kind: 'reentry' };
+}
+
+export interface GameRematchedPayload {
+  epoch: number;
+  seed: string;
 }
 
 export type RoomEventPayload =
@@ -92,7 +99,8 @@ export type RoomEventPayload =
   | PlayerReadyPayload
   | ProgramSubmittedPayload
   | ProgramTimedOutPayload
-  | EffectChosenPayload;
+  | EffectChosenPayload
+  | GameRematchedPayload;
 
 export interface RoomEvent {
   id: string;
@@ -135,7 +143,8 @@ export interface ReplayDiagnostic {
     | 'race-already-started'
     | 'invalid-program'
     | 'invalid-timeout'
-    | 'invalid-effect';
+    | 'invalid-effect'
+    | 'invalid-rematch';
   message: string;
 }
 
@@ -149,7 +158,10 @@ export interface RoomState {
   readyPlayerUids: string[];
   setup: RaceSetup | null;
   programming: ProgrammingState | null;
+  nextProgramming: ProgrammingState | null;
   resolution: ProgramResolution | null;
+  raceEpoch: number;
+  raceSummaries: { epoch: number; summary: NonNullable<ProgramResolution['summary']> }[];
   acceptedEventIds: string[];
   diagnostics: ReplayDiagnostic[];
 }
@@ -165,7 +177,10 @@ export function emptyRoomState(): RoomState {
     readyPlayerUids: [],
     setup: null,
     programming: null,
+    nextProgramming: null,
     resolution: null,
+    raceEpoch: 0,
+    raceSummaries: [],
     acceptedEventIds: [],
     diagnostics: []
   };
@@ -220,6 +235,44 @@ function isSupportedConfiguration(value: unknown, playerCount: number): value is
     config.expansionIds.length === 0 &&
     Array.isArray(config.houseRuleIds) &&
     config.houseRuleIds.length === 0
+  );
+}
+
+function projectNextProgramming(state: RoomState) {
+  if (
+    !state.setup ||
+    !state.configuration ||
+    !state.programming ||
+    !state.resolution ||
+    state.resolution.phase !== 'turn-complete' ||
+    state.programming.phase !== 'programmed'
+  ) {
+    state.nextProgramming = null;
+    return;
+  }
+  const damageByUid = Object.fromEntries(
+    state.resolution.robots.map(({ uid, damage }) => [uid, damage])
+  );
+  const lockedRegistersByUid = Object.fromEntries(
+    state.resolution.robots.map((robot) => [
+      robot.uid,
+      Object.fromEntries(
+        robot.lockedRegisters.map(({ register, cardId }) => [register, cardId])
+      )
+    ])
+  );
+  const eligibleUids = new Set(
+    state.resolution.robots
+      .filter(({ status }) => status === 'active')
+      .map(({ uid }) => uid)
+  );
+  state.nextProgramming = createProgrammingState(
+    state.setup,
+    state.configuration,
+    damageByUid,
+    lockedRegistersByUid,
+    state.resolution.turnNumber + 1,
+    eligibleUids
   );
 }
 
@@ -384,61 +437,94 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       if (state.readyPlayerUids.length === state.players.length) {
         state.setup = deriveRaceSetup(state.players, state.configuration);
         state.programming = createProgrammingState(state.setup, state.configuration);
+        state.nextProgramming = null;
+        state.raceEpoch = 1;
       }
     } else if (event.type === 'program/submitted') {
       const payload = event.payload as ProgramSubmittedPayload;
+      const eventProgramming =
+        payload?.turnId === state.programming?.turnId
+          ? state.programming
+          : payload?.turnId === state.nextProgramming?.turnId
+            ? state.nextProgramming
+            : null;
       if (
         !payload ||
         payload.uid !== event.actorUid ||
-        payload.turnId !== 'turn-001' ||
         !Array.isArray(payload.cardIds) ||
-        !state.programming
+        !eventProgramming
       ) {
         diagnostic(state, event, 'invalid-program', 'The Program submission is malformed.');
         continue;
       }
+      const turnStartRobots =
+        state.resolution?.turnNumber === eventProgramming.turnNumber - 1
+          ? state.resolution.robots
+          : undefined;
       const next = submitProgram(
-        state.programming,
+        eventProgramming,
         event.actorUid,
         payload.cardIds,
         event.createdAt ?? 0
       );
-      if (next.diagnostics.length !== state.programming.diagnostics.length) {
+      if (next.diagnostics.length !== eventProgramming.diagnostics.length) {
         diagnostic(state, event, 'invalid-program', 'The Program submission is not legal.');
         continue;
       }
       state.programming = next;
-      state.resolution = state.setup ? resolveProgrammedTurn(next, state.setup) : null;
+      state.nextProgramming = null;
+      if (next.phase === 'programmed') {
+        state.resolution = state.setup
+          ? resolveProgrammedTurn(next, state.setup, turnStartRobots)
+          : null;
+        projectNextProgramming(state);
+      }
     } else if (event.type === 'program/timed-out') {
       const payload = event.payload as ProgramTimedOutPayload;
+      const eventProgramming =
+        payload?.turnId === state.programming?.turnId
+          ? state.programming
+          : payload?.turnId === state.nextProgramming?.turnId
+            ? state.nextProgramming
+            : null;
       if (
         !payload ||
-        payload.turnId !== 'turn-001' ||
         typeof payload.targetUid !== 'string' ||
-        !state.programming ||
+        !eventProgramming ||
         !state.configuration
       ) {
         diagnostic(state, event, 'invalid-timeout', 'The timeout claim is malformed.');
         continue;
       }
+      const turnStartRobots =
+        state.resolution?.turnNumber === eventProgramming.turnNumber - 1
+          ? state.resolution.robots
+          : undefined;
       const next = timeOutProgram(
-        state.programming,
+        eventProgramming,
         payload.targetUid,
         event.createdAt ?? 0,
         state.configuration.seed
       );
-      if (next.diagnostics.length !== state.programming.diagnostics.length) {
+      if (next.diagnostics.length !== eventProgramming.diagnostics.length) {
         diagnostic(state, event, 'invalid-timeout', 'The timeout claim is not yet legal.');
         continue;
       }
       state.programming = next;
-      state.resolution = state.setup ? resolveProgrammedTurn(next, state.setup) : null;
+      state.nextProgramming = null;
+      if (next.phase === 'programmed') {
+        state.resolution = state.setup
+          ? resolveProgrammedTurn(next, state.setup, turnStartRobots)
+          : null;
+        projectNextProgramming(state);
+      }
     } else if (event.type === 'effect/chosen') {
       const payload = event.payload as EffectChosenPayload;
       if (
         !payload ||
         payload.uid !== event.actorUid ||
-        payload.turnId !== 'turn-001' ||
+        payload.turnId !==
+          `turn-${String(state.resolution?.turnNumber ?? 0).padStart(3, '0')}` ||
         payload.choice?.kind !== 'reentry' ||
         !state.resolution
       ) {
@@ -456,6 +542,38 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         continue;
       }
       state.resolution = next;
+      projectNextProgramming(state);
+    } else if (event.type === 'game/rematched') {
+      const payload = event.payload as GameRematchedPayload;
+      if (
+        !payload ||
+        event.actorUid !== state.hostUid ||
+        payload.epoch !== state.raceEpoch + 1 ||
+        typeof payload.seed !== 'string' ||
+        payload.seed.length < 1 ||
+        payload.seed.length > 64 ||
+        state.resolution?.phase !== 'race-finished' ||
+        !state.resolution.summary ||
+        !state.configuration
+      ) {
+        diagnostic(
+          state,
+          event,
+          'invalid-rematch',
+          'Only the host can begin the next immutable race epoch after a finish.'
+        );
+        continue;
+      }
+      state.raceSummaries.push({
+        epoch: state.raceEpoch,
+        summary: state.resolution.summary
+      });
+      state.raceEpoch = payload.epoch;
+      state.configuration = { ...state.configuration, seed: payload.seed };
+      state.setup = deriveRaceSetup(state.players, state.configuration);
+      state.programming = createProgrammingState(state.setup, state.configuration);
+      state.nextProgramming = null;
+      state.resolution = null;
     } else {
       diagnostic(state, event, 'invalid-event', `Event ${event.id} has an unknown type.`);
       continue;

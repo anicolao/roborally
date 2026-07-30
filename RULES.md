@@ -304,6 +304,11 @@ After lasers:
 Archive updates happen after every register, but repair and Option benefits
 happen only during cleanup after register 5.
 
+The current projection enforces this checkpoint after every laser snapshot.
+Out-of-order flags still move the Archive but do not advance progress. Flag 3
+ends Program resolution immediately and freezes winner, optional runner-up,
+and final robot standings for the race epoch.
+
 ## Cleanup
 
 After register 5:
@@ -319,6 +324,11 @@ After register 5:
 When multiple Option decisions share a timing window, the original Dock 1
 player decides first, followed clockwise. Each player receives one opportunity
 to say whether and how they use an Option.
+
+Single-wrench and crossed-site repair now remove exactly one damage during
+cleanup. A falling lock threshold discards the newly unlocked register from 1
+toward 5; crossed sites preserve a deterministic face-up Option-draw
+placeholder until the reviewed deck is enabled.
 
 ## Damage and locked registers
 
