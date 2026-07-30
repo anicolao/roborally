@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { stayActiveInDockOrder } from '../helpers/game-actions';
 import { TestStepHelper } from '../helpers/test-step-helper';
 
 async function chooseProgram(page: Page, labels: readonly string[]) {
@@ -58,6 +59,7 @@ test('board phases resolve conveyors, dependency conflicts, and gears atomically
     for (const page of [host, grace, linus]) {
       await page.getByRole('button', { name: 'Open programming console' }).click();
     }
+    await stayActiveInDockOrder([host, grace, linus]);
 
     await chooseProgram(host, [
       'rotate-left priority 400',

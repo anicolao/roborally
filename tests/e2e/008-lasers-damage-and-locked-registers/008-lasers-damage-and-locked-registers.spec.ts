@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { stayActiveInDockOrder } from '../helpers/game-actions';
 import { TestStepHelper } from '../helpers/test-step-helper';
 
 async function chooseProgram(page: Page, labels: readonly string[]) {
@@ -59,6 +60,7 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
     for (const page of pages) {
       await page.getByRole('button', { name: 'Open programming console' }).click();
     }
+    await stayActiveInDockOrder(pages);
 
     await chooseProgram(host, [
       'u-turn priority 60',

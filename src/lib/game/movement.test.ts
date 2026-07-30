@@ -8,6 +8,7 @@ import { PROGRAM_CARDS, type ProgramAction } from './program-manifest';
 import {
   applyProgramCard,
   applyReentryChoice,
+  beginNextTurnPowerDowns,
   createRaceRobotPositions,
   legalReentryChoices,
   lockedRegisterNumbersForDamage,
@@ -41,6 +42,8 @@ function raceRobot(
     touchedFlags: [],
     nextFlag: 1,
     pendingOptionDraws: 0,
+    poweredDown: false,
+    powerDownNextTurn: false,
     status: 'active',
     destructionOrder: null,
     optionLossPending: false,
@@ -296,6 +299,61 @@ describe('priority Program movement', () => {
         expect.objectContaining({ uid: 'second', x: 5, y: 9, damage: 2, status: 'active' })
       ])
     );
+  });
+
+  it('lets a destroyed announcer decide whether re-entry begins the promised shutdown', () => {
+    const destroyed = raceRobot({
+      uid: 'announcer',
+      name: 'Announcer',
+      x: 8,
+      y: 8,
+      archive: { x: 6, y: 10 },
+      damage: 0,
+      status: 'destroyed',
+      destructionOrder: 1,
+      lives: 2,
+      powerDownNextTurn: true
+    });
+    const awaiting: ProgramResolution = {
+      turnNumber: 1,
+      phase: 'awaiting-reentry',
+      robots: [destroyed],
+      trace: [],
+      nextReentryUid: destroyed.uid,
+      winnerUid: null,
+      runnersUpUids: [],
+      summary: null
+    };
+
+    const reenteredDown = applyReentryChoice(awaiting, destroyed.uid, {
+      x: 6,
+      y: 10,
+      facing: 'north',
+      poweredDown: true
+    });
+    expect(reenteredDown.robots[0]).toMatchObject({
+      status: 'active',
+      damage: 2,
+      powerDownNextTurn: true,
+      poweredDown: false
+    });
+    expect(beginNextTurnPowerDowns(reenteredDown.robots)[0]).toMatchObject({
+      damage: 0,
+      powerDownNextTurn: false,
+      poweredDown: true
+    });
+
+    const reenteredActive = applyReentryChoice(awaiting, destroyed.uid, {
+      x: 6,
+      y: 10,
+      facing: 'north',
+      poweredDown: false
+    });
+    expect(reenteredActive.robots[0]).toMatchObject({
+      damage: 2,
+      powerDownNextTurn: false,
+      poweredDown: false
+    });
   });
 
   it('has movement fixtures for every conveyor and gear on the selected course', () => {
@@ -781,5 +839,111 @@ describe('priority Program movement', () => {
     expect(Object.isFrozen(resolution.summary)).toBe(true);
     expect(Object.isFrozen(resolution.summary?.standings)).toBe(true);
     expect(resolution.trace).toContainEqual(expect.objectContaining({ kind: 'winner' }));
+  });
+
+  it('begins and continues power down by clearing damage and every retained lock', () => {
+    const announced = raceRobot({
+      uid: 'down',
+      name: 'Down',
+      x: 6,
+      y: 10,
+      damage: 8,
+      lockedRegisters: [
+        { register: 2, cardId: 'program-020' },
+        { register: 3, cardId: 'program-030' },
+        { register: 4, cardId: 'program-040' },
+        { register: 5, cardId: 'program-050' }
+      ],
+      powerDownNextTurn: true
+    });
+    const [poweredDown] = beginNextTurnPowerDowns([announced]);
+    expect(poweredDown).toMatchObject({
+      poweredDown: true,
+      powerDownNextTurn: false,
+      damage: 0,
+      lockedRegisters: []
+    });
+
+    poweredDown.damage = 6;
+    poweredDown.lockedRegisters = [
+      { register: 4, cardId: 'program-060' },
+      { register: 5, cardId: 'program-070' }
+    ];
+    poweredDown.powerDownNextTurn = true;
+    expect(beginNextTurnPowerDowns([poweredDown])[0]).toMatchObject({
+      poweredDown: true,
+      damage: 0,
+      lockedRegisters: []
+    });
+  });
+
+  it('skips powered-down Programs and robot fire but keeps factory and damage vulnerability', () => {
+    const config = riskyExchangeConfig('POWERED-DOWN-LOCK');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'down', name: 'Down', robotId: 'axle' },
+        { uid: 'active', name: 'Active', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(
+      setup,
+      config,
+      {},
+      {},
+      2,
+      new Set(['active'])
+    );
+    const reservedCard = programming.drawPile[0];
+    const down = raceRobot({
+      uid: 'down',
+      name: 'Down',
+      x: 10,
+      y: 3,
+      facing: 'west',
+      poweredDown: true,
+      damage: 4
+    });
+    const active = raceRobot({
+      uid: 'active',
+      name: 'Active',
+      x: 8,
+      y: 3,
+      facing: 'west'
+    });
+    const trace: ResolutionTraceEntry[] = [];
+    applyProgramCard([down, active], 'down', card('move-3'), 1, trace);
+    expect(down).toMatchObject({ x: 10, y: 3 });
+    resolveLaserSnapshot(
+      [down, active],
+      1,
+      trace,
+      programming,
+      [
+        {
+          x: 10,
+          y: 3,
+          elements: [{ kind: 'laser', direction: 'east', beamCount: 1 }]
+        }
+      ]
+    );
+    expect(down).toMatchObject({
+      damage: 5,
+      lockedRegisters: [{ register: 5, cardId: reservedCard }]
+    });
+    expect(programming.drawPile).not.toContain(reservedCard);
+    expect(
+      trace.some(({ kind, actorUid }) => kind === 'robot-laser' && actorUid === 'down')
+    ).toBe(false);
+
+    const conveyorCells: BoardCell[] = [
+      {
+        x: 10,
+        y: 3,
+        elements: [{ kind: 'conveyor', direction: 'south', express: false }]
+      }
+    ];
+    resolveBoardElements([down, active], 2, trace, conveyorCells);
+    expect(down).toMatchObject({ x: 10, y: 4, poweredDown: true });
   });
 });

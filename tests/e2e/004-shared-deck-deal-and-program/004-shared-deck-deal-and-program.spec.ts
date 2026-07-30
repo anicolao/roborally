@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext } from '@playwright/test';
+import { stayActiveInDockOrder } from '../helpers/game-actions';
 import { TestStepHelper } from '../helpers/test-step-helper';
 
 async function rewindSubmissionDeadline(roomCode: string) {
@@ -102,6 +103,7 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
     await host.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Open programming console' }).click();
     await guest.getByRole('button', { name: 'Open programming console' }).click();
+    await stayActiveInDockOrder([host, guest]);
 
     await expect(host.getByLabel('Your Program hand').getByRole('button')).toHaveCount(9);
     await expect(guest.getByLabel('Your Program hand').getByRole('button')).toHaveCount(9);

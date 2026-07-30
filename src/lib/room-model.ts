@@ -18,6 +18,8 @@ import {
 } from './game/programming';
 import {
   applyReentryChoice,
+  beginNextTurnPowerDowns,
+  createRaceRobotPositions,
   resolveProgrammedTurn,
   type ProgramResolution,
   type ReentryChoice
@@ -47,7 +49,8 @@ export type RoomEventType =
   | 'program/submitted'
   | 'program/timed-out'
   | 'effect/chosen'
-  | 'game/rematched';
+  | 'game/rematched'
+  | 'power-down/responded';
 
 export interface GameCreatedPayload {
   gameId: string;
@@ -92,6 +95,12 @@ export interface GameRematchedPayload {
   seed: string;
 }
 
+export interface PowerDownRespondedPayload {
+  uid: string;
+  turnId: TurnId;
+  powerDownNextTurn: boolean;
+}
+
 export type RoomEventPayload =
   | GameCreatedPayload
   | PlayerJoinedPayload
@@ -100,7 +109,8 @@ export type RoomEventPayload =
   | ProgramSubmittedPayload
   | ProgramTimedOutPayload
   | EffectChosenPayload
-  | GameRematchedPayload;
+  | GameRematchedPayload
+  | PowerDownRespondedPayload;
 
 export interface RoomEvent {
   id: string;
@@ -144,7 +154,8 @@ export interface ReplayDiagnostic {
     | 'invalid-program'
     | 'invalid-timeout'
     | 'invalid-effect'
-    | 'invalid-rematch';
+    | 'invalid-rematch'
+    | 'invalid-power-down';
   message: string;
 }
 
@@ -162,6 +173,8 @@ export interface RoomState {
   resolution: ProgramResolution | null;
   raceEpoch: number;
   raceSummaries: { epoch: number; summary: NonNullable<ProgramResolution['summary']> }[];
+  powerDownResponses: PowerDownRespondedPayload[];
+  pendingPowerDownUid: string | null;
   acceptedEventIds: string[];
   diagnostics: ReplayDiagnostic[];
 }
@@ -181,6 +194,8 @@ export function emptyRoomState(): RoomState {
     resolution: null,
     raceEpoch: 0,
     raceSummaries: [],
+    powerDownResponses: [],
+    pendingPowerDownUid: null,
     acceptedEventIds: [],
     diagnostics: []
   };
@@ -238,6 +253,45 @@ function isSupportedConfiguration(value: unknown, playerCount: number): value is
   );
 }
 
+function turnStartRobots(
+  state: RoomState,
+  programming: ProgrammingState
+): ProgramResolution['robots'] {
+  if (!state.setup) return [];
+  if (programming.turnNumber === 1) return createRaceRobotPositions(state.setup);
+  if (state.resolution?.turnNumber === programming.turnNumber - 1) {
+    return beginNextTurnPowerDowns(state.resolution.robots);
+  }
+  return [];
+}
+
+function isPowerDownEligible(
+  robot: ProgramResolution['robots'][number]
+): boolean {
+  return robot.status === 'active' && (robot.poweredDown || robot.damage > 0);
+}
+
+function refreshPowerDownPending(state: RoomState) {
+  if (!state.programming || !state.setup) {
+    state.pendingPowerDownUid = null;
+    return;
+  }
+  const activeUids = new Set(
+    turnStartRobots(state, state.programming)
+      .filter(isPowerDownEligible)
+      .map(({ uid }) => uid)
+  );
+  state.pendingPowerDownUid =
+    state.setup.players.find(
+      ({ uid }) =>
+        activeUids.has(uid) &&
+        !state.powerDownResponses.some(
+          (response) =>
+            response.turnId === state.programming?.turnId && response.uid === uid
+        )
+    )?.uid ?? null;
+}
+
 function projectNextProgramming(state: RoomState) {
   if (
     !state.setup ||
@@ -250,11 +304,10 @@ function projectNextProgramming(state: RoomState) {
     state.nextProgramming = null;
     return;
   }
-  const damageByUid = Object.fromEntries(
-    state.resolution.robots.map(({ uid, damage }) => [uid, damage])
-  );
+  const nextRobots = beginNextTurnPowerDowns(state.resolution.robots);
+  const damageByUid = Object.fromEntries(nextRobots.map(({ uid, damage }) => [uid, damage]));
   const lockedRegistersByUid = Object.fromEntries(
-    state.resolution.robots.map((robot) => [
+    nextRobots.map((robot) => [
       robot.uid,
       Object.fromEntries(
         robot.lockedRegisters.map(({ register, cardId }) => [register, cardId])
@@ -262,8 +315,8 @@ function projectNextProgramming(state: RoomState) {
     ])
   );
   const eligibleUids = new Set(
-    state.resolution.robots
-      .filter(({ status }) => status === 'active')
+    nextRobots
+      .filter(({ status, poweredDown }) => status === 'active' && !poweredDown)
       .map(({ uid }) => uid)
   );
   state.nextProgramming = createProgrammingState(
@@ -274,6 +327,39 @@ function projectNextProgramming(state: RoomState) {
     state.resolution.turnNumber + 1,
     eligibleUids
   );
+}
+
+function resolveReadyProgramming(state: RoomState) {
+  if (
+    !state.programming ||
+    state.programming.phase !== 'programmed' ||
+    !state.setup
+  ) {
+    return;
+  }
+  const robots = turnStartRobots(state, state.programming);
+  const missingResponse = robots.some(
+    (robot) =>
+      isPowerDownEligible(robot) &&
+      !state.powerDownResponses.some(
+        (response) =>
+          response.turnId === state.programming?.turnId && response.uid === robot.uid
+      )
+  );
+  if (missingResponse) {
+    refreshPowerDownPending(state);
+    return;
+  }
+  for (const robot of robots) {
+    robot.powerDownNextTurn =
+      state.powerDownResponses.find(
+        (response) =>
+          response.turnId === state.programming?.turnId && response.uid === robot.uid
+      )?.powerDownNextTurn ?? false;
+  }
+  state.pendingPowerDownUid = null;
+  state.resolution = resolveProgrammedTurn(state.programming, state.setup, robots);
+  projectNextProgramming(state);
 }
 
 export function replayRoom(events: readonly RoomEvent[]): RoomState {
@@ -439,6 +525,8 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         state.programming = createProgrammingState(state.setup, state.configuration);
         state.nextProgramming = null;
         state.raceEpoch = 1;
+        state.powerDownResponses = [];
+        refreshPowerDownPending(state);
       }
     } else if (event.type === 'program/submitted') {
       const payload = event.payload as ProgramSubmittedPayload;
@@ -457,10 +545,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         diagnostic(state, event, 'invalid-program', 'The Program submission is malformed.');
         continue;
       }
-      const turnStartRobots =
-        state.resolution?.turnNumber === eventProgramming.turnNumber - 1
-          ? state.resolution.robots
-          : undefined;
+      const activatesNextTurn = eventProgramming === state.nextProgramming;
       const next = submitProgram(
         eventProgramming,
         event.actorUid,
@@ -471,13 +556,13 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         diagnostic(state, event, 'invalid-program', 'The Program submission is not legal.');
         continue;
       }
+      if (activatesNextTurn) state.powerDownResponses = [];
       state.programming = next;
       state.nextProgramming = null;
       if (next.phase === 'programmed') {
-        state.resolution = state.setup
-          ? resolveProgrammedTurn(next, state.setup, turnStartRobots)
-          : null;
-        projectNextProgramming(state);
+        resolveReadyProgramming(state);
+      } else {
+        refreshPowerDownPending(state);
       }
     } else if (event.type === 'program/timed-out') {
       const payload = event.payload as ProgramTimedOutPayload;
@@ -496,10 +581,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         diagnostic(state, event, 'invalid-timeout', 'The timeout claim is malformed.');
         continue;
       }
-      const turnStartRobots =
-        state.resolution?.turnNumber === eventProgramming.turnNumber - 1
-          ? state.resolution.robots
-          : undefined;
+      const activatesNextTurn = eventProgramming === state.nextProgramming;
       const next = timeOutProgram(
         eventProgramming,
         payload.targetUid,
@@ -510,13 +592,74 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         diagnostic(state, event, 'invalid-timeout', 'The timeout claim is not yet legal.');
         continue;
       }
+      if (activatesNextTurn) state.powerDownResponses = [];
       state.programming = next;
       state.nextProgramming = null;
       if (next.phase === 'programmed') {
-        state.resolution = state.setup
-          ? resolveProgrammedTurn(next, state.setup, turnStartRobots)
-          : null;
-        projectNextProgramming(state);
+        resolveReadyProgramming(state);
+      } else {
+        refreshPowerDownPending(state);
+      }
+    } else if (event.type === 'power-down/responded') {
+      const payload = event.payload as PowerDownRespondedPayload;
+      const eventProgramming =
+        payload?.turnId === state.programming?.turnId
+          ? state.programming
+          : payload?.turnId === state.nextProgramming?.turnId
+            ? state.nextProgramming
+            : null;
+      if (!payload || payload.uid !== event.actorUid || !eventProgramming) {
+        diagnostic(
+          state,
+          event,
+          'invalid-power-down',
+          'The power-down response is malformed or stale.'
+        );
+        continue;
+      }
+      const activatesNextTurn = eventProgramming === state.nextProgramming;
+      if (activatesNextTurn) {
+        const activeUids = new Set(
+          turnStartRobots(state, eventProgramming)
+            .filter(isPowerDownEligible)
+            .map(({ uid }) => uid)
+        );
+        const expectedUid = state.setup?.players.find(({ uid }) => activeUids.has(uid))?.uid;
+        if (expectedUid !== event.actorUid) {
+          diagnostic(
+            state,
+            event,
+            'invalid-power-down',
+            'Power-down responses must begin with the next turn’s first original Dock.'
+          );
+          continue;
+        }
+      }
+      if (activatesNextTurn) {
+        state.programming = eventProgramming;
+        state.nextProgramming = null;
+        state.powerDownResponses = [];
+        refreshPowerDownPending(state);
+      }
+      if (
+        state.pendingPowerDownUid !== event.actorUid ||
+        state.powerDownResponses.some(
+          (response) =>
+            response.turnId === payload.turnId && response.uid === payload.uid
+        )
+      ) {
+        diagnostic(
+          state,
+          event,
+          'invalid-power-down',
+          'Power-down responses must follow original Dock order exactly once.'
+        );
+        continue;
+      }
+      state.powerDownResponses.push(payload);
+      refreshPowerDownPending(state);
+      if (state.programming?.phase === 'programmed') {
+        resolveReadyProgramming(state);
       }
     } else if (event.type === 'effect/chosen') {
       const payload = event.payload as EffectChosenPayload;
@@ -526,6 +669,8 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         payload.turnId !==
           `turn-${String(state.resolution?.turnNumber ?? 0).padStart(3, '0')}` ||
         payload.choice?.kind !== 'reentry' ||
+        (payload.choice.poweredDown !== undefined &&
+          typeof payload.choice.poweredDown !== 'boolean') ||
         !state.resolution
       ) {
         diagnostic(state, event, 'invalid-effect', 'The effect choice is malformed.');
@@ -574,6 +719,8 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       state.programming = createProgrammingState(state.setup, state.configuration);
       state.nextProgramming = null;
       state.resolution = null;
+      state.powerDownResponses = [];
+      refreshPowerDownPending(state);
     } else {
       diagnostic(state, event, 'invalid-event', `Event ${event.id} has an unknown type.`);
       continue;

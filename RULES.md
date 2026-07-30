@@ -180,6 +180,11 @@ continue clockwise, giving each eligible player one decision. If a robot
 announces a power down and is destroyed before it begins, its player chooses on
 re-entry whether to enter the scheduled turn powered down.
 
+**Digital policy:** each eligible decision is an immutable
+`power-down/responded` event. Ineligible Docks are skipped, eligible responses
+must arrive exactly once in original Dock order, and a completed Program cannot
+resolve until that turn's response barrier is complete.
+
 A register that becomes locked from damage received during power down is
 programmed immediately: draw the top available Program card and place it face
 up in that register.

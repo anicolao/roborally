@@ -95,7 +95,10 @@ export function createProgrammingState(
     };
   });
 
-  const largestHand = Math.max(...players.map(({ damage }) => handSizeForDamage(damage)));
+  const largestHand =
+    players.length > 0
+      ? Math.max(...players.map(({ damage }) => handSizeForDamage(damage)))
+      : 0;
   for (let round = 0; round < largestHand; round += 1) {
     for (const player of players) {
       if (round >= handSizeForDamage(player.damage)) continue;
@@ -108,7 +111,7 @@ export function createProgrammingState(
   return {
     turnId: `turn-${String(turnNumber).padStart(3, '0')}`,
     turnNumber,
-    phase: 'programming',
+    phase: players.length === 0 ? 'programmed' : 'programming',
     players,
     drawPile: deck,
     currentTurnDiscard: [],

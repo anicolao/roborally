@@ -72,6 +72,13 @@ consecutive Programs, including an owner-authored re-entry between turns. It
 proves repair cleanup, ordered flags, moving Archives, the terminal summary,
 and rematch epoch retention entirely through append-only browser actions.
 
+Scenario 010 plays eight turns through two clients. It proves that only eligible
+damaged or already-powered-down robots answer the strict original-Dock-order
+barrier; a robot then clears damage, skips programming, remains vulnerable to
+five board-laser hits, gains an exact random register lock, repeats the shutdown
+once, and powers up with the replacement lock retained. The observer view is
+asserted at the announcement and final barrier.
+
 ## Scenario layout
 
 Use the next three-digit sequence and a short kebab-case capability name:

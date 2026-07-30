@@ -9,8 +9,12 @@
   import type { FirebaseServices } from '$lib/firebase';
   import CourseBoard from '$lib/components/CourseBoard.svelte';
   import { PROGRAM_CARDS, type ProgramCard } from '$lib/game/program-manifest';
-  import { legalReentryChoices } from '$lib/game/movement';
-  import { previewProgram, programCardZones } from '$lib/game/programming';
+  import { beginNextTurnPowerDowns, legalReentryChoices } from '$lib/game/movement';
+  import {
+    previewProgram,
+    programCardZones,
+    type ProgrammingPlayer
+  } from '$lib/game/programming';
   import { riskyExchangeConfig } from '$lib/game/setup';
   import {
     MAX_ROOM_PLAYERS,
@@ -48,6 +52,7 @@
   let showProgramming = false;
   let requestedTurnNumber = 1;
   let selectedReentryChoice = '';
+  let reentryPoweredDown = false;
   const buildHash = (import.meta.env.VITE_GIT_HASH ?? 'local-development').slice(0, 8);
 
   $: currentPlayer = services
@@ -63,11 +68,54 @@
     roomState.nextProgramming?.turnNumber === requestedTurnNumber
       ? roomState.nextProgramming
       : roomState.programming;
+  $: projectedRobot = currentPlayer
+    ? roomState.resolution?.robots.find(({ uid }) => uid === currentPlayer.uid)
+    : undefined;
+  $: currentPlayerPoweredDown =
+    !!projectedRobot &&
+    !!activeProgramming &&
+    ((roomState.resolution?.turnNumber === activeProgramming.turnNumber - 1 &&
+      projectedRobot.powerDownNextTurn) ||
+      (roomState.resolution?.turnNumber === activeProgramming.turnNumber &&
+        projectedRobot.poweredDown));
   $: programmingPlayer = currentPlayer && activeProgramming
-    ? activeProgramming.players.find((player) => player.uid === currentPlayer.uid)
+    ? activeProgramming.players.find((player) => player.uid === currentPlayer.uid) ??
+      (currentPlayerPoweredDown
+        ? ({
+            uid: currentPlayer.uid,
+            damage: 0,
+            hand: [],
+            registers: Array.from({ length: 5 }, () => ({ cardId: null, locked: false })),
+            submitted: true,
+            timedOut: false
+          } satisfies ProgrammingPlayer)
+        : undefined)
     : undefined;
   $: openRegisterCount =
-    programmingPlayer?.registers.filter(({ locked }) => !locked).length ?? 0;
+    currentPlayerPoweredDown
+      ? 0
+      : programmingPlayer?.registers.filter(({ locked }) => !locked).length ?? 0;
+  $: powerResponse = currentPlayer && activeProgramming
+    ? roomState.powerDownResponses.find(
+        ({ uid, turnId }) => uid === currentPlayer.uid && turnId === activeProgramming?.turnId
+      )
+    : undefined;
+  $: firstNextPowerUid =
+    activeProgramming === roomState.nextProgramming
+      ? roomState.setup?.players.find((player) =>
+          beginNextTurnPowerDowns(roomState.resolution?.robots ?? []).some(
+            ({ uid, status, damage, poweredDown }) =>
+              uid === player.uid &&
+              status === 'active' &&
+              (poweredDown || damage > 0)
+          )
+        )?.uid
+      : null;
+  $: canRespondPowerDown =
+    !!currentPlayer &&
+    !powerResponse &&
+    (roomState.pendingPowerDownUid === currentPlayer.uid ||
+      firstNextPowerUid === currentPlayer.uid);
   $: programPreview = programmingPlayer
     ? previewProgram(programmingPlayer, selectedProgramCardIds)
     : [];
@@ -78,6 +126,9 @@
     currentPlayer && roomState.resolution
       ? legalReentryChoices(roomState.resolution, currentPlayer.uid)
       : [];
+  $: reentryRobot = roomState.resolution?.robots.find(
+    ({ uid }) => uid === roomState.resolution?.nextReentryUid
+  );
   $: normalizedName = normalizePlayerName(playerName);
   $: canSubmit =
     !!normalizedName &&
@@ -338,11 +389,15 @@
           kind: 'reentry',
           x: Number(x),
           y: Number(y),
-          facing: facing as 'north' | 'east' | 'south' | 'west'
+          facing: facing as 'north' | 'east' | 'south' | 'west',
+          ...(reentryRobot?.powerDownNextTurn
+            ? { poweredDown: reentryPoweredDown }
+            : {})
         },
         `turn-${String(roomState.resolution?.turnNumber ?? 1).padStart(3, '0')}`
       );
       selectedReentryChoice = '';
+      reentryPoweredDown = false;
     } catch (error) {
       console.error(error);
       formError = 'The re-entry choice could not be written.';
@@ -368,6 +423,22 @@
     } catch (error) {
       console.error(error);
       formError = 'The immutable rematch event could not be written.';
+    } finally {
+      pending = false;
+    }
+  }
+
+  async function respondPowerDown(powerDownNextTurn: boolean) {
+    if (!services || !roomService || !activeProgramming || !canRespondPowerDown) return;
+    pending = true;
+    try {
+      await roomService.respondPowerDown(services.db, services.user, roomCode, {
+        turnId: activeProgramming.turnId,
+        powerDownNextTurn
+      });
+    } catch (error) {
+      console.error(error);
+      formError = 'The ordered power-down response could not be written.';
     } finally {
       pending = false;
     }
@@ -408,6 +479,9 @@
       <CourseBoard setup={roomState.setup} robots={roomState.resolution?.robots} />
       <aside
         class:resolution-active={!!roomState.resolution}
+        class:next-turn-programming={!!roomState.resolution &&
+          !!activeProgramming &&
+          activeProgramming.turnNumber > roomState.resolution.turnNumber}
         class:many-robots={roomState.setup.players.length >= 3}
         class="setup-summary"
       >
@@ -463,6 +537,46 @@
               {activeProgramming.drawPile.length} undealt ·
               {activeProgramming.currentTurnDiscard.length} turn discard
             </p>
+            <div
+              class="power-control"
+              aria-label="Ordered power-down control"
+              data-turn-id={activeProgramming.turnId}
+              data-can-respond={canRespondPowerDown}
+              data-pending-uid={roomState.pendingPowerDownUid ?? firstNextPowerUid ?? ''}
+            >
+              {#if powerResponse}
+                <span>
+                  {powerResponse.powerDownNextTurn
+                    ? 'Power down committed for next turn'
+                    : 'Active next turn'}
+                </span>
+              {:else if canRespondPowerDown}
+                <span>
+                  {currentPlayerPoweredDown
+                    ? 'Continue shutdown after this turn?'
+                    : 'Announce shutdown for next turn?'}
+                </span>
+                <div>
+                  <button type="button" onclick={() => respondPowerDown(true)} disabled={pending}>
+                    {currentPlayerPoweredDown
+                      ? 'Continue power down next turn'
+                      : 'Power down next turn'}
+                  </button>
+                  <button type="button" onclick={() => respondPowerDown(false)} disabled={pending}>
+                    {currentPlayerPoweredDown ? 'Power up next turn' : 'Stay active next turn'}
+                  </button>
+                </div>
+              {:else}
+                {@const pendingPowerPlayer = roomState.players.find(
+                  ({ uid }) => uid === (roomState.pendingPowerDownUid ?? firstNextPowerUid)
+                )}
+                <span>
+                  {pendingPowerPlayer
+                    ? `Waiting for ${pendingPowerPlayer.name} in original Dock order`
+                    : 'No power-down decision required'}
+                </span>
+              {/if}
+            </div>
             {#if programmingPlayer.submitted}
               <p class="submission-state">Program committed. It cannot be inspected or changed.</p>
             {:else}
@@ -553,6 +667,11 @@
                       <strong>{robot.name}</strong>
                       <span class="robot-vitals">
                         {robot.status} · {robot.lives} Lives · {robot.damage} Damage
+                        {robot.poweredDown
+                          ? ' · Powered down'
+                          : robot.powerDownNextTurn
+                            ? ' · Shutdown announced'
+                            : ''}
                         {robot.lockedRegisters.length
                           ? ` · Locked ${robot.lockedRegisters.map(({ register }) => `R${register}`).join('/')}`
                           : ''}
@@ -586,6 +705,12 @@
                         {/each}
                       </select>
                     </label>
+                    {#if reentryRobot?.powerDownNextTurn}
+                      <label class="reentry-power">
+                        <input type="checkbox" bind:checked={reentryPoweredDown} />
+                        Re-enter powered down
+                      </label>
+                    {/if}
                     <button
                       type="button"
                       onclick={submitReentryChoice}
@@ -1424,6 +1549,13 @@
   .setup-summary h1 em { color: #d2ff37; -webkit-text-stroke: 0; }
   .setup-summary .lede strong { color: #eef4ee; font-family: 'Space Mono', monospace; }
   .setup-summary.resolution-active .setup-order.compact { display: none; }
+  .setup-summary.next-turn-programming .lede,
+  .setup-summary.next-turn-programming .setup-facts,
+  .setup-summary.next-turn-programming .epoch-state,
+  .setup-summary.next-turn-programming .reentry-policy,
+  .setup-summary.next-turn-programming .board-phase {
+    display: none;
+  }
   .epoch-state {
     margin: 5px 0 0;
     color: #718083;
@@ -1557,6 +1689,17 @@
     font: 7px 'Space Mono', monospace;
     text-transform: uppercase;
   }
+  .power-control {
+    display: grid;
+    gap: 3px;
+    padding: 4px 5px;
+    border: 1px solid #465356;
+    color: #91a09f;
+    font: 7px 'Space Mono', monospace;
+    text-transform: uppercase;
+  }
+  .power-control > div { display: flex; gap: 3px; }
+  .power-control button { flex: 1; min-height: 25px; padding: 0 4px; font-size: 6px; }
   .submission-state {
     padding: 9px;
     border: 1px solid #53613b;
@@ -1633,6 +1776,11 @@
     color: #ffcf4b;
     font: 7px 'Space Mono', monospace;
     text-transform: uppercase;
+  }
+  .reentry-choice .reentry-power {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
   }
   .reentry-choice select {
     min-width: 0;

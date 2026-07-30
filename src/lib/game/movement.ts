@@ -33,6 +33,8 @@ export interface RaceRobotPosition {
   touchedFlags: (1 | 2 | 3)[];
   nextFlag: 1 | 2 | 3 | null;
   pendingOptionDraws: number;
+  poweredDown: boolean;
+  powerDownNextTurn: boolean;
   status: RobotBoardStatus;
   destructionOrder: number | null;
   optionLossPending: boolean;
@@ -83,6 +85,7 @@ export interface ReentryChoice {
   x: number;
   y: number;
   facing: Direction;
+  poweredDown?: boolean;
 }
 
 export interface ProgramResolution {
@@ -358,7 +361,7 @@ export function applyProgramCard(
   trace: ResolutionTraceEntry[]
 ) {
   const robot = robots.find(({ uid }) => uid === actorUid);
-  if (!robot || robot.status !== 'active') return;
+  if (!robot || robot.status !== 'active' || robot.poweredDown) return;
   addTrace(
     trace,
     register,
@@ -599,10 +602,14 @@ function synchronizeLockedRegisters(
   programming: ProgrammingState
 ) {
   const player = programming.players.find(({ uid }) => uid === robot.uid);
-  if (!player || robot.status !== 'active') return;
+  if (robot.status !== 'active') return;
   const expected = lockedRegisterNumbersForDamage(robot.damage);
   robot.lockedRegisters = expected.flatMap((register) => {
-    const cardId = player.registers[register - 1].cardId;
+    const retained = robot.lockedRegisters.find((locked) => locked.register === register);
+    const cardId =
+      retained?.cardId ??
+      player?.registers[register - 1].cardId ??
+      (robot.poweredDown ? programming.drawPile.shift() : undefined);
     return cardId ? [{ register, cardId }] : [];
   });
 }
@@ -666,7 +673,7 @@ export function resolveLaserSnapshot(
     }
   }
 
-  for (const shooter of activeSnapshot) {
+  for (const shooter of activeSnapshot.filter(({ poweredDown }) => !poweredDown)) {
     let cursorX = shooter.x;
     let cursorY = shooter.y;
     const [dx, dy] = steps[shooter.facing];
@@ -935,6 +942,8 @@ export function applyReentryChoice(
   robot.y = choice.y;
   robot.facing = choice.facing;
   robot.damage += 2;
+  robot.powerDownNextTurn = Boolean(choice.poweredDown && robot.powerDownNextTurn);
+  robot.poweredDown = false;
   robot.status = 'active';
   addTrace(
     resolution.trace,
@@ -975,10 +984,35 @@ export function createRaceRobotPositions(setup: RaceSetup): RaceRobotPosition[] 
     touchedFlags: [],
     nextFlag: 1,
     pendingOptionDraws: 0,
+    poweredDown: false,
+    powerDownNextTurn: false,
     status: 'active',
     destructionOrder: null,
     optionLossPending: false
   }));
+}
+
+export function beginNextTurnPowerDowns(
+  current: readonly RaceRobotPosition[]
+): RaceRobotPosition[] {
+  return current.map((robot) => {
+    const next = {
+      ...robot,
+      archive: { ...robot.archive },
+      lockedRegisters: robot.lockedRegisters.map((locked) => ({ ...locked })),
+      touchedFlags: [...robot.touchedFlags]
+    };
+    if (next.status !== 'active') return next;
+    if (next.powerDownNextTurn) {
+      next.poweredDown = true;
+      next.powerDownNextTurn = false;
+      next.damage = 0;
+      next.lockedRegisters = [];
+    } else {
+      next.poweredDown = false;
+    }
+    return next;
+  });
 }
 
 export function resolveProgrammedTurn(
