@@ -8,7 +8,7 @@ test('application shell reaches Firebase and renders deterministically', async (
     'The static Robo Rally client loads its factory console and reaches the local Firebase emulators.'
   );
 
-  await page.goto('/');
+  await page.goto('/?e2eIdentity=SHELL');
   await steps.step('firebase-ready', {
     description: 'The factory is ready for racers',
     verifications: [
@@ -27,10 +27,10 @@ test('application shell reaches Firebase and renders deterministically', async (
         }
       },
       {
-        spec: 'Future room actions are present but unavailable in the shell slice',
+        spec: 'Room creation and join actions become available after anonymous authentication',
         check: async () => {
-          await expect(page.getByRole('button', { name: 'Create race' })).toBeDisabled();
-          await expect(page.getByRole('button', { name: 'Join with code' })).toBeDisabled();
+          await expect(page.getByRole('button', { name: 'Create race' })).toBeEnabled();
+          await expect(page.getByRole('button', { name: 'Join with code' })).toBeEnabled();
         }
       },
       {

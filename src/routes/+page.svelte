@@ -3,29 +3,197 @@
   import '@fontsource/atkinson-hyperlegible/700.css';
   import '@fontsource/space-mono/400.css';
   import '@fontsource/space-mono/700.css';
-  import { onMount } from 'svelte';
+  import { replaceState } from '$app/navigation';
+  import { onDestroy, onMount } from 'svelte';
+  import type { Unsubscribe } from 'firebase/firestore';
+  import type { FirebaseServices } from '$lib/firebase';
+  import {
+    MAX_ROOM_PLAYERS,
+    ROBOTS,
+    emptyRoomState,
+    normalizePlayerName,
+    normalizeRoomCode,
+    type RobotId
+  } from '$lib/room-model';
+  import type * as RoomService from '$lib/room-service';
 
   type ConnectionState = 'connecting' | 'synced' | 'error';
+  type ViewMode = 'landing' | 'create' | 'join' | 'room';
 
   let connectionState: ConnectionState = 'connecting';
   let connectionMessage = 'Connecting to the factory network';
+  let mode: ViewMode = 'landing';
+  let services: FirebaseServices | undefined;
+  let roomService: typeof RoomService | undefined;
+  let unsubscribe: Unsubscribe | undefined;
+  let roomState = emptyRoomState();
+  let roomCode = '';
+  let joinCode = '';
+  let playerName = '';
+  let selectedRobot: RobotId = 'axle';
+  let identityLabel = 'CONNECTING';
+  let formError = '';
+  let pending = false;
+  let copied = false;
   const buildHash = (import.meta.env.VITE_GIT_HASH ?? 'local-development').slice(0, 8);
+
+  $: currentPlayer = services
+    ? roomState.players.find((player) => player.uid === services?.user.uid)
+    : undefined;
+  $: unavailableRobots = new Set(roomState.players.map((player) => player.robotId));
+  $: roomIsFull = roomState.players.length >= MAX_ROOM_PLAYERS;
+  $: normalizedName = normalizePlayerName(playerName);
+  $: canSubmit =
+    !!normalizedName &&
+    !pending &&
+    !unavailableRobots.has(selectedRobot) &&
+    (mode !== 'join' || (!!roomState.gameId && !roomIsFull));
+
+  function deterministicIdentity(userId: string) {
+    const requested = new URLSearchParams(window.location.search).get('e2eIdentity');
+    if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' && requested) {
+      return requested.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 12);
+    }
+    return userId.slice(0, 8).toUpperCase();
+  }
+
+  function inviteUrl(code = roomCode) {
+    const url = new URL(window.location.href);
+    url.search = '';
+    url.searchParams.set('room', code);
+    return url.toString();
+  }
+
+  function updateRoomUrl(code: string) {
+    const url = new URL(window.location.href);
+    const identity = url.searchParams.get('e2eIdentity');
+    url.search = '';
+    url.searchParams.set('room', code);
+    if (identity) url.searchParams.set('e2eIdentity', identity);
+    replaceState(url, {});
+  }
+
+  function watchRoom(code: string) {
+    if (!services || !roomService) return;
+    unsubscribe?.();
+    roomCode = normalizeRoomCode(code);
+    joinCode = roomCode;
+    roomState = emptyRoomState();
+    formError = '';
+    unsubscribe = roomService.subscribeRoom(
+      services.db,
+      roomCode,
+      (nextState) => {
+        roomState = nextState;
+        if (mode === 'join' && !nextState.gameId) {
+          formError = `Room ${roomCode} was not found.`;
+        } else {
+          formError = '';
+        }
+        if (nextState.players.some((player) => player.uid === services?.user.uid)) {
+          mode = 'room';
+          connectionMessage = `Room ${roomCode} synced`;
+        }
+      },
+      (error) => {
+        console.error(error);
+        formError = 'The immutable room stream could not be read.';
+      }
+    );
+  }
 
   onMount(async () => {
     try {
       const { initializeFirebase } = await import('$lib/firebase');
-      await initializeFirebase();
+      services = await initializeFirebase();
+      roomService = await import('$lib/room-service');
+      identityLabel = deterministicIdentity(services.user.uid);
       connectionState = 'synced';
       connectionMessage =
         import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true'
           ? 'Firebase emulator ready'
           : 'Factory network ready';
+      const requestedRoom = normalizeRoomCode(
+        new URLSearchParams(window.location.search).get('room') ?? ''
+      );
+      if (requestedRoom) {
+        mode = 'join';
+        watchRoom(requestedRoom);
+      }
     } catch (error) {
       console.error(error);
       connectionState = 'error';
       connectionMessage = 'Firebase configuration required';
     }
   });
+
+  onDestroy(() => unsubscribe?.());
+
+  function showCreate() {
+    mode = 'create';
+    playerName = '';
+    selectedRobot = 'axle';
+    formError = '';
+  }
+
+  function showJoin() {
+    mode = 'join';
+    roomCode = '';
+    joinCode = '';
+    roomState = emptyRoomState();
+    formError = '';
+  }
+
+  function findRoom() {
+    const code = normalizeRoomCode(joinCode);
+    if (code.length !== 6) {
+      formError = 'Enter the six-character room code.';
+      return;
+    }
+    updateRoomUrl(code);
+    watchRoom(code);
+  }
+
+  async function submitSeat() {
+    if (!services || !roomService || !canSubmit) return;
+    pending = true;
+    formError = '';
+    try {
+      if (mode === 'create') {
+        const requestedCode =
+          import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true'
+            ? new URLSearchParams(window.location.search).get('e2eRoomCode')
+            : null;
+        const code =
+          normalizeRoomCode(requestedCode ?? '') || roomService.createRoomCode();
+        if (code.length !== 6) throw new Error('A room code must contain six characters.');
+        updateRoomUrl(code);
+        watchRoom(code);
+        await roomService.createRoom(services.db, services.user, code, {
+          name: normalizedName,
+          robotId: selectedRobot
+        });
+      } else {
+        await roomService.joinRoom(services.db, services.user, roomCode, {
+          name: normalizedName,
+          robotId: selectedRobot
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      formError =
+        mode === 'create'
+          ? 'That room code is already in use. Try creating another race.'
+          : 'Your seat could not be claimed. Replay the room and try again.';
+    } finally {
+      pending = false;
+    }
+  }
+
+  async function copyInvite() {
+    await navigator.clipboard.writeText(inviteUrl());
+    copied = true;
+  }
 
   const cards = [
     { label: 'Move 3', priority: '840', mark: '↑↑↑' },
@@ -37,7 +205,7 @@
 </script>
 
 <svelte:head>
-  <title>Robo Rally — Program the factory</title>
+  <title>{mode === 'room' ? `Room ${roomCode} — Robo Rally` : 'Robo Rally — Program the factory'}</title>
 </svelte:head>
 
 <main class="shell" data-e2e-layout>
@@ -53,62 +221,183 @@
     </div>
   </header>
 
-  <section class="hero">
-    <div class="copy">
-      <p class="eyebrow"><span>01</span> CLASSIC FACTORY CONTROL</p>
-      <h1>Program.<br /><em>Collide.</em><br />Survive.</h1>
-      <p class="lede">
-        Secretly load five registers. Watch every robot execute. Reach the flags while the
-        factory—and your rivals—rewrite the route.
-      </p>
-
-      <div class="actions" aria-label="Race actions">
-        <button disabled>Create race</button>
-        <button class="secondary" disabled>Join with code</button>
-        <p>Room controls arrive in the next tracer bullet.</p>
+  {#if mode === 'room' && currentPlayer}
+    <section class="lobby" aria-labelledby="room-heading">
+      <div class="room-console">
+        <p class="eyebrow"><span>02</span> IMMUTABLE RACE CONTROL</p>
+        <h1 id="room-heading">Room<br /><em>{roomCode}</em></h1>
+        <p class="lede">
+          Every seat is rebuilt from one ordered, append-only event stream. Share the invite;
+          reloads replay the same room.
+        </p>
+        <div class="room-actions">
+          <button type="button" onclick={copyInvite}>{copied ? 'Invite copied' : 'Copy invite link'}</button>
+          <a class="text-link" href={inviteUrl()}>Open join link</a>
+        </div>
+        <dl class="room-facts">
+          <div><dt>{roomState.players.length}/{MAX_ROOM_PLAYERS}</dt><dd>seats claimed</dd></div>
+          <div><dt>{roomState.acceptedEventIds.length}</dt><dd>immutable events</dd></div>
+          <div><dt>{roomState.diagnostics.length}</dt><dd>replay diagnostics</dd></div>
+        </dl>
+        <p class="identity">Identity <strong>{identityLabel}</strong> · Seat {currentPlayer.seat}</p>
       </div>
 
-      <dl class="facts">
-        <div><dt>2–8</dt><dd>robots</dd></div>
-        <div><dt>84</dt><dd>program cards</dd></div>
-        <div><dt>5</dt><dd>registers</dd></div>
-        <div><dt>34</dt><dd>courses</dd></div>
-      </dl>
-    </div>
+      <div class="seat-console">
+        <div class="telemetry-head">
+          <span>SEATING / ORIGINAL DOCK ORDER</span>
+          <span class="live"><i></i> REPLAY CLEAN</span>
+        </div>
+        <ol class="seats" aria-label="Race room players">
+          {#each Array(MAX_ROOM_PLAYERS) as _, index}
+            {@const player = roomState.players[index]}
+            <li class:claimed={!!player}>
+              <span class="seat-number">{String(index + 1).padStart(2, '0')}</span>
+              {#if player}
+                {@const robot = ROBOTS.find((option) => option.id === player.robotId)}
+                <span class="robot-token" aria-hidden="true">{robot?.mark}</span>
+                <span class="seat-name">
+                  <strong>{player.name}</strong>
+                  <small>{robot?.name} {player.uid === roomState.hostUid ? '· host' : ''}</small>
+                </span>
+                <span class="seat-state">linked</span>
+              {:else}
+                <span class="robot-token empty" aria-hidden="true">--</span>
+                <span class="seat-name"><strong>Open dock</strong><small>Waiting for racer</small></span>
+                <span class="seat-state">open</span>
+              {/if}
+            </li>
+          {/each}
+        </ol>
+        <p class="room-ready" class:full={roomIsFull}>
+          {roomIsFull ? 'All eight robots linked — configuration unlocks in Step 3.' : 'Waiting for at least two racers.'}
+        </p>
+      </div>
+    </section>
+  {:else}
+    <section class="hero">
+      <div class="copy">
+        <p class="eyebrow"><span>01</span> CLASSIC FACTORY CONTROL</p>
+        <h1>Program.<br /><em>Collide.</em><br />Survive.</h1>
+        <p class="lede">
+          Secretly load five registers. Watch every robot execute. Reach the flags while the
+          factory—and your rivals—rewrite the route.
+        </p>
 
-    <div class="telemetry" role="img" aria-label="Factory course and five programmed registers">
-      <div class="telemetry-head">
-        <span>EXCHANGE / PRE-RACE</span>
-        <span class="live"><i></i> LINKED</span>
+        {#if mode === 'landing'}
+          <div class="actions" aria-label="Race actions">
+            <button type="button" onclick={showCreate} disabled={!services}>Create race</button>
+            <button type="button" class="secondary" onclick={showJoin} disabled={!services}>Join with code</button>
+            <p>Identity {identityLabel}. Rooms replay from immutable events.</p>
+          </div>
+        {:else}
+          <form
+            class="join-panel"
+            aria-label={mode === 'create' ? 'Create race' : 'Join race'}
+            onsubmit={(event) => {
+              event.preventDefault();
+              if (mode === 'join' && !roomCode) findRoom();
+              else submitSeat();
+            }}
+          >
+            <div class="form-head">
+              <strong>{mode === 'create' ? 'Create race room' : roomCode ? `Join room ${roomCode}` : 'Find race room'}</strong>
+              <button type="button" class="close" aria-label="Return to home" onclick={() => (mode = 'landing')}>×</button>
+            </div>
+
+            {#if mode === 'join' && !roomCode}
+              <label>
+                Room code
+                <input
+                  name="roomCode"
+                  bind:value={joinCode}
+                  maxlength="6"
+                  autocomplete="off"
+                  placeholder="ABC234"
+                />
+              </label>
+              <button type="submit">Find room</button>
+            {:else if mode === 'join' && !roomState.gameId}
+              <p class="stream-note">Replaying room {roomCode}…</p>
+            {:else}
+              <label>
+                Racer name
+                <input
+                  name="playerName"
+                  bind:value={playerName}
+                  maxlength="24"
+                  autocomplete="nickname"
+                  placeholder="Your name"
+                />
+              </label>
+              <fieldset>
+                <legend>Choose an available robot</legend>
+                <div class="robot-options">
+                  {#each ROBOTS as robot}
+                    <button
+                      type="button"
+                      class:selected={selectedRobot === robot.id}
+                      aria-pressed={selectedRobot === robot.id}
+                      disabled={unavailableRobots.has(robot.id)}
+                      onclick={() => (selectedRobot = robot.id)}
+                    >
+                      <span>{robot.mark}</span>{robot.name}
+                    </button>
+                  {/each}
+                </div>
+              </fieldset>
+              {#if roomIsFull}
+                <p class="form-error" role="alert">Room full — all eight robot docks are claimed.</p>
+              {/if}
+              <button type="submit" disabled={!canSubmit}>
+                {pending ? 'Writing event…' : mode === 'create' ? 'Create and claim seat' : 'Claim seat'}
+              </button>
+            {/if}
+            {#if formError}<p class="form-error" role="alert">{formError}</p>{/if}
+          </form>
+        {/if}
+
+        <dl class="facts">
+          <div><dt>2–8</dt><dd>robots</dd></div>
+          <div><dt>84</dt><dd>program cards</dd></div>
+          <div><dt>5</dt><dd>registers</dd></div>
+          <div><dt>34</dt><dd>courses</dd></div>
+        </dl>
       </div>
 
-      <div class="factory">
-        <div class="grid-lines"></div>
-        <span class="conveyor belt-a">▶ ▶ ▶</span>
-        <span class="conveyor belt-b">▲ ▲ ▲</span>
-        <span class="pit pit-a"></span>
-        <span class="pit pit-b"></span>
-        <span class="flag">1</span>
-        <span class="robot" aria-hidden="true">
-          <i class="antenna"></i><i class="eye left"></i><i class="eye right"></i>
-        </span>
-        <span class="route route-a"></span>
-        <span class="route route-b"></span>
-        <span class="coordinate">X:04 / Y:09 / N</span>
-      </div>
+      <div class="telemetry" role="img" aria-label="Factory course and five programmed registers">
+        <div class="telemetry-head">
+          <span>EXCHANGE / PRE-RACE</span>
+          <span class="live"><i></i> LINKED</span>
+        </div>
 
-      <ol class="registers" aria-label="Example register program">
-        {#each cards as card, index}
-          <li>
-            <span class="register-number">R{index + 1}</span>
-            <strong>{card.mark}</strong>
-            <span>{card.label}</span>
-            <small>{card.priority}</small>
-          </li>
-        {/each}
-      </ol>
-    </div>
-  </section>
+        <div class="factory">
+          <div class="grid-lines"></div>
+          <span class="conveyor belt-a">▶ ▶ ▶</span>
+          <span class="conveyor belt-b">▲ ▲ ▲</span>
+          <span class="pit pit-a"></span>
+          <span class="pit pit-b"></span>
+          <span class="flag">1</span>
+          <span class="robot" aria-hidden="true">
+            <i class="antenna"></i><i class="eye left"></i><i class="eye right"></i>
+          </span>
+          <span class="route route-a"></span>
+          <span class="route route-b"></span>
+          <span class="coordinate">X:04 / Y:09 / N</span>
+        </div>
+
+        <ol class="registers" aria-label="Example register program">
+          {#each cards as card, index}
+            <li>
+              <span class="register-number">R{index + 1}</span>
+              <strong>{card.mark}</strong>
+              <span>{card.label}</span>
+              <small>{card.priority}</small>
+            </li>
+          {/each}
+        </ol>
+      </div>
+    </section>
+  {/if}
 
   <footer>
     <span>Deterministic multiplayer / Avalon Hill 2005 rules target</span>
@@ -149,6 +438,7 @@
   .masthead { border-bottom: 1px solid #344043; }
   .brand {
     display: flex;
+    flex: none;
     gap: 12px;
     align-items: center;
     color: #eef4ee;
@@ -156,6 +446,7 @@
     font-size: 16px;
     letter-spacing: 0.12em;
     text-decoration: none;
+    white-space: nowrap;
   }
   .brand strong { color: #d2ff37; }
   .brand small {
@@ -416,6 +707,199 @@
   }
   .registers small { position: absolute; top: 7px; right: 7px; color: #f2d372; font: 8px 'Space Mono', monospace; }
 
+  .join-panel {
+    display: grid;
+    gap: 12px;
+    margin-top: 20px;
+    padding: 15px;
+    border: 1px solid #465356;
+    background: rgba(13, 19, 20, 0.94);
+  }
+  .form-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #d2ff37;
+    font: 700 11px 'Space Mono', monospace;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  button.close {
+    width: 30px;
+    min-height: 30px;
+    padding: 0;
+    border-color: #465356;
+    color: #9da9a8;
+    background: transparent;
+    font-size: 20px;
+  }
+  .join-panel label, .join-panel legend {
+    color: #899597;
+    font: 9px 'Space Mono', monospace;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .join-panel label { display: grid; gap: 6px; }
+  .join-panel input {
+    width: 100%;
+    min-height: 40px;
+    padding: 0 11px;
+    border: 1px solid #465356;
+    border-radius: 0;
+    color: #edf3ed;
+    outline: none;
+    background: #101718;
+    font: 700 14px 'Space Mono', monospace;
+    text-transform: uppercase;
+  }
+  .join-panel input:focus { border-color: #d2ff37; box-shadow: 0 0 0 1px #d2ff37; }
+  .join-panel fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+  .join-panel legend { margin-bottom: 7px; }
+  .robot-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .robot-options button {
+    display: grid;
+    min-width: 0;
+    min-height: 47px;
+    grid-template-columns: auto 1fr;
+    gap: 5px;
+    align-items: center;
+    padding: 5px 6px;
+    border-color: #465356;
+    color: #899597;
+    background: #111819;
+    font-size: 8px;
+    text-align: left;
+  }
+  .robot-options button span { color: #d2ff37; font-size: 9px; }
+  .robot-options button.selected {
+    border-color: #d2ff37;
+    color: #edf3ed;
+    background: #1a2418;
+  }
+  .stream-note, .form-error {
+    margin: 0;
+    color: #93a09f;
+    font-size: 11px;
+  }
+  .form-error { color: #ffbf69; }
+
+  .lobby {
+    display: grid;
+    grid-template-columns: minmax(310px, 0.72fr) minmax(520px, 1.28fr);
+    gap: clamp(32px, 6vw, 84px);
+    align-items: center;
+    min-height: 0;
+    padding: 32px 0;
+  }
+  .room-console h1 { font-size: clamp(48px, 5vw, 70px); }
+  .room-console h1 em {
+    color: #d2ff37;
+    font-size: 0.8em;
+    letter-spacing: 0.04em;
+    -webkit-text-stroke: 0;
+  }
+  .room-actions { display: flex; gap: 14px; align-items: center; margin-top: 23px; }
+  .text-link {
+    color: #a9b4b2;
+    font: 9px 'Space Mono', monospace;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .room-facts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin: 24px 0 0;
+    border-top: 1px solid #344043;
+    border-bottom: 1px solid #344043;
+  }
+  .room-facts div { padding: 12px 8px 12px 0; }
+  .room-facts dt { color: #d2ff37; font: 700 18px 'Space Mono', monospace; }
+  .room-facts dd {
+    margin: 3px 0 0;
+    color: #718083;
+    font-size: 8px;
+    text-transform: uppercase;
+  }
+  .identity {
+    margin: 13px 0 0;
+    color: #718083;
+    font: 8px 'Space Mono', monospace;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .identity strong { color: #edf3ed; }
+  .seat-console {
+    position: relative;
+    padding: 15px;
+    border: 1px solid #435052;
+    background: rgba(16, 23, 25, 0.92);
+    box-shadow: 20px 24px 0 rgba(0, 0, 0, 0.18);
+  }
+  .seat-console::before, .seat-console::after {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border-color: #d2ff37;
+    content: '';
+  }
+  .seat-console::before { top: -1px; left: -1px; border-top: 2px solid; border-left: 2px solid; }
+  .seat-console::after { right: -1px; bottom: -1px; border-right: 2px solid; border-bottom: 2px solid; }
+  .seats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .seats li {
+    display: grid;
+    min-width: 0;
+    min-height: 66px;
+    grid-template-columns: 25px 42px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding: 8px;
+    border: 1px solid #303b3e;
+    color: #687578;
+    background: #0d1213;
+  }
+  .seats li.claimed { border-color: #4c5a46; color: #aeb8b6; background: #121a17; }
+  .seat-number { color: #5f6d70; font: 8px 'Space Mono', monospace; }
+  .robot-token {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    place-items: center;
+    border: 1px solid #839d2b;
+    color: #101510;
+    background: #d2ff37;
+    font: 700 10px 'Space Mono', monospace;
+  }
+  .robot-token.empty { border-color: #303b3e; color: #4f5b5e; background: transparent; }
+  .seat-name { display: grid; min-width: 0; gap: 3px; }
+  .seat-name strong {
+    overflow: hidden;
+    color: #e7ede8;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .seat-name small { color: #718083; font: 7px 'Space Mono', monospace; text-transform: uppercase; }
+  .seat-state { color: #637174; font: 7px 'Space Mono', monospace; text-transform: uppercase; }
+  .claimed .seat-state { color: #d2ff37; }
+  .room-ready {
+    margin: 10px 0 0;
+    padding: 9px 10px;
+    border: 1px solid #354245;
+    color: #829093;
+    background: #101617;
+    font: 8px 'Space Mono', monospace;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .room-ready.full { border-color: #72892c; color: #d2ff37; }
+
   footer {
     border-top: 1px solid #344043;
     color: #647174;
@@ -432,7 +916,7 @@
     .brand { gap: 9px; font-size: 13px; }
     .brand-mark { grid-template-columns: repeat(3, 4px); gap: 2px; padding: 7px; }
     .brand-mark i { width: 4px; height: 4px; }
-    .network { max-width: 125px; font-size: 8px; text-align: right; }
+    .network { max-width: 125px; margin-left: auto; font-size: 8px; text-align: right; }
     .hero {
       display: grid;
       grid-template-columns: 1fr;
@@ -461,6 +945,47 @@
     .registers small, .register-number { font-size: 6px; }
     footer span:first-child { display: none; }
     footer { font-size: 7px; }
+
+    .join-panel { grid-column: 1 / -1; gap: 8px; margin-top: 12px; padding: 10px; }
+    .robot-options { grid-template-columns: repeat(4, 1fr); }
+    .robot-options button { min-height: 35px; font-size: 7px; }
+    .lobby {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 12px;
+      padding: 14px 0 10px;
+    }
+    .room-console {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      column-gap: 12px;
+      align-items: end;
+    }
+    .room-console .eyebrow { grid-column: 1 / -1; }
+    .room-console h1 { font-size: 34px; line-height: 0.88; }
+    .room-console .lede { align-self: center; margin: 0; }
+    .room-actions { margin-top: 10px; }
+    .room-facts { margin-top: 10px; }
+    .identity { align-self: center; margin: 10px 0 0; text-align: right; }
+    .seat-console {
+      display: grid;
+      min-height: 0;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      align-self: stretch;
+      padding: 9px;
+      box-shadow: 10px 12px 0 rgba(0,0,0,.16);
+    }
+    .seats { grid-template-rows: repeat(4, 1fr); gap: 4px; }
+    .seats li {
+      min-height: 0;
+      grid-template-columns: 17px 31px minmax(0, 1fr);
+      gap: 5px;
+      padding: 5px;
+    }
+    .robot-token { width: 29px; height: 29px; font-size: 8px; }
+    .seat-name strong { font-size: 10px; }
+    .seat-state { display: none; }
+    .room-ready { margin-top: 6px; padding: 6px 7px; font-size: 7px; }
   }
 
   @media (max-height: 720px) and (max-width: 820px) {

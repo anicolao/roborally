@@ -61,11 +61,18 @@ enforces legal actions and masks information from its local display.
 
 ## Development status
 
-The first end-to-end tracer bullet now provides the static SvelteKit shell,
-anonymous Firebase initialization, append-only Firestore Rules and tests,
-deterministic Playwright screenshots, the generated application-shell
-walkthrough, repository verification hooks, and retained GitHub Pages preview
-workflow. Gameplay begins with room membership in the next slice described in
+The first two end-to-end tracer bullets are implemented. The foundation
+provides the static SvelteKit shell, repository verification, and retained
+GitHub Pages previews. Players can now create join links, claim one of eight
+unique robots, fill a two-to-eight-player room, reload, and reconstruct the
+same seating from the ordered append-only Firestore stream. Invalid,
+conflicting, stale, or incompatible events produce replay diagnostics without
+partially changing the projected room.
+
+The generated browser walkthroughs cover
+[application readiness](tests/e2e/001-app-shell-and-deployment/README.md) and
+[create, join, full-room, and reload behavior](tests/e2e/002-create-join-and-replay-room/README.md).
+Reviewed 2005 setup and Risky Exchange are the next slice in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 Nix is always available and is the mandatory entry point for every tooling,

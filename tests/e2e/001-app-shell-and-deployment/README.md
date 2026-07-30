@@ -10,6 +10,6 @@ The static Robo Rally client loads its factory console and reaches the local Fir
 
 - [x] The page exposes the stable Robo Rally title
 - [x] The landing page presents the programming premise and component counts
-- [x] Future room actions are present but unavailable in the shell slice
+- [x] Room creation and join actions become available after anonymous authentication
 - [x] The client has authenticated and reached the Firebase emulators
 - [x] The deterministic build marker and GPL license are visible

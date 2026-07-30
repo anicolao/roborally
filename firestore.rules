@@ -9,7 +9,36 @@ service cloud.firestore {
     match /games/{gameId}/events/{eventId} {
       allow read: if signedIn();
       allow create: if signedIn()
-        && request.resource.data.actorUid == request.auth.uid;
+        && eventId.matches(request.auth.uid + '-[0-9]{6}')
+        && request.resource.data.keys().hasOnly([
+          'type',
+          'payload',
+          'actorUid',
+          'clientSeq',
+          'createdAt',
+          'schemaVersion',
+          'reducerVersion'
+        ])
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.clientSeq is int
+        && request.resource.data.clientSeq > 0
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.schemaVersion == 1
+        && request.resource.data.reducerVersion == 'room-v1'
+        && request.resource.data.type in ['game/created', 'player/joined']
+        && request.resource.data.payload is map
+        && (
+          (
+            request.resource.data.type == 'game/created'
+            && request.resource.data.payload.hostUid == request.auth.uid
+            && request.resource.data.payload.gameId == gameId
+          )
+          ||
+          (
+            request.resource.data.type == 'player/joined'
+            && request.resource.data.payload.uid == request.auth.uid
+          )
+        );
       allow update, delete: if false;
     }
 
