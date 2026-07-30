@@ -438,5 +438,61 @@ describe('immutable room replay', () => {
       ])
     );
     expect(reentered.diagnostics).toEqual([]);
+
+    const hostTurnTwo = reentered.nextProgramming!.players.find(({ uid }) => uid === 'host')!;
+    const guestTurnTwo = reentered.nextProgramming!.players.find(({ uid }) => uid === 'guest')!;
+    const programmedBeforePowerResponses = replayRoom([
+      ...events,
+      hostReentry,
+      guestReentry,
+      event('host', 7, 'program/submitted', {
+        uid: 'host',
+        turnId: 'turn-002',
+        cardIds: hostTurnTwo.hand.slice(0, 5)
+      }, 5_000),
+      event('guest', 5, 'program/submitted', {
+        uid: 'guest',
+        turnId: 'turn-002',
+        cardIds: guestTurnTwo.hand.slice(0, 5)
+      }, 6_000)
+    ]);
+    expect(programmedBeforePowerResponses.programming?.phase).toBe('programmed');
+    expect(programmedBeforePowerResponses.resolution?.turnNumber).toBe(1);
+    expect(programmedBeforePowerResponses.pendingPowerDownUid).toBe('guest');
+
+    const wrongDockOrder = replayRoom([
+      ...events,
+      hostReentry,
+      guestReentry,
+      event('host', 7, 'power-down/responded', {
+        uid: 'host',
+        turnId: 'turn-002',
+        powerDownNextTurn: true
+      }, 5_000)
+    ]);
+    expect(wrongDockOrder.pendingPowerDownUid).toBeNull();
+    expect(wrongDockOrder.nextProgramming?.turnId).toBe('turn-002');
+    expect(wrongDockOrder.diagnostics.at(-1)?.code).toBe('invalid-power-down');
+
+    const orderedPowerResponses = replayRoom([
+      ...events,
+      hostReentry,
+      guestReentry,
+      event('guest', 5, 'power-down/responded', {
+        uid: 'guest',
+        turnId: 'turn-002',
+        powerDownNextTurn: false
+      }, 5_000),
+      event('host', 7, 'power-down/responded', {
+        uid: 'host',
+        turnId: 'turn-002',
+        powerDownNextTurn: true
+      }, 6_000)
+    ]);
+    expect(orderedPowerResponses.powerDownResponses).toEqual([
+      { uid: 'guest', turnId: 'turn-002', powerDownNextTurn: false },
+      { uid: 'host', turnId: 'turn-002', powerDownNextTurn: true }
+    ]);
+    expect(orderedPowerResponses.pendingPowerDownUid).toBeNull();
   });
 });

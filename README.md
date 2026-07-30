@@ -137,7 +137,9 @@ and
 [laser snapshots, damage, and locked registers](tests/e2e/008-lasers-damage-and-locked-registers/README.md),
 and
 [a ten-turn race through repairs, flags, victory, and rematch](tests/e2e/009-flags-archives-repairs-and-victory/README.md).
-Complete power down is the next slice in
+The suite also includes
+[an ordered consecutive power down with factory damage and exact random locks](tests/e2e/010-power-down/README.md).
+The Option framework is the next slice in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 Nix is always available and is the mandatory entry point for every tooling,

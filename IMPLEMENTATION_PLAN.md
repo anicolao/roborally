@@ -494,11 +494,22 @@ register-1-to-register-5 repair unlock order.
 
 ### 10. Complete power down
 
+**Status:** Implemented as the tenth vertical tracer.
+
 - Add next-turn announcements in original Dock order, beginning-of-turn damage
   removal, skipped programming, continued board vulnerability, consecutive
   power downs, and destroyed-announcer re-entry decisions.
 - Exercise damage and new register locks acquired while powered down.
 - Add `010-power-down`.
+
+Scenario 010 plays eight ordinary turns through two browser clients. A damaged
+robot announces after the earlier eligible Docks are skipped, powers down for
+two consecutive turns, clears its prior damage and lock state at each start,
+skips Programs and robot fire, takes five board-laser hits per turn, receives
+an exact top-card register lock from each turn's shared deck, and powers up with
+the second lock retained. The same slice makes eligible power-down responses a
+strict replay barrier and covers the destroyed-announcer re-entry decision with
+focused reducer and room-protocol fixtures.
 
 ### 11. Option framework
 

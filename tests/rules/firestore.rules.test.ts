@@ -182,6 +182,33 @@ describe('append-only game stream rules', () => {
     );
   });
 
+  it('attributes ordered power-down responses to their owner', async () => {
+    const db = environment.authenticatedContext('robot-a').firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'games/room/events/robot-a-000001'), {
+        ...eventData('robot-a'),
+        type: 'power-down/responded',
+        payload: {
+          uid: 'robot-a',
+          turnId: 'turn-002',
+          powerDownNextTurn: true
+        }
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, 'games/room/events/robot-a-000002'), {
+        ...eventData('robot-a'),
+        type: 'power-down/responded',
+        clientSeq: 2,
+        payload: {
+          uid: 'robot-b',
+          turnId: 'turn-002',
+          powerDownNextTurn: false
+        }
+      })
+    );
+  });
+
   it('allows only the owner to append a shaped re-entry choice', async () => {
     const db = environment.authenticatedContext('robot-a').firestore();
     await assertSucceeds(

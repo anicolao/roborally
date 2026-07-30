@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { stayActiveInDockOrder } from '../helpers/game-actions';
 import { TestStepHelper } from '../helpers/test-step-helper';
 
 async function chooseProgram(page: Page, labels: readonly string[]) {
@@ -43,6 +44,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     await host.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Open programming console' }).click();
     await guest.getByRole('button', { name: 'Open programming console' }).click();
+    await stayActiveInDockOrder([host, guest]);
 
     await chooseProgram(host, [
       'rotate-right priority 110',

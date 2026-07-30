@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { stayActiveInDockOrder } from '../helpers/game-actions';
 import { TestStepHelper } from '../helpers/test-step-helper';
 
 type Program = readonly string[];
@@ -95,6 +96,7 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
         await host.getByRole('button', { name: `Begin Turn ${turn}` }).click();
         await guest.getByRole('button', { name: `Begin Turn ${turn}` }).click();
       }
+      await stayActiveInDockOrder([host, guest]);
       await chooseProgram(host, programs.host);
       await expect(guest.getByLabel('Five face-down registers')).toBeVisible();
       await chooseProgram(guest, programs.guest);

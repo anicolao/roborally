@@ -21,6 +21,7 @@ import {
   type GameRematchedPayload,
   type EffectChosenPayload,
   type PlayerJoinedPayload,
+  type PowerDownRespondedPayload,
   type ProgramSubmittedPayload,
   type ProgramTimedOutPayload,
   type RaceConfiguredPayload,
@@ -200,6 +201,18 @@ export async function rematchGame(
   payload: GameRematchedPayload
 ) {
   await appendRoomEvent(db, user, roomCode, 'game/rematched', payload);
+}
+
+export async function respondPowerDown(
+  db: Firestore,
+  user: User,
+  roomCode: string,
+  payload: Omit<PowerDownRespondedPayload, 'uid'>
+) {
+  await appendRoomEvent(db, user, roomCode, 'power-down/responded', {
+    uid: user.uid,
+    ...payload
+  });
 }
 
 export function subscribeRoom(
