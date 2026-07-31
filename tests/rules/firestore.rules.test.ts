@@ -106,11 +106,37 @@ describe('append-only game stream rules', () => {
         }
       })
     );
-    await assertFails(
+    await assertSucceeds(
       setDoc(doc(db, 'games/room/events/robot-a-000003'), {
         ...eventData('robot-a'),
-        type: 'player/ready',
+        type: 'race/configured',
         clientSeq: 3,
+        payload: {
+          config: {
+            editionId: 'avalon-hill-2005',
+            courseId: 'factory-rejects'
+          }
+        }
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, 'games/room/events/robot-a-000004'), {
+        ...eventData('robot-a'),
+        type: 'race/configured',
+        clientSeq: 4,
+        payload: {
+          config: {
+            editionId: 'avalon-hill-2005',
+            courseId: 'unreviewed-course'
+          }
+        }
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, 'games/room/events/robot-a-000005'), {
+        ...eventData('robot-a'),
+        type: 'player/ready',
+        clientSeq: 5,
         payload: {
           uid: 'robot-b',
           configurationEventId: 'robot-a-000001'

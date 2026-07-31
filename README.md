@@ -35,10 +35,12 @@ and browser-level tracer bullets verified with Playwright.
 - Reconnect and replay from the complete immutable event history.
 - Keyboard-, touch-, phone-, tablet-, and desktop-friendly play.
 
-The first complete production race uses **Risky Exchange**, the published
-medium course on the Exchange board for two to eight players. The same product
-also exposes the reviewed remaining board faces, Option cards, expert variants,
-team courses, and compiled multi-board course geometry.
+Playable rooms offer **Risky Exchange**, the published medium course on the
+Exchange board for two to eight players, and **Factory Rejects**, the short
+five-to-eight-player expert course on Chop Shop. Factory Rejects begins every
+robot with two damage and disables power down. The same product also
+exposes the reviewed remaining board faces, Option cards, expert variants, team
+courses, and compiled multi-board course geometry.
 
 ## Technical foundation
 
@@ -158,7 +160,10 @@ Finally, the
 plays the same twelve turns at phone portrait, phone landscape, tablet, and
 desktop sizes while proving keyboard board navigation, keyboard and touch
 register ordering, focus flow, textual state cues, reduced motion, safe areas,
-and the same immutable winner.
+and the same immutable winner. The post-MVP
+[Factory Rejects scenario](tests/e2e/018-factory-rejects-playable-scenario/README.md)
+then proves a five-player room on Chop Shop with Docking Bay B, two starting
+damage, seven-card hands, and power down unavailable.
 
 All eight factory faces and both Docking Bay faces are pinned by golden
 semantic hashes. All 34 printed course diagrams are pinned as one transform and

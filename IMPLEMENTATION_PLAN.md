@@ -641,6 +641,19 @@ non-color submission cues, polite resolution announcements, reduced motion,
 safe-area-aware layouts, and the same immutable Flag 3 winner at every size.
 All earlier E2E baselines remain covered by the repository-wide verifier.
 
+### 18. Post-MVP Factory Rejects scenario
+
+**Status:** Implemented as the first playable course expansion.
+
+- Let the host choose Factory Rejects once five through eight players are
+  seated, while retaining Risky Exchange for two through eight.
+- Compile the reviewed Chop Shop and Docking Bay B placement into the same
+  movement, laser, flag, re-entry, and accessible board paths as the MVP race.
+- Start every robot with two damage, deal seven-card opening hands, and remove
+  the power-down path for the entire scenario.
+- Add `018-factory-rejects-playable-scenario` with five isolated clients and
+  desktop/phone visual baselines.
+
 ## Testing strategy
 
 Maintain:

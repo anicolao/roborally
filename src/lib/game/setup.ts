@@ -1,9 +1,16 @@
 import {
   BOARD_MANIFEST_VERSION,
   COURSE_MANIFEST_VERSION,
-  RISKY_EXCHANGE,
   type Direction
 } from './course-manifest';
+import { COMPLETE_BOARD_MANIFEST_VERSION } from './board-catalog';
+import { COMPLETE_COURSE_MANIFEST_VERSION } from './course-catalog';
+import { createCourseRuleState } from './course-rules';
+import {
+  compilePlayableCourse,
+  playableCourse,
+  type PlayableCourseId
+} from './playable-courses';
 import { PROGRAM_MANIFEST_VERSION } from './program-manifest';
 import { OPTION_MANIFEST_VERSION } from './option-manifest';
 
@@ -11,15 +18,20 @@ export const EDITION_ID = 'avalon-hill-2005';
 export const PRNG_VERSION = 'xorshift32-v1';
 export const RACE_REDUCER_VERSION = 'race-v1';
 
+export const PLAYABLE_COURSE_IDS = ['risky-exchange', 'factory-rejects'] as const;
+export type { PlayableCourseId } from './playable-courses';
+
 export interface RaceConfig {
   editionId: typeof EDITION_ID;
   reducerVersion: typeof RACE_REDUCER_VERSION;
   prngVersion: typeof PRNG_VERSION;
   programManifestVersion: typeof PROGRAM_MANIFEST_VERSION;
   optionManifestVersion: typeof OPTION_MANIFEST_VERSION;
-  boardManifestVersion: typeof BOARD_MANIFEST_VERSION;
-  courseManifestVersion: typeof COURSE_MANIFEST_VERSION;
-  courseId: typeof RISKY_EXCHANGE.id;
+  boardManifestVersion: typeof BOARD_MANIFEST_VERSION | typeof COMPLETE_BOARD_MANIFEST_VERSION;
+  courseManifestVersion:
+    | typeof COURSE_MANIFEST_VERSION
+    | typeof COMPLETE_COURSE_MANIFEST_VERSION;
+  courseId: PlayableCourseId;
   seed: string;
   lives: 3 | 4;
   expansionIds: readonly [];
@@ -39,25 +51,42 @@ export interface SetupPlayer {
 }
 
 export interface RaceSetup {
+  courseId: PlayableCourseId;
+  startingDamage: number;
+  powerDownAllowed: boolean;
   firstPlayerUid: string;
   players: SetupPlayer[];
 }
 
-export function riskyExchangeConfig(seed: string, lives: 3 | 4 = 3): RaceConfig {
+export function raceConfig(
+  courseId: PlayableCourseId,
+  seed: string,
+  lives: 3 | 4 = 3
+): RaceConfig {
   return {
     editionId: EDITION_ID,
     reducerVersion: RACE_REDUCER_VERSION,
     prngVersion: PRNG_VERSION,
     programManifestVersion: PROGRAM_MANIFEST_VERSION,
     optionManifestVersion: OPTION_MANIFEST_VERSION,
-    boardManifestVersion: BOARD_MANIFEST_VERSION,
-    courseManifestVersion: COURSE_MANIFEST_VERSION,
-    courseId: RISKY_EXCHANGE.id,
+    boardManifestVersion:
+      courseId === 'risky-exchange' ? BOARD_MANIFEST_VERSION : COMPLETE_BOARD_MANIFEST_VERSION,
+    courseManifestVersion:
+      courseId === 'risky-exchange' ? COURSE_MANIFEST_VERSION : COMPLETE_COURSE_MANIFEST_VERSION,
+    courseId,
     seed,
     lives,
     expansionIds: [],
     houseRuleIds: []
   };
+}
+
+export function riskyExchangeConfig(seed: string, lives: 3 | 4 = 3): RaceConfig {
+  return raceConfig('risky-exchange', seed, lives);
+}
+
+export function factoryRejectsConfig(seed: string, lives: 3 | 4 = 3): RaceConfig {
+  return raceConfig('factory-rejects', seed, lives);
 }
 
 export function seedToUint32(seed: string): number {
@@ -89,20 +118,36 @@ export function deriveRaceSetup(
   if (config.lives === 4 && players.length < 5) {
     throw new Error('The published four-Life option requires five or more players.');
   }
+  const course = playableCourse(config.courseId);
+  if (!course.players.includes(players.length)) {
+    throw new Error(`${course.name} does not support ${players.length} players.`);
+  }
 
   const random = createPrng(config.seed);
   const firstIndex = Math.floor(random() * players.length);
   const clockwise = [...players.slice(firstIndex), ...players.slice(0, firstIndex)];
+  const compiled = compilePlayableCourse(config.courseId);
   const dockCells = new Map<number, { x: number; y: number }>(
-    DOCK_POSITIONS.map(({ dock, x, y }) => [dock, { x, y }])
+    [...compiled.cells.values()].flatMap(({ x, y, elements }) =>
+      elements.flatMap((element) =>
+        element.kind === 'dock' ? [[element.number, { x, y }] as const] : []
+      )
+    )
+  );
+  const rules = createCourseRuleState(
+    course.id,
+    clockwise.map(({ uid }) => ({ uid }))
   );
 
   return {
+    courseId: config.courseId,
+    startingDamage: rules.robots[0]?.damage ?? 0,
+    powerDownAllowed: rules.powerDownAllowed,
     firstPlayerUid: clockwise[0].uid,
     players: clockwise.map((player, index) => {
       const dock = index + 1;
       const position = dockCells.get(dock);
-      if (!position) throw new Error(`Dock ${dock} is not present on Docking Bay A.`);
+      if (!position) throw new Error(`Dock ${dock} is not present on ${course.name}.`);
       return {
         ...player,
         dock,

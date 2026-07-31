@@ -26,6 +26,7 @@ import {
 import { createProgrammingState, submitProgram } from './programming';
 import { deriveRaceSetup, riskyExchangeConfig } from './setup';
 import { createOptionDeck } from './options';
+import { compilePlayableCourse } from './playable-courses';
 
 function card(action: ProgramAction) {
   return PROGRAM_CARDS.find((candidate) => candidate.action === action)!;
@@ -289,6 +290,40 @@ describe('priority Program movement', () => {
     expect(robots[0]).toMatchObject({ x: 2, y: 2, status: 'active' });
     expect(robots[1]).toMatchObject({ status: 'destroyed', lives: 2 });
     expect(trace).toContainEqual(expect.objectContaining({ kind: 'destroyed-pit' }));
+  });
+
+  it('resolves movement against the configured Factory Rejects geometry', () => {
+    const riskyRobot = raceRobot({
+      uid: 'risky',
+      name: 'Risky',
+      x: 3,
+      y: 3,
+      facing: 'east'
+    });
+    const rejectRobot = raceRobot({
+      uid: 'reject',
+      name: 'Reject',
+      x: 3,
+      y: 3,
+      facing: 'east'
+    });
+    const riskyTrace: ResolutionTraceEntry[] = [];
+    const rejectTrace: ResolutionTraceEntry[] = [];
+
+    applyProgramCard([riskyRobot], 'risky', card('move-1'), 1, riskyTrace);
+    applyProgramCard(
+      [rejectRobot],
+      'reject',
+      card('move-1'),
+      1,
+      rejectTrace,
+      undefined,
+      compilePlayableCourse('factory-rejects')
+    );
+
+    expect(riskyRobot).toMatchObject({ x: 4, y: 3, status: 'active' });
+    expect(rejectRobot).toMatchObject({ status: 'destroyed', lives: 2 });
+    expect(rejectTrace).toContainEqual(expect.objectContaining({ kind: 'destroyed-pit' }));
   });
 
   it('destroys robots immediately in pits and off course in exact destruction order', () => {
@@ -972,6 +1007,9 @@ describe('priority Program movement', () => {
     target.damage = 3;
     resolveRepairCleanup([target], trace, []);
     expect(target.powerDownNextTurn).toBe(true);
+    target.powerDownNextTurn = false;
+    resolveRepairCleanup([target], trace, [], undefined, false);
+    expect(target.powerDownNextTurn).toBe(false);
 
     target.status = 'destroyed';
     target.destructionOrder = 1;

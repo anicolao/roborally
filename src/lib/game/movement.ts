@@ -1,12 +1,6 @@
-import {
-  DOCKING_BAY_A,
-  EXCHANGE_BOARD,
-  RISKY_EXCHANGE,
-  type BoardCell,
-  type BoardElement,
-  type Direction,
-  type Wall
-} from './course-manifest';
+import type { BoardCell, BoardElement, Direction } from './course-manifest';
+import type { CompiledCourse } from './course-geometry';
+import { compilePlayableCourse } from './playable-courses';
 import { PROGRAM_CARDS, type ProgramAction, type ProgramCard } from './program-manifest';
 import type { OptionCardId } from './option-manifest';
 import {
@@ -20,7 +14,7 @@ import {
   type OwnedOption
 } from './options';
 import type { ProgrammingState } from './programming';
-import type { RaceSetup } from './setup';
+import type { PlayableCourseId, RaceSetup } from './setup';
 import { applyOptionEffect } from './option-effects';
 
 export type RobotBoardStatus = 'active' | 'destroyed' | 'eliminated';
@@ -119,6 +113,7 @@ export interface ReentryChoice {
 }
 
 export interface ProgramResolution {
+  courseId?: PlayableCourseId;
   turnNumber: number;
   phase: 'awaiting-option' | 'awaiting-reentry' | 'turn-complete' | 'race-finished';
   robots: RaceRobotPosition[];
@@ -165,43 +160,42 @@ function rotate(facing: Direction, quarterTurns: number): Direction {
   ];
 }
 
-function worldWalls(): Wall[] {
-  return [
-    ...EXCHANGE_BOARD.walls,
-    ...DOCKING_BAY_A.walls.map((wall) => ({ ...wall, y: wall.y + 12 }))
-  ];
+const defaultCourse = compilePlayableCourse('risky-exchange');
+const defaultCourseCells: BoardCell[] = [...defaultCourse.cells.values()];
+
+function resolutionCourse(resolution: Pick<ProgramResolution, 'courseId'>): CompiledCourse {
+  return compilePlayableCourse(resolution.courseId ?? 'risky-exchange');
 }
-
-const wallKeys = new Set(worldWalls().map(({ x, y, edge }) => `${x},${y},${edge}`));
-const pitKeys = new Set(
-  EXCHANGE_BOARD.cells
-    .filter(({ elements }) => elements.some(({ kind }) => kind === 'pit'))
-    .map(({ x, y }) => `${x},${y}`)
-);
-
-const worldBoardCells: BoardCell[] = [
-  ...EXCHANGE_BOARD.cells,
-  ...DOCKING_BAY_A.cells.map((entry) => ({ ...entry, y: entry.y + 12 }))
-];
 
 export function movementBlockedByWall(
   x: number,
   y: number,
-  direction: Direction
+  direction: Direction,
+  course: CompiledCourse = defaultCourse
 ): boolean {
   const [dx, dy] = steps[direction];
   return (
-    wallKeys.has(`${x},${y},${direction}`) ||
-    wallKeys.has(`${x + dx},${y + dy},${opposite[direction]}`)
+    course.walls.has(`${x},${y},${direction}`) ||
+    course.walls.has(`${x + dx},${y + dy},${opposite[direction]}`)
   );
 }
 
-export function courseContains(x: number, y: number): boolean {
-  return x >= 1 && x <= 12 && y >= 1 && y <= 16;
+export function courseContains(
+  x: number,
+  y: number,
+  course: CompiledCourse = defaultCourse
+): boolean {
+  return course.cells.has(`${x},${y}`);
 }
 
-export function courseHasPit(x: number, y: number): boolean {
-  return pitKeys.has(`${x},${y}`);
+export function courseHasPit(
+  x: number,
+  y: number,
+  course: CompiledCourse = defaultCourse
+): boolean {
+  return course.cells
+    .get(`${x},${y}`)
+    ?.elements.some(({ kind }) => kind === 'pit') ?? false;
 }
 
 function movementDistance(action: ProgramAction): number {
@@ -327,12 +321,13 @@ function translateOneCell(
   register: number,
   card: ProgramCard | null,
   trace: ResolutionTraceEntry[],
-  source: 'program' | 'pusher' = 'program'
+  source: 'program' | 'pusher' = 'program',
+  course: CompiledCourse = defaultCourse
 ): TranslationResult {
   const chain: RaceRobotPosition[] = [actor];
   let cursor = actor;
   while (true) {
-    if (movementBlockedByWall(cursor.x, cursor.y, direction)) {
+    if (movementBlockedByWall(cursor.x, cursor.y, direction, course)) {
       addTrace(
         trace,
         register,
@@ -363,11 +358,11 @@ function translateOneCell(
   for (const moving of [...chain].reverse()) {
     const nextX = moving.x + dx;
     const nextY = moving.y + dy;
-    if (!courseContains(nextX, nextY)) {
+    if (!courseContains(nextX, nextY, course)) {
       destroyRobot(robots, moving, 'edge', register, card, trace);
       continue;
     }
-    if (courseHasPit(nextX, nextY)) {
+    if (courseHasPit(nextX, nextY, course)) {
       destroyRobot(robots, moving, 'pit', register, card, trace);
       continue;
     }
@@ -397,7 +392,8 @@ export function applyProgramCard(
   card: ProgramCard,
   register: number,
   trace: ResolutionTraceEntry[],
-  optionPlan?: OptionTurnPlan
+  optionPlan?: OptionTurnPlan,
+  course: CompiledCourse = defaultCourse
 ) {
   const robot = robots.find(({ uid }) => uid === actorUid);
   if (!robot || robot.status !== 'active' || robot.poweredDown) return;
@@ -489,7 +485,17 @@ export function applyProgramCard(
     }
   }
   for (let step = 1; step <= Math.abs(signedDistance); step += 1) {
-    const result = translateOneCell(robots, robot, direction, step, register, card, trace);
+    const result = translateOneCell(
+      robots,
+      robot,
+      direction,
+      step,
+      register,
+      card,
+      trace,
+      'program',
+      course
+    );
     if (!result.moved || result.actorDestroyed) return;
   }
   if (rotationAfterMovement) {
@@ -530,7 +536,8 @@ function resolveConveyorSubstep(
   trace: ResolutionTraceEntry[],
   expressOnly: boolean,
   cells: readonly BoardCell[],
-  optionPlans: Readonly<Record<string, OptionTurnPlan>>
+  optionPlans: Readonly<Record<string, OptionTurnPlan>>,
+  course: CompiledCourse
 ) {
   const intents: ConveyorIntent[] = [];
   for (const robot of robots.filter(({ status }) => status === 'active')) {
@@ -539,7 +546,7 @@ function resolveConveyorSubstep(
       | undefined;
     if (!conveyor || (expressOnly && !conveyor.express)) continue;
     const [dx, dy] = steps[conveyor.direction];
-    if (movementBlockedByWall(robot.x, robot.y, conveyor.direction)) {
+    if (movementBlockedByWall(robot.x, robot.y, conveyor.direction, course)) {
       addTrace(
         trace,
         register,
@@ -622,11 +629,11 @@ function resolveConveyorSubstep(
   for (const { robot, conveyor, nextX, nextY } of intents.filter(
     ({ robot }) => !rejected.has(robot.uid)
   )) {
-    if (!courseContains(nextX, nextY)) {
+    if (!courseContains(nextX, nextY, course)) {
       destroyRobot(robots, robot, 'edge', register, null, trace);
       continue;
     }
-    if (courseHasPit(nextX, nextY)) {
+    if (courseHasPit(nextX, nextY, course)) {
       destroyRobot(robots, robot, 'pit', register, null, trace);
       continue;
     }
@@ -659,28 +666,31 @@ function resolveExpressConveyors(
   robots: RaceRobotPosition[],
   register: number,
   trace: ResolutionTraceEntry[],
-  cells: readonly BoardCell[] = worldBoardCells,
-  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {}
+  cells: readonly BoardCell[] = defaultCourseCells,
+  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {},
+  course: CompiledCourse = defaultCourse
 ) {
-  resolveConveyorSubstep(robots, register, trace, true, cells, optionPlans);
+  resolveConveyorSubstep(robots, register, trace, true, cells, optionPlans, course);
 }
 
 function resolveNormalConveyors(
   robots: RaceRobotPosition[],
   register: number,
   trace: ResolutionTraceEntry[],
-  cells: readonly BoardCell[] = worldBoardCells,
-  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {}
+  cells: readonly BoardCell[] = defaultCourseCells,
+  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {},
+  course: CompiledCourse = defaultCourse
 ) {
-  resolveConveyorSubstep(robots, register, trace, false, cells, optionPlans);
+  resolveConveyorSubstep(robots, register, trace, false, cells, optionPlans, course);
 }
 
 function resolvePushers(
   robots: RaceRobotPosition[],
   register: number,
   trace: ResolutionTraceEntry[],
-  cells: readonly BoardCell[] = worldBoardCells,
-  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {}
+  cells: readonly BoardCell[] = defaultCourseCells,
+  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {},
+  course: CompiledCourse = defaultCourse
 ) {
   for (const robot of [...robots]) {
     if (robot.status !== 'active') continue;
@@ -696,7 +706,8 @@ function resolvePushers(
       register,
       null,
       trace,
-      'pusher'
+      'pusher',
+      course
     );
   }
 }
@@ -705,7 +716,7 @@ function resolveGears(
   robots: RaceRobotPosition[],
   register: number,
   trace: ResolutionTraceEntry[],
-  cells: readonly BoardCell[] = worldBoardCells,
+  cells: readonly BoardCell[] = defaultCourseCells,
   optionPlans: Readonly<Record<string, OptionTurnPlan>> = {}
 ) {
   for (const robot of robots) {
@@ -747,12 +758,13 @@ export function resolveBoardElements(
   robots: RaceRobotPosition[],
   register: number,
   trace: ResolutionTraceEntry[],
-  cells: readonly BoardCell[] = worldBoardCells,
-  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {}
+  cells: readonly BoardCell[] = defaultCourseCells,
+  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {},
+  course: CompiledCourse = defaultCourse
 ) {
-  resolveExpressConveyors(robots, register, trace, cells, optionPlans);
-  resolveNormalConveyors(robots, register, trace, cells, optionPlans);
-  resolvePushers(robots, register, trace, cells, optionPlans);
+  resolveExpressConveyors(robots, register, trace, cells, optionPlans, course);
+  resolveNormalConveyors(robots, register, trace, cells, optionPlans, course);
+  resolvePushers(robots, register, trace, cells, optionPlans, course);
   resolveGears(robots, register, trace, cells, optionPlans);
 }
 
@@ -849,10 +861,11 @@ export function resolveLaserSnapshot(
   register: number,
   trace: ResolutionTraceEntry[],
   programming: ProgrammingState,
-  cells: readonly BoardCell[] = worldBoardCells,
+  cells: readonly BoardCell[] = defaultCourseCells,
   optionDeck?: OptionDeckState,
   preventionQueues?: Record<string, OptionCardId[]>,
-  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {}
+  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {},
+  course: CompiledCourse = defaultCourse
 ) {
   const activeSnapshot = robots.filter(({ status }) => status === 'active');
   const hits: LaserHit[] = [];
@@ -894,7 +907,7 @@ export function resolveLaserSnapshot(
         }
         break;
       }
-      if (movementBlockedByWall(cursorX, cursorY, laser.direction)) break;
+      if (movementBlockedByWall(cursorX, cursorY, laser.direction, course)) break;
       cursorX += dx;
       cursorY += dy;
     }
@@ -924,14 +937,14 @@ export function resolveLaserSnapshot(
       )
         ? 2
         : 1;
-      while (courseContains(cursorX, cursorY)) {
-        if (movementBlockedByWall(cursorX, cursorY, firingDirection)) {
+      while (courseContains(cursorX, cursorY, course)) {
+        if (movementBlockedByWall(cursorX, cursorY, firingDirection, course)) {
           if (passBudget === 0) break;
           passBudget -= 1;
         }
         cursorX += dx;
         cursorY += dy;
-        if (!courseContains(cursorX, cursorY)) break;
+        if (!courseContains(cursorX, cursorY, course)) break;
         const target = activeRobotAt(activeSnapshot, cursorX, cursorY, shooter.uid);
         if (!target) continue;
         for (let beam = 0; beam < beamDamage; beam += 1) {
@@ -979,8 +992,13 @@ export function resolveFlagsAndArchives(
   robots: RaceRobotPosition[],
   register: number,
   trace: ResolutionTraceEntry[],
-  cells: readonly BoardCell[] = worldBoardCells,
-  flags: readonly { number: 1 | 2 | 3; x: number; y: number }[] = RISKY_EXCHANGE.flags
+  cells: readonly BoardCell[] = defaultCourseCells,
+  flags: readonly { number: 1 | 2 | 3; x: number; y: number }[] = defaultCourse.course.flags as readonly {
+    number: 1 | 2 | 3;
+    x: number;
+    y: number;
+  }[],
+  course: CompiledCourse = defaultCourse
 ): string[] {
   const finishers: string[] = [];
   for (const robot of robots) {
@@ -996,23 +1014,25 @@ export function resolveFlagsAndArchives(
               return !movementBlockedByWall(
                 robot.x,
                 robot.y,
-                dy < 0 ? 'north' : 'south'
+                dy < 0 ? 'north' : 'south',
+                course
               );
             }
             if (dy === 0) {
               return !movementBlockedByWall(
                 robot.x,
                 robot.y,
-                dx < 0 ? 'west' : 'east'
+                dx < 0 ? 'west' : 'east',
+                course
               );
             }
             const horizontal = dx < 0 ? 'west' : 'east';
             const vertical = dy < 0 ? 'north' : 'south';
             return (
-              (!movementBlockedByWall(robot.x, robot.y, horizontal) &&
-                !movementBlockedByWall(robot.x + dx, robot.y, vertical)) ||
-              (!movementBlockedByWall(robot.x, robot.y, vertical) &&
-                !movementBlockedByWall(robot.x, robot.y + dy, horizontal))
+              (!movementBlockedByWall(robot.x, robot.y, horizontal, course) &&
+                !movementBlockedByWall(robot.x + dx, robot.y, vertical, course)) ||
+              (!movementBlockedByWall(robot.x, robot.y, vertical, course) &&
+                !movementBlockedByWall(robot.x, robot.y + dy, horizontal, course))
             );
           })
         : undefined);
@@ -1051,8 +1071,9 @@ export function resolveFlagsAndArchives(
 export function resolveRepairCleanup(
   robots: RaceRobotPosition[],
   trace: ResolutionTraceEntry[],
-  cells: readonly BoardCell[] = worldBoardCells,
-  optionDeck?: OptionDeckState
+  cells: readonly BoardCell[] = defaultCourseCells,
+  optionDeck?: OptionDeckState,
+  powerDownAllowed = true
 ) {
   for (const robot of robots) {
     if (robot.status !== 'active') continue;
@@ -1107,6 +1128,7 @@ export function resolveRepairCleanup(
   }
   for (const robot of robots) {
     if (
+      powerDownAllowed &&
       robot.status === 'active' &&
       robot.options.some(({ cardId }) => cardId === 'circuit-breaker') &&
       applyOptionEffect('circuit-breaker', { damage: robot.damage }).forcePowerDown
@@ -1189,13 +1211,14 @@ function hasRobotInLineOfSight(
   robots: readonly RaceRobotPosition[],
   x: number,
   y: number,
-  facing: Direction
+  facing: Direction,
+  course: CompiledCourse = defaultCourse
 ) {
   let cursorX = x;
   let cursorY = y;
   const [dx, dy] = steps[facing];
   for (let distance = 1; distance <= 3; distance += 1) {
-    if (movementBlockedByWall(cursorX, cursorY, facing)) return false;
+    if (movementBlockedByWall(cursorX, cursorY, facing, course)) return false;
     cursorX += dx;
     cursorY += dy;
     if (activeRobotAt(robots, cursorX, cursorY)) return true;
@@ -1210,9 +1233,10 @@ export function legalReentryChoices(
   if (resolution.nextReentryUid !== uid) return [];
   const robot = resolution.robots.find((candidate) => candidate.uid === uid);
   if (!robot || robot.status !== 'destroyed') return [];
+  const course = resolutionCourse(resolution);
   const archiveOpen =
     !activeRobotAt(resolution.robots, robot.archive.x, robot.archive.y) &&
-    !courseHasPit(robot.archive.x, robot.archive.y);
+    !courseHasPit(robot.archive.x, robot.archive.y, course);
   const cells = archiveOpen
     ? [robot.archive]
     : [-1, 0, 1].flatMap((dy) =>
@@ -1224,15 +1248,15 @@ export function legalReentryChoices(
   return cells
     .filter(
       ({ x, y }) =>
-        courseContains(x, y) &&
-        !courseHasPit(x, y) &&
+        courseContains(x, y, course) &&
+        !courseHasPit(x, y, course) &&
         !activeRobotAt(resolution.robots, x, y)
     )
     .flatMap(({ x, y }) =>
       directionOrder
         .filter(
           (facing) =>
-            archiveOpen || !hasRobotInLineOfSight(resolution.robots, x, y, facing)
+            archiveOpen || !hasRobotInLineOfSight(resolution.robots, x, y, facing, course)
         )
         .map((facing) => ({ x, y, facing }))
     );
@@ -1342,7 +1366,7 @@ export function createRaceRobotPositions(setup: RaceSetup): RaceRobotPosition[] 
     facing: player.facing,
     archive: { ...player.archive },
     lives: player.lives,
-    damage: 0,
+    damage: setup.startingDamage,
     lockedRegisters: [],
     touchedFlags: [],
     nextFlag: 1,
@@ -1390,6 +1414,13 @@ export function resolveProgrammedTurn(
   optionPlans: Readonly<Record<string, OptionTurnPlan>> = {}
 ): ProgramResolution | null {
   if (programming.phase !== 'programmed') return null;
+  const course = compilePlayableCourse(setup.courseId);
+  const courseCells: BoardCell[] = [...course.cells.values()];
+  const flags = course.course.flags as readonly {
+    number: 1 | 2 | 3;
+    x: number;
+    y: number;
+  }[];
   const robots = initialRobots.map((robot) => ({
     ...robot,
     archive: { ...robot.archive },
@@ -1438,7 +1469,8 @@ export function resolveProgrammedTurn(
         entry.card,
         register,
         trace,
-        optionPlanFor(optionPlans, entry.uid)
+        optionPlanFor(optionPlans, entry.uid),
+        course
       );
       if (trace.length === cardTraceStart) continue;
       playback.frames.push({
@@ -1452,7 +1484,7 @@ export function resolveProgrammedTurn(
     }
 
     const expressTraceStart = trace.length;
-    resolveExpressConveyors(robots, register, trace, worldBoardCells, optionPlans);
+    resolveExpressConveyors(robots, register, trace, courseCells, optionPlans, course);
     playback.frames.push({
       register: register as RegisterNumber,
       stage: 'express-conveyors',
@@ -1463,7 +1495,7 @@ export function resolveProgrammedTurn(
     });
 
     const conveyorTraceStart = trace.length;
-    resolveNormalConveyors(robots, register, trace, worldBoardCells, optionPlans);
+    resolveNormalConveyors(robots, register, trace, courseCells, optionPlans, course);
     playback.frames.push({
       register: register as RegisterNumber,
       stage: 'conveyors',
@@ -1474,7 +1506,7 @@ export function resolveProgrammedTurn(
     });
 
     const pusherTraceStart = trace.length;
-    resolvePushers(robots, register, trace, worldBoardCells, optionPlans);
+    resolvePushers(robots, register, trace, courseCells, optionPlans, course);
     playback.frames.push({
       register: register as RegisterNumber,
       stage: 'pushers',
@@ -1485,18 +1517,19 @@ export function resolveProgrammedTurn(
     });
 
     const gearTraceStart = trace.length;
-    resolveGears(robots, register, trace, worldBoardCells, optionPlans);
+    resolveGears(robots, register, trace, courseCells, optionPlans);
     resolveLaserSnapshot(
       robots,
       register,
       trace,
       programming,
-      worldBoardCells,
+      courseCells,
       optionDeck,
       preventionQueues,
-      optionPlans
+      optionPlans,
+      course
     );
-    const finishers = resolveFlagsAndArchives(robots, register, trace);
+    const finishers = resolveFlagsAndArchives(robots, register, trace, courseCells, flags, course);
     if (finishers.length > 0) {
       const winnerUid = finishers[0];
       const runnersUpUids = includeRunnersUp ? finishers.slice(1) : [];
@@ -1518,6 +1551,7 @@ export function resolveProgrammedTurn(
         trace: trace.slice(gearTraceStart)
       });
       return {
+        courseId: setup.courseId,
         turnNumber: programming.turnNumber,
         phase: 'race-finished',
         robots,
@@ -1541,9 +1575,10 @@ export function resolveProgrammedTurn(
     });
   }
 
-  resolveRepairCleanup(robots, trace, worldBoardCells, optionDeck);
+  resolveRepairCleanup(robots, trace, courseCells, optionDeck, setup.powerDownAllowed);
 
   const resolution: ProgramResolution = {
+    courseId: setup.courseId,
     turnNumber: programming.turnNumber,
     phase: 'turn-complete',
     robots,

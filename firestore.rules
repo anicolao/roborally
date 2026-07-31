@@ -53,7 +53,10 @@ service cloud.firestore {
             request.resource.data.type == 'race/configured'
             && request.resource.data.payload.config is map
             && request.resource.data.payload.config.editionId == 'avalon-hill-2005'
-            && request.resource.data.payload.config.courseId == 'risky-exchange'
+            && request.resource.data.payload.config.courseId in [
+              'risky-exchange',
+              'factory-rejects'
+            ]
           )
           ||
           (

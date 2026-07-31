@@ -26,7 +26,12 @@
     programCardZones,
     type ProgrammingPlayer
   } from '$lib/game/programming';
-  import { riskyExchangeConfig } from '$lib/game/setup';
+  import {
+    PLAYABLE_COURSE_IDS,
+    raceConfig,
+    type PlayableCourseId
+  } from '$lib/game/setup';
+  import { PUBLISHED_COURSES_BY_ID } from '$lib/game/course-catalog';
   import {
     MAX_ROOM_PLAYERS,
     ROBOTS,
@@ -61,7 +66,8 @@
   let formError = '';
   let pending = false;
   let copied = false;
-  let setupSeed = 'RISKY-2005';
+  let selectedCourseId: PlayableCourseId = 'risky-exchange';
+  let setupSeed = 'RALLY-2005';
   let setupLives: 3 | 4 = 3;
   let selectedProgramCardIds: ProgramCard['id'][] = [];
   let editingRegisterIndex = 0;
@@ -101,6 +107,11 @@
     ? roomState.readyPlayerUids.includes(currentPlayer.uid)
     : false;
   $: isHost = currentPlayer?.uid === roomState.hostUid;
+  $: selectedCourse = PUBLISHED_COURSES_BY_ID.get(selectedCourseId)!;
+  $: configuredCourse = roomState.configuration
+    ? PUBLISHED_COURSES_BY_ID.get(roomState.configuration.courseId)
+    : undefined;
+  $: selectedCourseSupportsRoom = selectedCourse.players.includes(roomState.players.length);
   $: activeProgramming =
     roomState.nextProgramming?.turnNumber === requestedTurnNumber
       ? roomState.nextProgramming
@@ -514,13 +525,13 @@
     copied = true;
   }
 
-  async function configureRiskyExchange() {
+  async function configureCourse() {
     if (!services || !roomService || !isHost || roomState.players.length < 2) return;
     pending = true;
     formError = '';
     try {
       await roomService.configureRace(services.db, services.user, roomCode, {
-        config: riskyExchangeConfig(setupSeed.trim() || 'RISKY-2005', setupLives)
+        config: raceConfig(selectedCourseId, setupSeed.trim() || 'RALLY-2005', setupLives)
       });
     } catch (error) {
       console.error(error);
@@ -737,7 +748,7 @@
     try {
       await roomService.rematchGame(services.db, services.user, roomCode, {
         epoch: roomState.raceEpoch + 1,
-        seed: `${roomState.configuration?.seed ?? 'RISKY-2005'}:rematch-${
+        seed: `${roomState.configuration?.seed ?? 'RALLY-2005'}:rematch-${
           roomState.raceEpoch + 1
         }`
       });
@@ -888,7 +899,7 @@
         <dl class="setup-facts">
           <div><dt>{roomState.configuration.lives}</dt><dd>Lives each</dd></div>
           <div><dt>{roomState.setup.players.length}</dt><dd>robots</dd></div>
-          <div><dt>3</dt><dd>flags</dd></div>
+          <div><dt>{configuredCourse?.flags.length ?? 0}</dt><dd>flags</dd></div>
         </dl>
         <p class="epoch-state">
           Race epoch {roomState.raceEpoch} · {roomState.raceSummaries.length} retained
@@ -940,13 +951,14 @@
                 {/each}
               </ol>
             </details>
-            <div
-              class="power-control"
-              aria-label="Ordered power-down control"
-              data-turn-id={activeProgramming.turnId}
-              data-can-respond={canRespondPowerDown}
-              data-pending-uid={roomState.pendingPowerDownUid ?? firstNextPowerUid ?? ''}
-            >
+            {#if roomState.setup.powerDownAllowed}
+              <div
+                class="power-control"
+                aria-label="Ordered power-down control"
+                data-turn-id={activeProgramming.turnId}
+                data-can-respond={canRespondPowerDown}
+                data-pending-uid={roomState.pendingPowerDownUid ?? firstNextPowerUid ?? ''}
+              >
               {#if powerResponse}
                 <span>
                   {powerResponse.powerDownNextTurn
@@ -979,7 +991,12 @@
                     : 'No power-down decision required'}
                 </span>
               {/if}
-            </div>
+              </div>
+            {:else}
+              <p class="power-control" data-power-down-disabled>
+                Factory Rejects rule · power down unavailable
+              </p>
+            {/if}
             {#if programmingPlayer.submitted}
               <p class="submission-state">Program committed. It cannot be inspected or changed.</p>
             {:else}
@@ -1187,7 +1204,10 @@
                 </p>
                 <p class="board-phase">
                   Board phase: express conveyors → all conveyors → register pushers → gears →
-                  one laser snapshot. Exchange prints no pushers; fixtures cover that stage.
+                  one laser snapshot.
+                  {roomState.configuration?.courseId === 'risky-exchange'
+                    ? 'Exchange prints no pushers; fixtures cover that stage.'
+                    : 'The configured board manifest supplies every active element.'}
                   Damage 9 repeats all five locked registers.
                 </p>
                 {#if !playbackIsActive && optionLossRobot}
@@ -1256,7 +1276,7 @@
                     ({ uid }) => uid === roomState.resolution?.summary?.winnerUid
                   )}
                   <section class="race-summary" aria-label="Immutable race summary">
-                    <strong>{winner?.name} wins Risky Exchange</strong>
+                    <strong>{winner?.name} wins {configuredCourse?.name ?? 'the race'}</strong>
                     <span>
                       Epoch {roomState.raceEpoch} ·
                       {roomState.resolution.summary.standings.length} final standings retained
@@ -1292,8 +1312,13 @@
           <p class="archive-note">Archives remain on the original Dock cells. Trusted-client secrecy masks, but cannot cryptographically hide, readable events.</p>
         {:else}
           <p class="archive-note">
-            Every robot’s archive begins on its Dock cell. Option cards remain disabled until their
-            complete 2005 manifest is reviewed.
+            Every robot’s archive begins on its Dock cell.
+            {#if roomState.setup.startingDamage > 0}
+              Factory Rejects begins each robot at {roomState.setup.startingDamage} damage.
+            {:else}
+              Option cards remain disabled until their complete 2005 manifest is reviewed.
+            {/if}
+            {#if !roomState.setup.powerDownAllowed} Power down is unavailable for this race.{/if}
           </p>
           <button class="open-programming" type="button" onclick={openProgrammingConsole}>
             Open programming console
@@ -1322,8 +1347,19 @@
         <p class="identity">Identity <strong>{identityLabel}</strong> · Seat {currentPlayer.seat}</p>
         <CourseCatalog />
         {#if roomState.players.length >= 2}
-          <div class="race-config" aria-label="Risky Exchange configuration">
+          <div class="race-config" aria-label="Race configuration">
             {#if isHost}
+              <label>
+                Course
+                <select bind:value={selectedCourseId} aria-label="Course">
+                  {#each PLAYABLE_COURSE_IDS as courseId}
+                    {@const course = PUBLISHED_COURSES_BY_ID.get(courseId)!}
+                    <option value={courseId} disabled={!course.players.includes(roomState.players.length)}>
+                      {course.name} ({course.players[0]}–{course.players.at(-1)} players)
+                    </option>
+                  {/each}
+                </select>
+              </label>
               <label>
                 Setup seed
                 <input bind:value={setupSeed} maxlength="64" aria-label="Setup seed" />
@@ -1335,16 +1371,23 @@
                   <option value={4} disabled={roomState.players.length < 5}>4 Lives (5+ players)</option>
                 </select>
               </label>
-              <button type="button" onclick={configureRiskyExchange} disabled={pending}>
-                {roomState.configuration ? 'Replace configuration' : 'Configure Risky Exchange'}
+              <button
+                type="button"
+                onclick={configureCourse}
+                disabled={pending || !selectedCourseSupportsRoom}
+              >
+                {roomState.configuration ? 'Replace configuration' : `Configure ${selectedCourse.name}`}
               </button>
             {:else if !roomState.configuration}
-              <p>Host is configuring Risky Exchange.</p>
+              <p>Host is choosing a reviewed course.</p>
             {/if}
             {#if roomState.configuration}
               <p class="configuration-lock">
-                Risky Exchange · seed {roomState.configuration.seed} ·
-                {roomState.configuration.lives} Lives
+                {configuredCourse?.name} · seed {roomState.configuration.seed} ·
+                {roomState.configuration.lives} Lives ·
+                {configuredCourse?.specialRules.length
+                  ? configuredCourse.specialRules.map(({ kind }) => kind.replaceAll('-', ' ')).join(' · ')
+                  : 'standard rules'}
               </p>
               <button type="button" onclick={becomeReady} disabled={pending || currentPlayerReady}>
                 {currentPlayerReady ? 'Ready event written' : 'Ready for race'}
@@ -1387,7 +1430,7 @@
           {#if roomState.configuration}
             {roomState.readyPlayerUids.length}/{roomState.players.length} racers ready for the immutable setup barrier.
           {:else if roomState.players.length >= 2}
-            Host may configure the reviewed Risky Exchange course.
+            Host may configure a reviewed playable course.
           {:else}
             Waiting for at least two racers.
           {/if}

@@ -82,7 +82,7 @@ export function createProgrammingState(
   }
   const deck = shuffledProgramDeck(config, new Set(lockedCardIds), turnNumber);
   const players = setup.players.filter(({ uid }) => eligibleUids.has(uid)).map(({ uid }) => {
-    const damage = damageByUid[uid] ?? 0;
+    const damage = damageByUid[uid] ?? setup.startingDamage;
     const locked = lockedRegistersByUid[uid] ?? {};
     return {
       uid,
