@@ -156,7 +156,10 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
 
     await rewindSubmissionDeadline(roomCode);
     await host.reload();
-    await host.getByRole('button', { name: 'Open programming console' }).click();
+    await expect(host.locator('[data-status]')).toHaveAttribute('data-status', 'synced');
+    const openProgramming = host.getByRole('button', { name: 'Open programming console' });
+    await expect(openProgramming).toBeVisible();
+    await openProgramming.click();
     await expect(
       host.getByRole('list', { name: 'Program submission status' })
     ).toContainText('▰ ▰ ▰ ▰ ▰');
