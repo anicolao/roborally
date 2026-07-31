@@ -11,7 +11,17 @@
   import type { RaceSetup } from '$lib/game/setup';
   import type { RaceRobotPosition } from '$lib/game/movement';
 
-  let { setup, robots }: { setup: RaceSetup; robots?: RaceRobotPosition[] } = $props();
+  let {
+    setup,
+    robots,
+    animateRobots = false,
+    registerDurationMs = 3_000
+  }: {
+    setup: RaceSetup;
+    robots?: RaceRobotPosition[];
+    animateRobots?: boolean;
+    registerDurationMs?: number;
+  } = $props();
 
   let zoom = $state(1);
   let panX = $state(0);
@@ -109,6 +119,7 @@
 
   <div class="board-viewport">
     <div
+      class:animating-robots={animateRobots}
       class="course-board"
       style={`--zoom:${zoom};--pan-x:${panX};--pan-y:${panY}`}
       role="grid"
@@ -161,6 +172,19 @@
           {/each}
         </div>
       {/each}
+      {#if animateRobots}
+        {#each displayedRobots as player (player.uid)}
+          {@const robot = ROBOTS.find((entry) => entry.id === player.robotId)}
+          <span
+            aria-hidden="true"
+            class={`animated-race-robot facing-${player.facing}`}
+            data-playback-robot={player.uid}
+            style={`left:${((player.position.x - 0.5) / 12) * 100}%;top:${((player.position.y - 0.5) / 16) * 100}%;--register-duration:${registerDurationMs}ms`}
+          >
+            <i></i>{robot?.mark}
+          </span>
+        {/each}
+      {/if}
     </div>
   </div>
   <p class="board-position" aria-live="polite" aria-atomic="true">
@@ -213,6 +237,7 @@
     background: #090d0e;
   }
   .course-board {
+    position: relative;
     display: grid;
     width: min(100%, 480px);
     height: 100%;
@@ -281,7 +306,26 @@
     font: 700 7px 'Space Mono', monospace;
     transform: translate(-50%, -50%);
   }
-  .race-robot i {
+  .course-board.animating-robots .race-robot { opacity: 0; }
+  .animated-race-robot {
+    position: absolute;
+    z-index: 5;
+    display: grid;
+    width: 23px;
+    height: 20px;
+    place-items: center;
+    border: 2px solid #090d0e;
+    border-radius: 3px;
+    color: #0c120d;
+    background: #d2ff37;
+    font: 700 7px 'Space Mono', monospace;
+    transform: translate(-50%, -50%);
+    transition:
+      left var(--register-duration) ease-in-out,
+      top var(--register-duration) ease-in-out,
+      transform var(--register-duration) ease-in-out;
+  }
+  .race-robot i, .animated-race-robot i {
     position: absolute; top: -7px; left: 8px;
     width: 4px; height: 7px; background: #d2ff37;
   }
@@ -336,5 +380,6 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .course-board { transition: none; }
+    .animated-race-robot { transition: none; }
   }
 </style>

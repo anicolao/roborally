@@ -97,6 +97,17 @@ export interface ResolutionTraceEntry {
   text: string;
 }
 
+export interface ProgramPlaybackFrame {
+  register: RegisterNumber;
+  robots: RaceRobotPosition[];
+  trace: ResolutionTraceEntry[];
+}
+
+export interface ProgramPlayback {
+  initialRobots: RaceRobotPosition[];
+  frames: ProgramPlaybackFrame[];
+}
+
 export interface ReentryChoice {
   x: number;
   y: number;
@@ -115,6 +126,7 @@ export interface ProgramResolution {
   winnerUid: string | null;
   runnersUpUids: string[];
   summary: RaceSummary | null;
+  playback: ProgramPlayback;
 }
 
 export interface RaceSummary {
@@ -1348,6 +1360,18 @@ export function resolveProgrammedTurn(
     initialOptionDeck ?? createOptionDeck(`standalone-turn-${programming.turnNumber}`)
   );
   const trace: ResolutionTraceEntry[] = [];
+  const cloneRobots = (source: readonly RaceRobotPosition[]) =>
+    source.map((robot) => ({
+      ...robot,
+      archive: { ...robot.archive },
+      options: robot.options.map((option) => ({ ...option })),
+      lockedRegisters: robot.lockedRegisters.map((locked) => ({ ...locked })),
+      touchedFlags: [...robot.touchedFlags]
+    }));
+  const playback: ProgramPlayback = {
+    initialRobots: cloneRobots(robots),
+    frames: []
+  };
   const preventionQueues = Object.fromEntries(
     robots.map(({ uid }) => [
       uid,
@@ -1357,6 +1381,7 @@ export function resolveProgrammedTurn(
   const cards = new Map(PROGRAM_CARDS.map((card) => [card.id, card]));
 
   for (let register = 1; register <= 5; register += 1) {
+    const registerTraceStart = trace.length;
     const queue = programming.players
       .map((player) => {
         const cardId = player.registers[register - 1].cardId;
@@ -1387,6 +1412,11 @@ export function resolveProgrammedTurn(
       optionPlans
     );
     const finishers = resolveFlagsAndArchives(robots, register, trace);
+    playback.frames.push({
+      register: register as RegisterNumber,
+      robots: cloneRobots(robots),
+      trace: trace.slice(registerTraceStart)
+    });
     if (finishers.length > 0) {
       const winnerUid = finishers[0];
       const runnersUpUids = includeRunnersUp ? finishers.slice(1) : [];
@@ -1409,7 +1439,8 @@ export function resolveProgrammedTurn(
         nextReentryUid: null,
         winnerUid,
         runnersUpUids,
-        summary: createRaceSummary(robots, winnerUid, runnersUpUids)
+        summary: createRaceSummary(robots, winnerUid, runnersUpUids),
+        playback
       };
     }
   }
@@ -1426,7 +1457,8 @@ export function resolveProgrammedTurn(
     nextReentryUid: null,
     winnerUid: null,
     runnersUpUids: [],
-    summary: null
+    summary: null,
+    playback
   };
   updateResolutionPhase(resolution);
   const next = nextDestroyedRobot(robots);
