@@ -2,11 +2,18 @@ import {
   EDITION_ID,
   PRNG_VERSION,
   RACE_REDUCER_VERSION,
+  PLAYABLE_COURSE_IDS,
   deriveRaceSetup,
+  type PlayableCourseId,
   type RaceConfig,
   type RaceSetup
 } from './game/setup';
 import { BOARD_MANIFEST_VERSION, COURSE_MANIFEST_VERSION } from './game/course-manifest';
+import { COMPLETE_BOARD_MANIFEST_VERSION } from './game/board-catalog';
+import {
+  COMPLETE_COURSE_MANIFEST_VERSION,
+  PUBLISHED_COURSES_BY_ID
+} from './game/course-catalog';
 import { PROGRAM_MANIFEST_VERSION } from './game/program-manifest';
 import { OPTION_MANIFEST_VERSION } from './game/option-manifest';
 import type { ProgramCard } from './game/program-manifest';
@@ -249,15 +256,25 @@ function isRobotId(value: unknown): value is RobotId {
 function isSupportedConfiguration(value: unknown, playerCount: number): value is RaceConfig {
   if (!value || typeof value !== 'object') return false;
   const config = value as Partial<RaceConfig>;
+  const courseId = config.courseId as PlayableCourseId | undefined;
+  const course = courseId ? PUBLISHED_COURSES_BY_ID.get(courseId) : undefined;
+  const completeManifests =
+    config.boardManifestVersion === COMPLETE_BOARD_MANIFEST_VERSION &&
+    config.courseManifestVersion === COMPLETE_COURSE_MANIFEST_VERSION;
+  const legacyRiskyExchangeManifests =
+    courseId === 'risky-exchange' &&
+    config.boardManifestVersion === BOARD_MANIFEST_VERSION &&
+    config.courseManifestVersion === COURSE_MANIFEST_VERSION;
   return (
     config.editionId === EDITION_ID &&
     config.reducerVersion === RACE_REDUCER_VERSION &&
     config.prngVersion === PRNG_VERSION &&
     config.programManifestVersion === PROGRAM_MANIFEST_VERSION &&
     config.optionManifestVersion === OPTION_MANIFEST_VERSION &&
-    config.boardManifestVersion === BOARD_MANIFEST_VERSION &&
-    config.courseManifestVersion === COURSE_MANIFEST_VERSION &&
-    config.courseId === 'risky-exchange' &&
+    (completeManifests || legacyRiskyExchangeManifests) &&
+    !!courseId &&
+    PLAYABLE_COURSE_IDS.includes(courseId) &&
+    !!course?.players.includes(playerCount) &&
     typeof config.seed === 'string' &&
     config.seed.length >= 1 &&
     config.seed.length <= 64 &&
@@ -288,7 +305,7 @@ function isPowerDownEligible(
 }
 
 function refreshPowerDownPending(state: RoomState) {
-  if (!state.programming || !state.setup) {
+  if (!state.programming || !state.setup?.powerDownAllowed) {
     state.pendingPowerDownUid = null;
     return;
   }
@@ -385,6 +402,7 @@ function resolveReadyProgramming(state: RoomState) {
   const robots = turnStartRobots(state, state.programming);
   const missingResponse = robots.some(
     (robot) =>
+      state.setup?.powerDownAllowed &&
       isPowerDownEligible(robot) &&
       !state.powerDownResponses.some(
         (response) =>

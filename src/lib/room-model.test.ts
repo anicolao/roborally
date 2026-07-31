@@ -7,7 +7,7 @@ import {
   replayRoom,
   type RoomEvent
 } from './room-model';
-import { riskyExchangeConfig } from './game/setup';
+import { factoryRejectsConfig, riskyExchangeConfig } from './game/setup';
 
 function event(
   actorUid: string,
@@ -235,6 +235,41 @@ describe('immutable room replay', () => {
       { uid: 'guest', dock: 1, facing: 'north', lives: 3 },
       { uid: 'host', dock: 2, facing: 'north', lives: 3 }
     ]);
+  });
+
+  it('starts Factory Rejects with five damaged robots and no power-down barrier', () => {
+    const joins = Array.from({ length: 5 }, (_, index) => {
+      const uid = index === 0 ? 'host' : `guest-${index}`;
+      return event(uid, index === 0 ? 2 : 1, 'player/joined', {
+        uid,
+        name: `Racer ${index + 1}`,
+        robotId: ROBOTS[index].id
+      }, index + 2);
+    });
+    const configured = event('host', 3, 'race/configured', {
+      config: factoryRejectsConfig('REJECTS-ROOM')
+    }, 8);
+    const readiness = joins.map((join, index) => {
+      const uid = (join.payload as { uid: string }).uid;
+      return event(uid, index === 0 ? 4 : 2, 'player/ready', {
+        uid,
+        configurationEventId: configured.id
+      }, 9 + index);
+    });
+
+    const state = replayRoom([created, ...joins, configured, ...readiness]);
+
+    expect(state.diagnostics).toEqual([]);
+    expect(state.setup).toMatchObject({
+      courseId: 'factory-rejects',
+      startingDamage: 2,
+      powerDownAllowed: false
+    });
+    expect(state.programming?.players).toHaveLength(5);
+    expect(
+      state.programming?.players.every(({ damage, hand }) => damage === 2 && hand.length === 7)
+    ).toBe(true);
+    expect(state.pendingPowerDownUid).toBeNull();
   });
 
   it('invalidates readiness on reconfiguration and rejects unsupported manifests', () => {

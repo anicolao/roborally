@@ -476,7 +476,9 @@ All 34 diagrams are reviewed in
 `courses-avalon-hill-2005-complete-v1`. Their combined placements and flag
 coordinates are one golden fixture; each board instance is compiled into world
 coordinates with quarter-turn transforms and overlap rejection. Risky Exchange
-remains the production multiplayer course. Around the World is the
+and Factory Rejects are playable multiplayer courses. Factory Rejects uses Chop
+Shop with Docking Bay B for five to eight players; every robot starts with two
+Damage tokens and cannot power down. Around the World is the
 representative multi-board geometry race.
 
 The exceptional-course reducer explicitly covers both published clocks, moving

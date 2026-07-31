@@ -9,6 +9,7 @@ import { PROGRAM_CARDS, PROGRAM_MANIFEST } from './program-manifest';
 import {
   createPrng,
   deriveRaceSetup,
+  factoryRejectsConfig,
   riskyExchangeConfig,
   seedToUint32
 } from './setup';
@@ -113,6 +114,9 @@ describe('versioned deterministic setup', () => {
 
   it('uses the seeded first player, clockwise Dock order, archives, Lives, and facing', () => {
     expect(deriveRaceSetup(players, riskyExchangeConfig('RISKY-6'))).toEqual({
+      courseId: 'risky-exchange',
+      startingDamage: 0,
+      powerDownAllowed: true,
       firstPlayerUid: 'guest',
       players: [
         {
@@ -139,6 +143,31 @@ describe('versioned deterministic setup', () => {
         }
       ]
     });
+  });
+
+  it('derives Factory Rejects from Docking Bay B with its printed setup rules', () => {
+    const rejectsPlayers = Array.from({ length: 5 }, (_, index) => ({
+      uid: `player-${index}`,
+      name: `Player ${index + 1}`,
+      robotId: `robot-${index}`
+    }));
+    const setup = deriveRaceSetup(rejectsPlayers, factoryRejectsConfig('REJECTS-2005'));
+
+    expect(setup).toMatchObject({
+      courseId: 'factory-rejects',
+      startingDamage: 2,
+      powerDownAllowed: false
+    });
+    expect(setup.players.map(({ dock, position }) => ({ dock, position }))).toEqual([
+      { dock: 1, position: { x: 6, y: 16 } },
+      { dock: 2, position: { x: 7, y: 16 } },
+      { dock: 3, position: { x: 4, y: 15 } },
+      { dock: 4, position: { x: 9, y: 15 } },
+      { dock: 5, position: { x: 2, y: 14 } }
+    ]);
+    expect(() =>
+      deriveRaceSetup(rejectsPlayers.slice(0, 4), factoryRejectsConfig('TOO-FEW'))
+    ).toThrow('does not support 4 players');
   });
 
   it('permits the published four-Life option only with at least five players', () => {

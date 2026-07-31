@@ -1,12 +1,7 @@
 <script lang="ts">
-  import {
-    DOCKING_BAY_A,
-    EXCHANGE_BOARD,
-    RISKY_EXCHANGE,
-    type BoardCell,
-    type BoardElement,
-    type Direction
-  } from '$lib/game/course-manifest';
+  import type { BoardElement, Direction } from '$lib/game/course-manifest';
+  import { PUBLISHED_COURSES_BY_ID } from '$lib/game/course-catalog';
+  import { compilePlayableCourse } from '$lib/game/playable-courses';
   import { ROBOTS } from '$lib/room-model';
   import type { RaceSetup } from '$lib/game/setup';
   import type { RaceRobotPosition } from '$lib/game/movement';
@@ -38,22 +33,30 @@
       })) ?? setup.players
   );
 
-  const cells = Array.from({ length: 16 * 12 }, (_, index) => ({
-    x: (index % 12) + 1,
-    y: Math.floor(index / 12) + 1
-  }));
-
-  const boardCells = new Map<string, BoardCell>(
-    [
-      ...EXCHANGE_BOARD.cells,
-      ...DOCKING_BAY_A.cells.map((entry) => ({ ...entry, y: entry.y + 12 }))
-    ].map((entry) => [`${entry.x},${entry.y}`, entry])
+  const course = $derived(PUBLISHED_COURSES_BY_ID.get(setup.courseId)!);
+  const compiledCourse = $derived(compilePlayableCourse(setup.courseId));
+  const cells = $derived(
+    Array.from({ length: compiledCourse.height * compiledCourse.width }, (_, index) => ({
+      x: compiledCourse.minX + (index % compiledCourse.width),
+      y: compiledCourse.minY + Math.floor(index / compiledCourse.width)
+    }))
   );
-  const walls = [
-    ...EXCHANGE_BOARD.walls,
-    ...DOCKING_BAY_A.walls.map((wall) => ({ ...wall, y: wall.y + 12 }))
-  ];
-  const flags = new Map(RISKY_EXCHANGE.flags.map((flag) => [`${flag.x},${flag.y}`, flag.number]));
+  const boardCells = $derived(compiledCourse.cells);
+  const walls = $derived(
+    [...compiledCourse.walls].map((wall) => {
+      const [x, y, edge] = wall.split(',');
+      return { x: Number(x), y: Number(y), edge };
+    })
+  );
+  const flags = $derived(
+    new Map(course.flags.map((flag) => [`${flag.x},${flag.y}`, flag.number]))
+  );
+  const factoryPlacement = $derived(
+    course.boardPlacements.find(({ boardId }) => !boardId.startsWith('docking-bay'))
+  );
+  const dockingPlacement = $derived(
+    course.boardPlacements.find(({ boardId }) => boardId.startsWith('docking-bay'))
+  );
 
   function elementLabel(element: BoardElement): string {
     if (element.kind === 'pit') return 'pit';
@@ -88,12 +91,12 @@
 
   function moveBoardCursor(event: KeyboardEvent) {
     const next = { x: activeX, y: activeY };
-    if (event.key === 'ArrowLeft') next.x = Math.max(1, activeX - 1);
-    else if (event.key === 'ArrowRight') next.x = Math.min(12, activeX + 1);
-    else if (event.key === 'ArrowUp') next.y = Math.max(1, activeY - 1);
-    else if (event.key === 'ArrowDown') next.y = Math.min(16, activeY + 1);
-    else if (event.key === 'Home') next.x = 1;
-    else if (event.key === 'End') next.x = 12;
+    if (event.key === 'ArrowLeft') next.x = Math.max(compiledCourse.minX, activeX - 1);
+    else if (event.key === 'ArrowRight') next.x = Math.min(compiledCourse.minX + compiledCourse.width - 1, activeX + 1);
+    else if (event.key === 'ArrowUp') next.y = Math.max(compiledCourse.minY, activeY - 1);
+    else if (event.key === 'ArrowDown') next.y = Math.min(compiledCourse.minY + compiledCourse.height - 1, activeY + 1);
+    else if (event.key === 'Home') next.x = compiledCourse.minX;
+    else if (event.key === 'End') next.x = compiledCourse.minX + compiledCourse.width - 1;
     else return;
     event.preventDefault();
     activeX = next.x;
@@ -104,8 +107,12 @@
 <section class="course-panel" aria-labelledby="course-heading">
   <header>
     <div>
-      <p>COURSE 01 / MEDIUM / 2–8</p>
-      <h2 id="course-heading">Risky Exchange</h2>
+      <p>
+        {setup.courseId === 'risky-exchange'
+          ? 'COURSE 01 / MEDIUM / 2–8'
+          : `${course.category} / ${course.length} / ${course.players[0]}–${course.players.at(-1)}`}
+      </p>
+      <h2 class:long-title={course.name.length > 14} id="course-heading">{course.name}</h2>
     </div>
     <div class="board-controls" aria-label="Board view controls">
       <button type="button" onclick={() => (zoom = Math.max(0.75, zoom - 0.25))} aria-label="Zoom out">−</button>
@@ -121,12 +128,12 @@
     <div
       class:animating-robots={animateRobots}
       class="course-board"
-      style={`--zoom:${zoom};--pan-x:${panX};--pan-y:${panY}`}
+      style={`--zoom:${zoom};--pan-x:${panX};--pan-y:${panY};--course-columns:${compiledCourse.width};--course-rows:${compiledCourse.height}`}
       role="grid"
       tabindex="0"
-      aria-label="Risky Exchange board explorer. Use arrow keys to inspect cells."
-      aria-rowcount="16"
-      aria-colcount="12"
+      aria-label={`${course.name} board explorer. Use arrow keys to inspect cells.`}
+      aria-rowcount={compiledCourse.height}
+      aria-colcount={compiledCourse.width}
       aria-activedescendant={`board-cell-${activeX}-${activeY}`}
       onkeydown={moveBoardCursor}
     >
@@ -134,7 +141,7 @@
         {@const manifestCell = boardCells.get(`${position.x},${position.y}`)}
         {@const flag = flags.get(`${position.x},${position.y}`)}
         <div
-          class:dock-bay={position.y > 12}
+          class:dock-bay={manifestCell?.boardId.startsWith('docking-bay')}
           class:active-cell={position.x === activeX && position.y === activeY}
           class="board-cell"
           id={`board-cell-${position.x}-${position.y}`}
@@ -179,7 +186,7 @@
             aria-hidden="true"
             class={`animated-race-robot facing-${player.facing}`}
             data-playback-robot={player.uid}
-            style={`left:${((player.position.x - 0.5) / 12) * 100}%;top:${((player.position.y - 0.5) / 16) * 100}%;--playback-duration:${transitionDurationMs}ms`}
+            style={`left:${((player.position.x - compiledCourse.minX + 0.5) / compiledCourse.width) * 100}%;top:${((player.position.y - compiledCourse.minY + 0.5) / compiledCourse.height) * 100}%;--playback-duration:${transitionDurationMs}ms`}
           >
             <i></i>{robot?.mark}
           </span>
@@ -193,10 +200,18 @@
 
   <details class="text-equivalent">
     <summary>Course text equivalent</summary>
-    <p>
-      Coordinates begin at the Exchange board’s upper-left. Docking Bay A occupies rows 13–16.
-      Robots face north, toward the factory. A cell omitted from the list is ordinary floor.
-    </p>
+    {#if setup.courseId === 'risky-exchange'}
+      <p>
+        Coordinates begin at the Exchange board’s upper-left. Docking Bay A occupies rows 13–16.
+        Robots face north, toward the factory. A cell omitted from the list is ordinary floor.
+      </p>
+    {:else}
+      <p>
+        Coordinates begin at the {factoryPlacement?.boardId.replaceAll('-', ' ')} board’s upper-left.
+        {dockingPlacement?.boardId.replaceAll('-', ' ')} supplies the starting docks.
+        Robots face north, toward the factory. A cell omitted from the list is ordinary floor.
+      </p>
+    {/if}
     <ul>
       {#each cells.filter(({ x, y }) => describeCell(x, y) !== `Column ${x}, row ${y}: floor`) as position}
         <li>{describeCell(position.x, position.y)}</li>
@@ -251,8 +266,8 @@
     width: min(100%, 480px);
     height: 100%;
     min-height: 0;
-    grid-template-columns: repeat(12, 1fr);
-    grid-template-rows: repeat(16, 1fr);
+    grid-template-columns: repeat(var(--course-columns), 1fr);
+    grid-template-rows: repeat(var(--course-rows), 1fr);
     margin: 0 auto;
     transform: translate(calc(var(--pan-x) * 16px), calc(var(--pan-y) * 16px)) scale(var(--zoom));
     transform-origin: center;
@@ -363,6 +378,7 @@
   @media (max-width: 720px) {
     header { align-items: flex-start; }
     h2 { font-size: 28px; }
+    h2.long-title { font-size: 20px; }
   }
   @media (max-height: 560px) and (orientation: landscape) {
     .course-panel {
