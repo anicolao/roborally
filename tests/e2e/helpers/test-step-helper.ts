@@ -78,6 +78,36 @@ export class TestStepHelper {
         throw new Error(`page is scrolled to ${window.scrollX},${window.scrollY}`);
       }
 
+      const visibleRect = (element: HTMLElement) => {
+        const bounds = element.getBoundingClientRect();
+        const visible = {
+          left: Math.max(0, bounds.left),
+          right: Math.min(window.innerWidth, bounds.right),
+          top: Math.max(0, bounds.top),
+          bottom: Math.min(window.innerHeight, bounds.bottom)
+        };
+        let clippedByAncestor = false;
+        let ancestor = element.parentElement;
+        while (ancestor && !ancestor.hasAttribute('data-e2e-layout')) {
+          const style = getComputedStyle(ancestor);
+          const ancestorBounds = ancestor.getBoundingClientRect();
+          if (/(auto|clip|hidden|scroll)/.test(style.overflowX)) {
+            clippedByAncestor ||=
+              bounds.left < ancestorBounds.left - 1 || bounds.right > ancestorBounds.right + 1;
+            visible.left = Math.max(visible.left, ancestorBounds.left);
+            visible.right = Math.min(visible.right, ancestorBounds.right);
+          }
+          if (/(auto|clip|hidden|scroll)/.test(style.overflowY)) {
+            clippedByAncestor ||=
+              bounds.top < ancestorBounds.top - 1 || bounds.bottom > ancestorBounds.bottom + 1;
+            visible.top = Math.max(visible.top, ancestorBounds.top);
+            visible.bottom = Math.min(visible.bottom, ancestorBounds.bottom);
+          }
+          ancestor = ancestor.parentElement;
+        }
+        return { ...visible, clippedByAncestor };
+      };
+
       for (const element of document.querySelectorAll<HTMLElement>('[data-e2e-layout] *')) {
         const style = getComputedStyle(element);
         if (style.display === 'none' || style.visibility === 'hidden') continue;
@@ -89,6 +119,7 @@ export class TestStepHelper {
           rect.top < -1 ||
           rect.bottom > window.innerHeight + 1
         ) {
+          if (visibleRect(element).clippedByAncestor) continue;
           throw new Error(
             `${element.tagName}.${element.className} is outside ` +
               `${window.innerWidth}x${window.innerHeight} at ` +
@@ -103,25 +134,27 @@ export class TestStepHelper {
         document.querySelectorAll<HTMLElement>(
           '[data-e2e-layout] button:not([disabled]), [data-e2e-layout] input:not([disabled])'
         )
-      ).filter((element) => {
+      ).flatMap((element) => {
         const style = getComputedStyle(element);
-        const rect = element.getBoundingClientRect();
+        const rect = visibleRect(element);
         return (
           style.visibility !== 'hidden' &&
           style.display !== 'none' &&
-          rect.width > 0 &&
-          rect.height > 0
-        );
+          rect.right - rect.left > 1 &&
+          rect.bottom - rect.top > 1
+        ) ? [{ element, rect }] : [];
       });
       for (let left = 0; left < controls.length; left += 1) {
-        const first = controls[left].getBoundingClientRect();
+        const first = controls[left].rect;
         for (let right = left + 1; right < controls.length; right += 1) {
-          const second = controls[right].getBoundingClientRect();
+          const second = controls[right].rect;
           const overlapWidth = Math.min(first.right, second.right) - Math.max(first.left, second.left);
           const overlapHeight =
             Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top);
           if (overlapWidth > 1 && overlapHeight > 1) {
-            throw new Error(`${controls[left].tagName} overlaps ${controls[right].tagName}`);
+            throw new Error(
+              `${controls[left].element.tagName} overlaps ${controls[right].element.tagName}`
+            );
           }
         }
       }

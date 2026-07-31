@@ -208,17 +208,26 @@
 <style>
   .course-panel {
     display: grid;
+    min-width: 0;
     min-height: 0;
     grid-template-rows: auto minmax(0, 1fr) auto;
     gap: 8px;
+    overflow: hidden;
     padding: 12px;
     border: 1px solid #435052;
     background: rgba(16, 23, 25, 0.96);
   }
-  header { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
-  p { margin: 0; color: #7f8d8f; font: 8px 'Space Mono', monospace; letter-spacing: .08em; }
-  h2 { margin: 2px 0 0; color: #eef4ee; font: 700 18px 'Space Mono', monospace; text-transform: uppercase; }
-  .board-controls { display: flex; gap: 4px; align-items: center; }
+  header { display: flex; min-width: 0; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+  header > div:first-child { min-width: 0; }
+  p { margin: 0; color: #7f8d8f; font: 16px 'Space Mono', monospace; letter-spacing: .08em; }
+  h2 { margin: 2px 0 0; overflow-wrap: break-word; color: #eef4ee; font: 700 36px 'Space Mono', monospace; text-transform: uppercase; }
+  .board-controls {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    align-items: center;
+  }
   button {
     min-width: 32px;
     min-height: 32px;
@@ -226,10 +235,10 @@
     border: 1px solid #566366;
     color: #d2ff37;
     background: #11191a;
-    font: 700 9px 'Space Mono', monospace;
+    font: 700 18px 'Space Mono', monospace;
     text-transform: uppercase;
   }
-  output { min-width: 38px; color: #a7b2b1; font: 9px 'Space Mono', monospace; text-align: center; }
+  output { min-width: 38px; color: #a7b2b1; font: 18px 'Space Mono', monospace; text-align: center; }
   .board-viewport {
     min-height: 0;
     overflow: hidden;
@@ -241,7 +250,7 @@
     display: grid;
     width: min(100%, 480px);
     height: 100%;
-    min-height: 360px;
+    min-height: 0;
     grid-template-columns: repeat(12, 1fr);
     grid-template-rows: repeat(16, 1fr);
     margin: 0 auto;
@@ -268,13 +277,13 @@
     position: absolute; inset: 4px;
     display: grid; place-items: center;
     color: #788184; background: #030505;
-    font: 6px 'Space Mono', monospace;
+    font: 12px 'Space Mono', monospace;
   }
   .repair, .gear, .conveyor, .dock, .laser, .pusher {
     position: absolute; inset: 1px;
     display: grid; place-items: center;
     color: #8ddad0;
-    font: 700 11px 'Space Mono', monospace;
+    font: 700 22px 'Space Mono', monospace;
   }
   .repair { color: #ffcf4b; }
   .repair.option { color: #ee8bff; }
@@ -283,13 +292,13 @@
   .pusher { color: #ffcf4b; }
   .conveyor { background: repeating-linear-gradient(135deg, #133936 0 3px, #102b2a 3px 6px); }
   .conveyor.express { color: white; box-shadow: inset 0 0 0 2px #337c76; }
-  .dock { color: #91a0a2; font-size: 8px; }
+  .dock { color: #91a0a2; font-size: 16px; }
   .course-flag {
     position: absolute; z-index: 3; top: 50%; left: 50%;
     display: grid; width: 18px; height: 18px; place-items: center;
     border-radius: 50%;
     color: #101510; background: #ffcf4b;
-    font: 700 9px 'Space Mono', monospace;
+    font: 700 18px 'Space Mono', monospace;
     transform: translate(-50%, -50%);
     box-shadow: 0 0 0 2px #151b1b;
   }
@@ -303,7 +312,7 @@
     display: grid; width: 23px; height: 20px; place-items: center;
     border: 2px solid #090d0e; border-radius: 3px;
     color: #0c120d; background: #d2ff37;
-    font: 700 7px 'Space Mono', monospace;
+    font: 700 14px 'Space Mono', monospace;
     transform: translate(-50%, -50%);
   }
   .course-board.animating-robots .race-robot { opacity: 0; }
@@ -318,7 +327,7 @@
     border-radius: 3px;
     color: #0c120d;
     background: #d2ff37;
-    font: 700 7px 'Space Mono', monospace;
+    font: 700 14px 'Space Mono', monospace;
     transform: translate(-50%, -50%);
     transition:
       left var(--playback-duration) ease-in-out,
@@ -336,7 +345,7 @@
     max-height: 90px;
     overflow: auto;
     color: #9da9a8;
-    font-size: 10px;
+    font-size: 20px;
   }
   .board-position {
     position: absolute;
@@ -347,33 +356,36 @@
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
   }
-  summary { color: #d2ff37; cursor: pointer; font: 9px 'Space Mono', monospace; text-transform: uppercase; }
+  summary { color: #d2ff37; cursor: pointer; font: 18px 'Space Mono', monospace; text-transform: uppercase; }
   details:not([open]) > p, details:not([open]) > ul { display: none; }
-  .text-equivalent p { margin: 8px 0; font: 10px/1.4 'Atkinson Hyperlegible', sans-serif; }
+  .text-equivalent p { margin: 8px 0; font: 20px/1.4 'Atkinson Hyperlegible', sans-serif; }
   ul { margin: 0; padding-left: 18px; }
   @media (max-width: 720px) {
     header { align-items: flex-start; }
-    h2 { font-size: 14px; }
-    .board-controls { display: grid; grid-template-columns: repeat(3, auto); }
-    .course-board { min-height: 300px; }
+    h2 { font-size: 28px; }
   }
   @media (max-height: 560px) and (orientation: landscape) {
     .course-panel {
       gap: 3px;
       padding: 4px;
     }
-    header { gap: 4px; }
+    header { flex-wrap: wrap; gap: 4px; }
     header p { display: none; }
-    h2 { margin: 0; font-size: 10px; }
+    h2 { margin: 0; font-size: 20px; }
+    .board-controls {
+      display: grid;
+      width: 100%;
+      grid-template-columns: repeat(5, minmax(23px, 1fr)) auto;
+    }
     button {
       min-width: 23px;
       min-height: 23px;
       padding: 0 4px;
-      font-size: 6px;
+      font-size: 12px;
     }
     output {
       min-width: 27px;
-      font-size: 6px;
+      font-size: 12px;
     }
     .course-board { min-height: 0; }
     .text-equivalent { display: none; }
