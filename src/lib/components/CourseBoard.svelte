@@ -9,11 +9,13 @@
   let {
     setup,
     robots,
+    currentPlayerUid,
     animateRobots = false,
     transitionDurationMs = 2_000
   }: {
     setup: RaceSetup;
     robots?: RaceRobotPosition[];
+    currentPlayerUid?: string;
     animateRobots?: boolean;
     transitionDurationMs?: number;
   } = $props();
@@ -173,7 +175,11 @@
           {/each}
           {#each displayedRobots.filter((player) => player.position.x === position.x && player.position.y === position.y) as player}
             {@const robot = ROBOTS.find((entry) => entry.id === player.robotId)}
-            <span class={`race-robot facing-${player.facing}`} title={`${player.name}, ${robot?.name}, facing ${player.facing}`}>
+            <span
+              class:current-player={player.uid === currentPlayerUid}
+              class={`race-robot robot-${player.robotId} facing-${player.facing}`}
+              title={`${player.name}, ${robot?.name}, facing ${player.facing}`}
+            >
               <i></i>{robot?.mark}
             </span>
           {/each}
@@ -184,7 +190,8 @@
           {@const robot = ROBOTS.find((entry) => entry.id === player.robotId)}
           <span
             aria-hidden="true"
-            class={`animated-race-robot facing-${player.facing}`}
+            class:current-player={player.uid === currentPlayerUid}
+            class={`animated-race-robot robot-${player.robotId} facing-${player.facing}`}
             data-playback-robot={player.uid}
             style={`left:${((player.position.x - compiledCourse.minX + 0.5) / compiledCourse.width) * 100}%;top:${((player.position.y - compiledCourse.minY + 0.5) / compiledCourse.height) * 100}%;--playback-duration:${transitionDurationMs}ms`}
           >
@@ -326,7 +333,7 @@
     position: absolute; z-index: 4; top: 50%; left: 50%;
     display: grid; width: 23px; height: 20px; place-items: center;
     border: 2px solid #090d0e; border-radius: 3px;
-    color: #0c120d; background: #d2ff37;
+    color: #0c120d; background: var(--robot-color, #d2ff37);
     font: 700 14px 'Space Mono', monospace;
     transform: translate(-50%, -50%);
   }
@@ -341,7 +348,7 @@
     border: 2px solid #090d0e;
     border-radius: 3px;
     color: #0c120d;
-    background: #d2ff37;
+    background: var(--robot-color, #d2ff37);
     font: 700 14px 'Space Mono', monospace;
     transform: translate(-50%, -50%);
     transition:
@@ -351,7 +358,19 @@
   }
   .race-robot i, .animated-race-robot i {
     position: absolute; top: -7px; left: 8px;
-    width: 4px; height: 7px; background: #d2ff37;
+    width: 4px; height: 7px; background: var(--robot-color, #d2ff37);
+  }
+  .robot-axle { --robot-color: #65d8ff; }
+  .robot-bit { --robot-color: #ffb454; }
+  .robot-cog { --robot-color: #ff79c6; }
+  .robot-dash { --robot-color: #b993ff; }
+  .robot-flux { --robot-color: #72e0c2; }
+  .robot-gizmo { --robot-color: #ff887d; }
+  .robot-hex { --robot-color: #e8edb5; }
+  .robot-rivet { --robot-color: #9ad1ff; }
+  .race-robot.current-player, .animated-race-robot.current-player {
+    --robot-color: #d2ff37;
+    box-shadow: 0 0 0 2px #d2ff37, 0 0 12px rgba(210, 255, 55, .9);
   }
   .facing-east { transform: translate(-50%, -50%) rotate(90deg); }
   .facing-south { transform: translate(-50%, -50%) rotate(180deg); }

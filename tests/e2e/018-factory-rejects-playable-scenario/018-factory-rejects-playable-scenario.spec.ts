@@ -62,6 +62,8 @@ test('five players configure and enter the Factory Rejects scenario', async ({
           spec: 'The immutable setup identifies Factory Rejects and its two starting damage',
           check: async () => {
             await expect(page.getByRole('heading', { name: 'Factory Rejects' })).toBeVisible();
+            await expect(page.locator('.your-robot')).toContainText('Axle');
+            await expect(page.locator('.race-robot.current-player')).toHaveCount(1);
             await expect(
               page.getByText(/Factory Rejects begins each robot at 2 damage/)
             ).toBeVisible();
@@ -80,6 +82,8 @@ test('five players configure and enter the Factory Rejects scenario', async ({
           spec: 'Every observer converges on the same course and five-robot setup',
           check: async () => {
             await expect(guests[0].getByRole('heading', { name: 'Factory Rejects' })).toBeVisible();
+            await expect(guests[0].locator('.your-robot')).toContainText('Bit');
+            await expect(guests[0].locator('.race-robot.current-player')).toHaveCount(1);
             await expect(guests[0].locator('.race-robot')).toHaveCount(5);
           }
         }
