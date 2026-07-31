@@ -77,6 +77,9 @@ player, original Dock order, three/four-Life setup, archives, north-facing
 robots, flags, and semantic 12×16 course. The board has pan, zoom, fit, and a
 coordinate text equivalent. The transcription review is recorded in
 [the initial manifest review](docs/data/avalon-hill-2005-step3-review.md).
+The configured race view prominently labels the local player’s robot and marks
+it bright yellow on the board; other robots use distinct colors and retain their
+name/mark labels for quick identification.
 
 The first turn now deals the seeded shared Program deck round-robin in original
 Dock order. Each player orders five cards with a labeled, explicitly
