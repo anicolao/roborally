@@ -201,7 +201,10 @@ test('a keyboard and touch-operable race completes at every target viewport', as
         {
           spec: 'Arrow-key board navigation exposes a selected semantic grid cell',
           check: async () => {
-            await expect(board).toHaveAttribute('aria-activedescendant', 'board-cell-2-2');
+            await expect(host.locator('.course-board')).toHaveAttribute(
+              'aria-activedescendant',
+              'board-cell-2-2'
+            );
           }
         },
         {

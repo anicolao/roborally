@@ -271,7 +271,7 @@
     cursor: pointer;
     padding: 11px 13px;
     color: #d2ff37;
-    font: 700 10px 'Space Mono', monospace;
+    font: 700 20px 'Space Mono', monospace;
     letter-spacing: .04em;
     text-transform: uppercase;
   }
@@ -285,19 +285,19 @@
     overflow: hidden;
   }
   header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
-  p { margin: 0; color: #91a0a2; font: 9px 'Space Mono', monospace; }
-  h2, h3 { margin: 3px 0 0; font: 700 18px 'Space Mono', monospace; text-transform: uppercase; }
+  p { margin: 0; color: #91a0a2; font: 18px 'Space Mono', monospace; }
+  h2, h3 { margin: 3px 0 0; font: 700 36px 'Space Mono', monospace; text-transform: uppercase; }
   header dl { display: flex; gap: 10px; margin: 0; }
   header dl div { min-width: 48px; text-align: right; }
-  dt { color: #d2ff37; font: 700 17px 'Space Mono', monospace; }
-  dd { margin: 0; color: #7f8d8f; font: 8px 'Space Mono', monospace; text-transform: uppercase; }
+  dt { color: #d2ff37; font: 700 34px 'Space Mono', monospace; }
+  dd { margin: 0; color: #7f8d8f; font: 16px 'Space Mono', monospace; text-transform: uppercase; }
   nav { display: flex; flex-wrap: wrap; gap: 5px; }
   button {
     min-height: 34px;
     border: 1px solid #4a5759;
     color: #d5ddda;
     background: #151d1f;
-    font: 700 9px 'Space Mono', monospace;
+    font: 700 18px 'Space Mono', monospace;
     text-transform: uppercase;
   }
   nav button { padding: 0 12px; }
@@ -308,7 +308,7 @@
   .face-grid button { display: grid; width: 100%; gap: 4px; padding: 7px; text-align: left; }
   .face-grid small, .course-list small, .course-list span, .course-preview span, .face-facts small {
     color: #849294;
-    font: 8px 'Space Mono', monospace;
+    font: 16px 'Space Mono', monospace;
   }
   .face-mini {
     display: grid;
@@ -322,7 +322,7 @@
     display: grid; min-width: 0; place-items: center;
     border-right: 1px solid rgba(110, 130, 132, .25);
     border-bottom: 1px solid rgba(110, 130, 132, .25);
-    color: #8ddad0; font: 5px 'Space Mono', monospace;
+    color: #8ddad0; font: 10px 'Space Mono', monospace;
   }
   .face-mini i.feature, .compiled-course i.feature { background: #183735; }
   .face-mini i.pit, .compiled-course i.pit { color: #9ba3a4; background: #050707; }
@@ -331,7 +331,7 @@
     margin-top: 9px; padding: 10px; border: 1px solid #334144;
   }
   .face-facts ul { display: flex; flex-wrap: wrap; gap: 6px 16px; }
-  .face-facts li { color: #aeb9b7; font: 9px 'Space Mono', monospace; }
+  .face-facts li { color: #aeb9b7; font: 18px 'Space Mono', monospace; }
   .face-facts li strong { color: #d2ff37; }
   .face-facts > small { grid-column: 1 / -1; }
   .course-catalog {
@@ -345,7 +345,7 @@
   .course-catalog.race-focus .course-list { display: none; }
   .course-list { display: grid; min-height: 0; align-content: start; gap: 4px; overflow: auto; }
   .course-list button { display: grid; width: 100%; gap: 2px; padding: 7px 9px; text-align: left; }
-  .course-list strong { font-size: 10px; }
+  .course-list strong { font-size: 20px; }
   .course-preview {
     display: grid; min-width: 0; min-height: 0; align-content: start; gap: 8px;
     padding: 11px; overflow: auto; border: 1px solid #344144;
@@ -366,24 +366,24 @@
   .compiled-course b {
     display: grid; width: 12px; height: 12px; place-items: center;
     border-radius: 50%; color: #111; background: #ffcf4b;
-    font: 700 7px 'Space Mono', monospace;
+    font: 700 14px 'Space Mono', monospace;
   }
   .placements, .special-rules { display: flex; flex-wrap: wrap; gap: 5px; }
   .placements li, .special-rules li {
     padding: 3px 5px; border: 1px solid #354346;
-    color: #9faeac; font: 8px 'Space Mono', monospace;
+    color: #9faeac; font: 16px 'Space Mono', monospace;
   }
   .special-rules li { color: #ffcf4b; }
   .race-audit { padding: 0 12px; border-color: #d2ff37; color: #d2ff37; }
   .race-result { display: grid; gap: 3px; padding: 8px; border-left: 3px solid #d2ff37; background: #18221b; }
-  .race-result strong { color: #d2ff37; font: 700 10px 'Space Mono', monospace; }
+  .race-result strong { color: #d2ff37; font: 700 20px 'Space Mono', monospace; }
   .rule-probes {
     display: grid; min-height: 0; grid-template-columns: 180px 1fr;
     gap: 12px; overflow: hidden;
   }
   .probe-summary { display: grid; align-content: start; gap: 4px; padding: 12px; border: 1px solid #344144; }
-  .probe-summary strong { color: #d2ff37; font: 700 28px 'Space Mono', monospace; }
-  .probe-summary span { color: #93a19f; font: 9px 'Space Mono', monospace; text-transform: uppercase; }
+  .probe-summary strong { color: #d2ff37; font: 700 56px 'Space Mono', monospace; }
+  .probe-summary span { color: #93a19f; font: 18px 'Space Mono', monospace; text-transform: uppercase; }
   .rule-probes ol {
     display: grid; min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 5px; overflow: auto;
@@ -391,8 +391,8 @@
   .rule-probes li { display: flex; gap: 8px; padding: 8px; border: 1px solid #354346; }
   .rule-probes li > span { color: #d2ff37; font-weight: 700; }
   .rule-probes li div { display: grid; gap: 2px; }
-  .rule-probes li strong { font: 700 9px 'Space Mono', monospace; }
-  .rule-probes li small { color: #8d9b9c; font: 8px 'Space Mono', monospace; }
+  .rule-probes li strong { font: 700 18px 'Space Mono', monospace; }
+  .rule-probes li small { color: #8d9b9c; font: 16px 'Space Mono', monospace; }
 
   @media (max-width: 720px) {
     details[open] .catalog-body { inset: 58px 7px 7px; }
@@ -406,8 +406,8 @@
     .course-catalog.race-focus { grid-template-rows: minmax(0, 1fr); }
     .rule-probes ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .rule-probes li { gap: 4px; padding: 5px; }
-    .rule-probes li strong { font-size: 7px; }
-    .rule-probes li small { font-size: 6px; }
+    .rule-probes li strong { font-size: 14px; }
+    .rule-probes li small { font-size: 12px; }
     .compiled-course { max-height: 300px; }
   }
 </style>

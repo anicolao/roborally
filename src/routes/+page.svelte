@@ -1570,7 +1570,7 @@
   }
   .program-countdown small,
   .program-countdown span {
-    font: 700 clamp(10px, 1.5vw, 16px) 'Space Mono', monospace;
+    font: 700 clamp(20px, 3vw, 32px) 'Space Mono', monospace;
     letter-spacing: 0.2em;
     text-transform: uppercase;
   }
@@ -1578,7 +1578,7 @@
   .program-countdown span { color: #aebbb9; }
   .program-countdown strong {
     color: #d2ff37;
-    font: 700 clamp(120px, 30vmin, 280px)/0.82 'Space Mono', monospace;
+    font: 700 clamp(240px, 60vmin, 560px)/0.82 'Space Mono', monospace;
     text-shadow: 0 0 42px rgba(210, 255, 55, 0.28);
     animation: countdown-pulse 900ms ease-out both;
   }
@@ -1601,13 +1601,13 @@
   }
   .register-playback strong {
     color: #d2ff37;
-    font-size: 13px;
+    font-size: 26px;
     letter-spacing: 0.16em;
   }
   .register-playback span {
     overflow: hidden;
     color: #aebbb9;
-    font-size: 9px;
+    font-size: 18px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -1628,10 +1628,12 @@
 
   .shell {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: 68px minmax(0, 1fr) 46px;
     width: min(100%, 1228px);
     height: 100dvh;
     margin: 0 auto;
+    overflow: hidden;
     padding:
       env(safe-area-inset-top)
       max(24px, env(safe-area-inset-right))
@@ -1641,8 +1643,11 @@
 
   .masthead, footer {
     display: flex;
+    min-width: 0;
+    gap: 8px;
     align-items: center;
     justify-content: space-between;
+    overflow: hidden;
   }
   .masthead { border-bottom: 1px solid #344043; }
   .brand {
@@ -1652,7 +1657,7 @@
     align-items: center;
     color: #eef4ee;
     font-family: 'Space Mono', monospace;
-    font-size: 16px;
+    font-size: 32px;
     letter-spacing: 0.12em;
     text-decoration: none;
     white-space: nowrap;
@@ -1663,7 +1668,7 @@
     padding: 2px 5px;
     border: 1px solid #5a696c;
     color: #9caaac;
-    font-size: 8px;
+    font-size: 16px;
     letter-spacing: 0.08em;
     vertical-align: 2px;
   }
@@ -1680,14 +1685,17 @@
 
   .network {
     display: flex;
+    min-width: 0;
     gap: 8px;
     align-items: center;
     color: #8e9a9c;
     font-family: 'Space Mono', monospace;
-    font-size: 10px;
+    font-size: 20px;
+    line-height: 1;
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
+  .network span:last-child { min-width: 0; overflow-wrap: anywhere; }
   .signal {
     width: 7px;
     height: 7px;
@@ -1702,7 +1710,7 @@
     border: 1px solid #ffb84d;
     color: #ffcf75;
     background: #151b1c;
-    font: 700 8px 'Space Mono', monospace;
+    font: 700 16px 'Space Mono', monospace;
     text-transform: uppercase;
   }
 
@@ -1710,15 +1718,16 @@
     display: grid;
     grid-template-columns: minmax(360px, 0.82fr) minmax(500px, 1.18fr);
     gap: clamp(32px, 5vw, 72px);
-    align-items: center;
+    align-items: start;
     min-height: 0;
+    overflow: auto;
     padding: 32px 0;
   }
   .eyebrow {
     margin: 0 0 18px;
     color: #899597;
     font-family: 'Space Mono', monospace;
-    font-size: 10px;
+    font-size: 20px;
     letter-spacing: 0.13em;
   }
   .eyebrow span { margin-right: 9px; color: #d2ff37; }
@@ -1726,7 +1735,7 @@
     margin: 0;
     color: #f1f5f0;
     font-family: 'Space Mono', monospace;
-    font-size: clamp(48px, 5.3vw, 76px);
+    font-size: clamp(96px, 10.6vw, 152px);
     line-height: 0.91;
     letter-spacing: -0.075em;
     text-transform: uppercase;
@@ -1736,12 +1745,12 @@
     max-width: 470px;
     margin: 22px 0 0;
     color: #a9b4b2;
-    font-size: 16px;
-    line-height: 1.55;
+    font-size: 32px;
+    line-height: 1.25;
   }
   .actions {
     display: grid;
-    grid-template-columns: auto auto 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 10px;
     align-items: center;
     margin-top: 24px;
@@ -1753,14 +1762,14 @@
     color: #101510;
     background: #d2ff37;
     font-family: 'Space Mono', monospace;
-    font-size: 11px;
+    font-size: 22px;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
   button.secondary { color: #a5b0ae; border-color: #4e5a5c; background: transparent; }
   button:disabled { cursor: not-allowed; opacity: 0.54; }
-  .actions p { margin: 0 0 0 4px; color: #657173; font-size: 11px; line-height: 1.3; }
+  .actions p { display: none; }
   .facts {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -1772,10 +1781,10 @@
   .facts dt {
     color: #d2ff37;
     font-family: 'Space Mono', monospace;
-    font-size: 18px;
+    font-size: 36px;
     font-weight: 700;
   }
-  .facts dd { margin: 2px 0 0; color: #718083; font-size: 10px; text-transform: uppercase; }
+  .facts dd { margin: 2px 0 0; color: #718083; font-size: 20px; text-transform: uppercase; }
 
   .telemetry {
     position: relative;
@@ -1799,7 +1808,7 @@
     margin-bottom: 10px;
     color: #829093;
     font-family: 'Space Mono', monospace;
-    font-size: 9px;
+    font-size: 18px;
     letter-spacing: 0.08em;
   }
   .live { color: #d2ff37; }
@@ -1831,7 +1840,7 @@
     border: 1px solid #337c76;
     background: repeating-linear-gradient(90deg, #173c3b 0 15px, #102928 15px 30px);
     font-family: 'Space Mono', monospace;
-    font-size: 11px;
+    font-size: 22px;
     letter-spacing: 7px;
     white-space: nowrap;
   }
@@ -1852,7 +1861,7 @@
     color: #111;
     background: #ffcf4b;
     box-shadow: 0 0 0 5px rgba(255, 207, 75, 0.15);
-    font: 700 15px 'Space Mono', monospace;
+    font: 700 30px 'Space Mono', monospace;
   }
   .robot {
     position: absolute;
@@ -1887,7 +1896,7 @@
     right: 8px;
     bottom: 6px;
     color: #687679;
-    font: 8px 'Space Mono', monospace;
+    font: 16px 'Space Mono', monospace;
   }
   .registers {
     display: grid;
@@ -1910,20 +1919,20 @@
     text-align: center;
   }
   .registers li:first-child { border-color: #7e982b; background: #182014; }
-  .register-number { color: #657275; font: 8px 'Space Mono', monospace; text-align: left; }
+  .register-number { color: #657275; font: 16px 'Space Mono', monospace; text-align: left; }
   .registers strong {
     align-self: center;
     color: #d2ff37;
-    font: 700 24px 'Space Mono', monospace;
+    font: 700 48px 'Space Mono', monospace;
   }
   .registers li > span:nth-of-type(2) {
     overflow: hidden;
-    font-size: 9px;
+    font-size: 18px;
     text-overflow: ellipsis;
     text-transform: uppercase;
     white-space: nowrap;
   }
-  .registers small { position: absolute; top: 7px; right: 7px; color: #f2d372; font: 8px 'Space Mono', monospace; }
+  .registers small { position: absolute; top: 7px; right: 7px; color: #f2d372; font: 16px 'Space Mono', monospace; }
 
   .join-panel {
     display: grid;
@@ -1938,7 +1947,7 @@
     align-items: center;
     justify-content: space-between;
     color: #d2ff37;
-    font: 700 11px 'Space Mono', monospace;
+    font: 700 22px 'Space Mono', monospace;
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
@@ -1949,11 +1958,11 @@
     border-color: #465356;
     color: #9da9a8;
     background: transparent;
-    font-size: 20px;
+    font-size: 40px;
   }
   .join-panel label, .join-panel legend {
     color: #899597;
-    font: 9px 'Space Mono', monospace;
+    font: 18px 'Space Mono', monospace;
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
@@ -1967,7 +1976,7 @@
     color: #edf3ed;
     outline: none;
     background: #101718;
-    font: 700 14px 'Space Mono', monospace;
+    font: 700 28px 'Space Mono', monospace;
     text-transform: uppercase;
   }
   .join-panel input:focus { border-color: #d2ff37; box-shadow: 0 0 0 1px #d2ff37; }
@@ -1985,10 +1994,10 @@
     border-color: #465356;
     color: #899597;
     background: #111819;
-    font-size: 8px;
+    font-size: 16px;
     text-align: left;
   }
-  .robot-options button span { color: #d2ff37; font-size: 9px; }
+  .robot-options button span { color: #d2ff37; font-size: 18px; }
   .robot-options button.selected {
     border-color: #d2ff37;
     color: #edf3ed;
@@ -1997,7 +2006,7 @@
   .stream-note, .form-error {
     margin: 0;
     color: #93a09f;
-    font-size: 11px;
+    font-size: 22px;
   }
   .form-error { color: #ffbf69; }
 
@@ -2005,11 +2014,12 @@
     display: grid;
     grid-template-columns: minmax(310px, 0.72fr) minmax(520px, 1.28fr);
     gap: clamp(32px, 6vw, 84px);
-    align-items: center;
+    align-items: start;
     min-height: 0;
+    overflow: auto;
     padding: 32px 0;
   }
-  .room-console h1 { font-size: clamp(48px, 5vw, 70px); }
+  .room-console h1 { font-size: clamp(96px, 10vw, 140px); }
   .room-console h1 em {
     color: #d2ff37;
     font-size: 0.8em;
@@ -2019,7 +2029,7 @@
   .room-actions { display: flex; gap: 14px; align-items: center; margin-top: 23px; }
   .text-link {
     color: #a9b4b2;
-    font: 9px 'Space Mono', monospace;
+    font: 18px 'Space Mono', monospace;
     letter-spacing: 0.05em;
     text-transform: uppercase;
   }
@@ -2031,17 +2041,17 @@
     border-bottom: 1px solid #344043;
   }
   .room-facts div { padding: 12px 8px 12px 0; }
-  .room-facts dt { color: #d2ff37; font: 700 18px 'Space Mono', monospace; }
+  .room-facts dt { color: #d2ff37; font: 700 36px 'Space Mono', monospace; }
   .room-facts dd {
     margin: 3px 0 0;
     color: #718083;
-    font-size: 8px;
+    font-size: 16px;
     text-transform: uppercase;
   }
   .identity {
     margin: 13px 0 0;
     color: #718083;
-    font: 8px 'Space Mono', monospace;
+    font: 16px 'Space Mono', monospace;
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
@@ -2083,7 +2093,7 @@
     background: #0d1213;
   }
   .seats li.claimed { border-color: #4c5a46; color: #aeb8b6; background: #121a17; }
-  .seat-number { color: #5f6d70; font: 8px 'Space Mono', monospace; }
+  .seat-number { color: #5f6d70; font: 16px 'Space Mono', monospace; }
   .robot-token {
     display: grid;
     width: 40px;
@@ -2092,19 +2102,19 @@
     border: 1px solid #839d2b;
     color: #101510;
     background: #d2ff37;
-    font: 700 10px 'Space Mono', monospace;
+    font: 700 20px 'Space Mono', monospace;
   }
   .robot-token.empty { border-color: #303b3e; color: #4f5b5e; background: transparent; }
   .seat-name { display: grid; min-width: 0; gap: 3px; }
   .seat-name strong {
     overflow: hidden;
     color: #e7ede8;
-    font-size: 12px;
+    font-size: 24px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .seat-name small { color: #718083; font: 7px 'Space Mono', monospace; text-transform: uppercase; }
-  .seat-state { color: #637174; font: 7px 'Space Mono', monospace; text-transform: uppercase; }
+  .seat-name small { color: #718083; font: 14px 'Space Mono', monospace; text-transform: uppercase; }
+  .seat-state { color: #637174; font: 14px 'Space Mono', monospace; text-transform: uppercase; }
   .claimed .seat-state { color: #d2ff37; }
   .room-ready {
     margin: 10px 0 0;
@@ -2112,7 +2122,7 @@
     border: 1px solid #354245;
     color: #829093;
     background: #101617;
-    font: 8px 'Space Mono', monospace;
+    font: 16px 'Space Mono', monospace;
     letter-spacing: 0.04em;
     text-transform: uppercase;
   }
@@ -2130,7 +2140,7 @@
     display: grid;
     gap: 4px;
     color: #819093;
-    font: 8px 'Space Mono', monospace;
+    font: 16px 'Space Mono', monospace;
     text-transform: uppercase;
   }
   .race-config input, .race-config select {
@@ -2141,34 +2151,36 @@
     border-radius: 0;
     color: #edf3ed;
     background: #101718;
-    font: 9px 'Space Mono', monospace;
+    font: 18px 'Space Mono', monospace;
   }
   .race-config button, .race-config p { grid-column: 1 / -1; }
   .race-config p {
     margin: 0;
     color: #839194;
-    font: 8px/1.4 'Space Mono', monospace;
+    font: 16px/1.4 'Space Mono', monospace;
     text-transform: uppercase;
   }
   .race-config .configuration-lock { color: #d2ff37; }
   .configured-race {
     display: grid;
     min-height: 0;
-    grid-template-columns: minmax(500px, 1.3fr) minmax(300px, .7fr);
+    grid-template-columns: minmax(320px, .7fr) minmax(600px, 1.3fr);
     gap: clamp(20px, 4vw, 54px);
+    overflow: hidden;
     padding: 20px 0;
   }
   .setup-summary {
-    align-self: center;
+    align-self: stretch;
     min-width: 0;
+    min-height: 0;
+    overflow: auto;
   }
-  .setup-summary h1 { font-size: clamp(42px, 4.6vw, 64px); }
+  .setup-summary h1 { font-size: clamp(84px, 9.2vw, 128px); }
   .setup-summary h1 em { color: #d2ff37; -webkit-text-stroke: 0; }
   .setup-summary .lede strong { color: #eef4ee; font-family: 'Space Mono', monospace; }
   .setup-summary.resolution-active .setup-order.compact { display: none; }
   .setup-summary.next-turn-programming .lede,
   .setup-summary.next-turn-programming .setup-facts,
-  .setup-summary.next-turn-programming .epoch-state,
   .setup-summary.next-turn-programming .reentry-policy,
   .setup-summary.next-turn-programming .board-phase {
     display: none;
@@ -2176,7 +2188,7 @@
   .epoch-state {
     margin: 5px 0 0;
     color: #718083;
-    font: 7px 'Space Mono', monospace;
+    font: 14px 'Space Mono', monospace;
     text-transform: uppercase;
   }
   .reconnect-state {
@@ -2186,7 +2198,7 @@
     border-left: 2px solid #d2ff37;
     color: #a9b6b3;
     background: #17201a;
-    font: 7px 'Space Mono', monospace;
+    font: 14px 'Space Mono', monospace;
     text-transform: uppercase;
   }
   .reconnect-state button {
@@ -2197,7 +2209,7 @@
     min-height: 0;
     padding: 0 4px;
     border-color: #8b9d53;
-    font-size: 6px;
+    font-size: 12px;
   }
   .setup-facts {
     display: grid;
@@ -2207,8 +2219,8 @@
     border-bottom: 1px solid #344043;
   }
   .setup-facts div { padding: 9px 4px; }
-  .setup-facts dt { color: #d2ff37; font: 700 16px 'Space Mono', monospace; }
-  .setup-facts dd { margin: 2px 0 0; color: #718083; font-size: 8px; text-transform: uppercase; }
+  .setup-facts dt { color: #d2ff37; font: 700 32px 'Space Mono', monospace; }
+  .setup-facts dd { margin: 2px 0 0; color: #718083; font-size: 16px; text-transform: uppercase; }
   .setup-order {
     display: grid;
     gap: 4px;
@@ -2226,14 +2238,14 @@
     border: 1px solid #354245;
     background: #101617;
   }
-  .setup-order li > span { grid-row: 1 / 3; color: #d2ff37; font: 700 10px 'Space Mono', monospace; }
-  .setup-order strong { color: #e7ede8; font-size: 11px; }
-  .setup-order small { grid-column: 2 / 4; color: #778487; font: 7px 'Space Mono', monospace; text-transform: uppercase; }
-  .setup-order em { color: #ffcf4b; font: 7px 'Space Mono', monospace; font-style: normal; text-transform: uppercase; }
+  .setup-order li > span { grid-row: 1 / 3; color: #d2ff37; font: 700 20px 'Space Mono', monospace; }
+  .setup-order strong { color: #e7ede8; font-size: 22px; }
+  .setup-order small { grid-column: 2 / 4; color: #778487; font: 14px 'Space Mono', monospace; text-transform: uppercase; }
+  .setup-order em { color: #ffcf4b; font: 14px 'Space Mono', monospace; font-style: normal; text-transform: uppercase; }
   .archive-note {
     margin: 10px 0 0;
     color: #778487;
-    font-size: 10px;
+    font-size: 20px;
     line-height: 1.4;
   }
   .setup-order.compact { max-height: 105px; }
@@ -2246,10 +2258,13 @@
     padding-top: 9px;
     border-top: 1px solid #344043;
   }
-  .setup-summary.program-editing .lede,
-  .setup-summary.program-editing .setup-facts,
-  .setup-summary.program-editing .epoch-state,
-  .setup-summary.program-editing > .archive-note {
+  .setup-summary:has(.program-console) .lede,
+  .setup-summary:has(.program-console) .setup-facts,
+  .setup-summary:has(.program-console) > .archive-note {
+    display: none;
+  }
+  .setup-summary:has(.program-console) > .eyebrow,
+  .setup-summary:has(.program-console) > h1 {
     display: none;
   }
   .program-head {
@@ -2260,10 +2275,10 @@
   .program-head h2 {
     margin: 0;
     color: #eef4ee;
-    font: 700 10px 'Space Mono', monospace;
+    font: 700 20px 'Space Mono', monospace;
     text-transform: uppercase;
   }
-  .program-head span { color: #d2ff37; font: 8px 'Space Mono', monospace; text-transform: uppercase; }
+  .program-head span { color: #d2ff37; font: 16px 'Space Mono', monospace; text-transform: uppercase; }
   .program-hand {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2290,11 +2305,13 @@
     top: 3px;
     right: 4px;
     color: #ffcf4b;
-    font: 7px 'Space Mono', monospace;
+    font: 14px 'Space Mono', monospace;
   }
   .program-hand strong {
+    min-width: 0;
+    max-width: 100%;
     overflow: hidden;
-    font: 700 7px 'Space Mono', monospace;
+    font: 700 14px 'Space Mono', monospace;
     text-overflow: ellipsis;
     text-transform: uppercase;
     white-space: nowrap;
@@ -2315,7 +2332,7 @@
     overflow: hidden;
     border: 1px solid #354245;
     color: #788588;
-    font: 6px 'Space Mono', monospace;
+    font: 12px 'Space Mono', monospace;
     text-overflow: ellipsis;
     text-transform: uppercase;
     white-space: nowrap;
@@ -2334,7 +2351,7 @@
     display: grid;
     gap: 2px;
     color: #ffcf4b;
-    font: 6px 'Space Mono', monospace;
+    font: 12px 'Space Mono', monospace;
     text-transform: uppercase;
   }
   .register-order-controls select {
@@ -2343,34 +2360,31 @@
     border: 1px solid #536164;
     color: #eef4ee;
     background: #11191a;
-    font: 7px 'Space Mono', monospace;
+    font: 14px 'Space Mono', monospace;
   }
   .register-order-controls button {
     min-height: 26px;
     padding: 0 4px;
-    font-size: 6px;
+    font-size: 12px;
   }
   .preview-note, .submission-state {
     margin: 0;
     color: #778487;
-    font-size: 8px;
+    font-size: 16px;
     line-height: 1.35;
   }
   .conservation {
     margin: 0;
     color: #ffcf4b;
-    font: 7px 'Space Mono', monospace;
+    font: 14px 'Space Mono', monospace;
     text-transform: uppercase;
   }
   .option-catalog {
-    position: absolute;
-    z-index: 4;
-    top: 0;
-    right: 46px;
-    width: 46%;
+    position: static;
+    width: 100%;
     border: 1px solid #465356;
     color: #91a09f;
-    font: 7px 'Space Mono', monospace;
+    font: 14px 'Space Mono', monospace;
   }
   .option-catalog summary { padding: 5px; color: #d2ff37; cursor: pointer; text-transform: uppercase; }
   .option-catalog ol {
@@ -2399,11 +2413,11 @@
     padding: 4px 5px;
     border: 1px solid #465356;
     color: #91a09f;
-    font: 7px 'Space Mono', monospace;
+    font: 14px 'Space Mono', monospace;
     text-transform: uppercase;
   }
   .power-control > div { display: flex; gap: 3px; }
-  .power-control button { flex: 1; min-height: 25px; padding: 0 4px; font-size: 6px; }
+  .power-control button { flex: 1; min-height: 25px; padding: 0 4px; font-size: 12px; }
   .submission-state {
     padding: 9px;
     border: 1px solid #53613b;
@@ -2425,12 +2439,12 @@
     padding: 4px 6px;
     border: 1px solid #354245;
     color: #7f8d8f;
-    font: 7px 'Space Mono', monospace;
+    font: 14px 'Space Mono', monospace;
     text-transform: uppercase;
   }
   .opponent-programs strong { color: #eef4ee; }
   .deadline { gap: 7px; border-color: #8b7130; color: #ffcf4b; }
-  .deadline button { min-height: 28px; padding: 0 6px; font-size: 7px; }
+  .deadline button { min-height: 28px; padding: 0 6px; font-size: 14px; }
   .resolution-console {
     display: grid;
     gap: 5px;
@@ -2441,7 +2455,7 @@
   .resolution-console h2 {
     margin: 0;
     color: #d2ff37;
-    font: 700 8px 'Space Mono', monospace;
+    font: 700 16px 'Space Mono', monospace;
     text-transform: uppercase;
   }
   .robot-state {
@@ -2460,7 +2474,7 @@
     padding: 3px 5px;
     border: 1px solid #354245;
     color: #91a09f;
-    font: 7px 'Space Mono', monospace;
+    font: 14px 'Space Mono', monospace;
     animation: none;
   }
   .robot-state strong { color: #eef4ee; }
@@ -2472,13 +2486,13 @@
     padding: 5px;
     border: 1px solid #8b7130;
   }
-  .reentry-policy { margin: 0; color: #778487; font-size: 7px; line-height: 1.3; }
-  .board-phase { margin: 0; color: #6e9691; font-size: 7px; line-height: 1.3; }
+  .reentry-policy { margin: 0; color: #778487; font-size: 14px; line-height: 1.3; }
+  .board-phase { margin: 0; color: #6e9691; font-size: 14px; line-height: 1.3; }
   .reentry-choice label {
     display: grid;
     gap: 2px;
     color: #ffcf4b;
-    font: 7px 'Space Mono', monospace;
+    font: 14px 'Space Mono', monospace;
     text-transform: uppercase;
   }
   .reentry-choice .reentry-power {
@@ -2492,21 +2506,21 @@
     border: 1px solid #536164;
     color: #eef4ee;
     background: #11191a;
-    font: 8px 'Space Mono', monospace;
+    font: 16px 'Space Mono', monospace;
   }
-  .reentry-choice button { min-height: 28px; padding: 0 6px; font-size: 7px; }
-  .reentry-wait { margin: 0; color: #ffcf4b; font-size: 8px; }
+  .reentry-choice button { min-height: 28px; padding: 0 6px; font-size: 14px; }
+  .reentry-wait { margin: 0; color: #ffcf4b; font-size: 16px; }
   .race-summary {
     display: grid;
     gap: 4px;
     padding: 5px;
     border: 1px solid #d2ff37;
     color: #91a09f;
-    font: 7px 'Space Mono', monospace;
+    font: 14px 'Space Mono', monospace;
     text-transform: uppercase;
   }
-  .race-summary strong { color: #d2ff37; font-size: 9px; }
-  .race-summary button { min-height: 28px; padding: 0 6px; font-size: 7px; }
+  .race-summary strong { color: #d2ff37; font-size: 18px; }
+  .race-summary button { min-height: 28px; padding: 0 6px; font-size: 14px; }
   .resolution-console ol {
     display: grid;
     gap: 2px;
@@ -2521,16 +2535,16 @@
     border-left: 2px solid #536164;
     color: #91a09f;
     background: #0d1314;
-    font-size: 8px;
+    font-size: 16px;
     line-height: 1.25;
     animation: trace-in 180ms ease-out both;
     animation-delay: calc(var(--trace-index) * 18ms);
   }
-  .resolution-console li span { color: #ffcf4b; font: 7px 'Space Mono', monospace; }
+  .resolution-console li span { color: #ffcf4b; font: 14px 'Space Mono', monospace; }
   .full-resolution summary {
     color: #91a09f;
     cursor: pointer;
-    font: 7px 'Space Mono', monospace;
+    font: 14px 'Space Mono', monospace;
     text-transform: uppercase;
   }
   .full-resolution:not([open]) > ol { display: none; }
@@ -2544,9 +2558,15 @@
     border-top: 1px solid #344043;
     color: #647174;
     font-family: 'Space Mono', monospace;
-    font-size: 8px;
+    font-size: 16px;
     letter-spacing: 0.04em;
     text-transform: uppercase;
+  }
+  footer span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   footer span:nth-child(2) { color: #95a3a1; }
 
@@ -2558,56 +2578,57 @@
       padding-left: max(14px, env(safe-area-inset-left));
     }
     .masthead { align-items: center; }
-    .brand { gap: 9px; font-size: 13px; }
+    .brand { gap: 9px; font-size: 26px; }
     .brand-mark { grid-template-columns: repeat(3, 4px); gap: 2px; padding: 7px; }
     .brand-mark i { width: 4px; height: 4px; }
-    .network { max-width: 125px; margin-left: auto; font-size: 8px; text-align: right; }
+    .network { max-width: 125px; margin-left: auto; font-size: 16px; text-align: right; }
     .hero {
       display: grid;
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
       grid-template-rows: auto minmax(0, 1fr);
       gap: 15px;
       padding: 15px 0 12px;
     }
     .copy { display: grid; grid-template-columns: 1fr auto; align-items: end; }
-    .eyebrow { grid-column: 1 / -1; margin-bottom: 9px; font-size: 8px; }
-    h1 { font-size: clamp(35px, 11vw, 48px); line-height: 0.9; }
-    .lede { align-self: center; max-width: 190px; margin: 0 0 0 16px; font-size: 11px; line-height: 1.35; }
+    .eyebrow { grid-column: 1 / -1; margin-bottom: 9px; font-size: 16px; }
+    h1 { font-size: clamp(70px, 22vw, 96px); line-height: 0.9; }
+    .lede { align-self: center; max-width: 190px; margin: 0 0 0 16px; font-size: 22px; line-height: 1.35; }
     .actions { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; margin-top: 13px; }
     .actions p { display: none; }
-    button { min-height: 38px; padding: 0 10px; font-size: 9px; }
+    button { min-height: 38px; padding: 0 10px; font-size: 18px; }
     .facts { grid-column: 1 / -1; margin-top: 12px; }
     .facts div { padding: 7px 3px 7px 0; }
-    .facts dt { font-size: 14px; }
-    .facts dd { font-size: 8px; }
+    .facts dt { font-size: 28px; }
+    .facts dd { font-size: 16px; }
     .telemetry { align-self: stretch; min-height: 0; padding: 9px; box-shadow: 10px 12px 0 rgba(0,0,0,.16); }
-    .telemetry-head { margin-bottom: 6px; font-size: 7px; }
+    .telemetry-head { margin-bottom: 6px; font-size: 14px; }
     .factory { height: calc(100% - 91px); min-height: 150px; }
     .registers { gap: 4px; margin-top: 6px; }
     .registers li { min-height: 75px; padding: 5px; }
-    .registers strong { font-size: 17px; }
-    .registers li > span:nth-of-type(2) { font-size: 7px; }
-    .registers small, .register-number { font-size: 6px; }
+    .registers strong { font-size: 34px; }
+    .registers li > span:nth-of-type(2) { font-size: 14px; }
+    .registers small, .register-number { font-size: 12px; }
     footer span:first-child { display: none; }
-    footer { font-size: 7px; }
+    footer { font-size: 14px; }
 
     .join-panel { grid-column: 1 / -1; gap: 8px; margin-top: 12px; padding: 10px; }
     .robot-options { grid-template-columns: repeat(4, 1fr); }
-    .robot-options button { min-height: 35px; font-size: 7px; }
+    .robot-options button { min-height: 35px; font-size: 14px; }
     .lobby {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
       grid-template-rows: auto minmax(0, 1fr);
       gap: 12px;
       padding: 14px 0 10px;
     }
     .room-console {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      min-width: 0;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       column-gap: 12px;
       align-items: end;
     }
     .room-console .eyebrow { grid-column: 1 / -1; }
-    .room-console h1 { font-size: 34px; line-height: 0.88; }
+    .room-console h1 { font-size: 68px; line-height: 0.88; }
     .room-console .lede { align-self: center; margin: 0; }
     .room-actions { margin-top: 10px; }
     .room-facts { margin-top: 10px; }
@@ -2621,28 +2642,27 @@
       box-shadow: 10px 12px 0 rgba(0,0,0,.16);
     }
     .configured-race {
-      grid-template-columns: minmax(0, 1fr) 190px;
+      grid-template-columns: 220px minmax(0, 1fr);
       gap: 10px;
       padding: 10px 0;
     }
     .setup-summary .eyebrow { margin-bottom: 7px; }
-    .setup-summary h1 { font-size: 28px; }
-    .setup-summary .lede { max-width: none; margin: 8px 0 0; font-size: 9px; }
+    .setup-summary h1 { font-size: 56px; }
+    .setup-summary .lede { max-width: none; margin: 8px 0 0; font-size: 18px; }
     .setup-facts { margin-top: 8px; }
     .setup-facts div { padding: 5px 2px; }
-    .setup-facts dt { font-size: 12px; }
+    .setup-facts dt { font-size: 24px; }
     .setup-order { max-height: 155px; margin-top: 7px; }
     .setup-order.compact { max-height: 76px; }
     .setup-order li { grid-template-columns: 24px minmax(0, 1fr); padding: 5px; }
     .setup-order em { grid-column: 2; }
-    .archive-note { margin-top: 6px; font-size: 8px; }
+    .archive-note { margin-top: 6px; font-size: 16px; }
     .program-console { margin-top: 6px; padding-top: 6px; }
     .program-head { gap: 4px; min-width: 0; }
     .program-head h2 { min-width: 0; }
     .program-head span { flex: none; white-space: nowrap; }
     .setup-summary.resolution-active .lede,
     .setup-summary.resolution-active > .archive-note { display: none; }
-    .setup-summary.resolution-active .epoch-state { display: none; }
     .setup-summary.resolution-active .setup-order.compact { display: none; }
     .setup-summary.resolution-active .resolution-console ol { max-height: 70px; }
     .setup-summary.resolution-active:has(.robot-options-owned) .resolution-console > ol {
@@ -2677,16 +2697,19 @@
       gap: 5px;
       padding: 5px;
     }
-    .robot-token { width: 29px; height: 29px; font-size: 8px; }
-    .seat-name strong { font-size: 10px; }
+    .robot-token { width: 29px; height: 29px; font-size: 16px; }
+    .seat-name strong { font-size: 20px; }
     .seat-state { display: none; }
-    .room-ready { margin-top: 6px; padding: 6px 7px; font-size: 7px; }
+    .room-ready { margin-top: 6px; padding: 6px 7px; font-size: 14px; }
   }
 
   @media (max-height: 720px) and (max-width: 820px) {
     .lede, .facts { display: none; }
     .copy { grid-template-columns: 1fr; }
     .actions { margin-top: 9px; }
+  }
+  @media (min-width: 561px) and (max-width: 820px) {
+    .network { max-width: none; white-space: nowrap; }
   }
   @media (max-height: 560px) and (orientation: landscape) {
     .shell {
@@ -2698,14 +2721,14 @@
       padding-left: max(10px, env(safe-area-inset-left));
     }
     .masthead { align-items: center; }
-    .brand { gap: 6px; font-size: 10px; }
+    .brand { gap: 6px; font-size: 20px; }
     .brand-mark { grid-template-columns: repeat(3, 3px); gap: 2px; padding: 4px; }
     .brand-mark i { width: 3px; height: 3px; }
-    .network { max-width: 130px; margin-left: auto; font-size: 6px; text-align: right; }
+    .network { max-width: 130px; margin-left: auto; font-size: 12px; text-align: right; }
     footer {
       justify-content: center;
       border-top: 0;
-      font-size: 5px;
+      font-size: 10px;
     }
     footer span:first-child,
     footer span:last-child { display: none; }
@@ -2722,10 +2745,10 @@
     }
     .copy > .eyebrow {
       margin: 0 0 3px;
-      font-size: 6px;
+      font-size: 12px;
     }
     .copy h1 {
-      font-size: 27px;
+      font-size: 54px;
       line-height: .86;
     }
     .copy > .lede,
@@ -2739,7 +2762,7 @@
     .actions button {
       min-height: 27px;
       padding: 0 5px;
-      font-size: 7px;
+      font-size: 14px;
     }
     .telemetry {
       display: grid;
@@ -2751,7 +2774,7 @@
     }
     .telemetry-head {
       margin-bottom: 3px;
-      font-size: 6px;
+      font-size: 12px;
     }
     .factory {
       height: auto;
@@ -2765,42 +2788,42 @@
       min-height: 34px;
       padding: 2px;
     }
-    .registers strong { font-size: 10px; }
+    .registers strong { font-size: 20px; }
     .register-number,
     .registers small,
-    .registers li > span:nth-of-type(2) { font-size: 4px; }
+    .registers li > span:nth-of-type(2) { font-size: 8px; }
     .registers small { top: 2px; right: 2px; }
     .join-panel {
       gap: 4px;
       margin-top: 4px;
       padding: 5px;
     }
-    .form-head { font-size: 7px; }
+    .form-head { font-size: 14px; }
     button.close {
       width: 22px;
       min-height: 22px;
-      font-size: 14px;
+      font-size: 28px;
     }
     .join-panel label,
-    .join-panel legend { gap: 2px; font-size: 6px; }
+    .join-panel legend { gap: 2px; font-size: 12px; }
     .join-panel legend { margin-bottom: 2px; }
     .join-panel input {
       min-height: 25px;
       padding: 0 5px;
-      font-size: 8px;
+      font-size: 16px;
     }
     .robot-options { gap: 2px; }
     .robot-options button {
       min-height: 27px;
       gap: 2px;
       padding: 2px;
-      font-size: 5px;
+      font-size: 10px;
     }
-    .robot-options button span { font-size: 6px; }
+    .robot-options button span { font-size: 12px; }
     .join-panel > button[type='submit'] {
       min-height: 25px;
       padding: 0 4px;
-      font-size: 6px;
+      font-size: 12px;
     }
 
     .lobby {
@@ -2822,7 +2845,7 @@
       display: none;
     }
     .room-console h1 {
-      font-size: 22px;
+      font-size: 44px;
       line-height: .85;
     }
     .room-actions {
@@ -2832,26 +2855,26 @@
     .room-actions button {
       min-height: 25px;
       padding: 0 5px;
-      font-size: 6px;
+      font-size: 12px;
     }
-    .text-link { font-size: 6px; }
+    .text-link { font-size: 12px; }
     .race-config {
       gap: 3px;
       margin-top: 5px;
       padding: 4px;
     }
     .race-config label,
-    .race-config p { gap: 2px; font-size: 6px; }
+    .race-config p { gap: 2px; font-size: 12px; }
     .race-config input,
     .race-config select {
       height: 24px;
       padding: 0 4px;
-      font-size: 6px;
+      font-size: 12px;
     }
     .race-config button {
       min-height: 24px;
       padding: 0 4px;
-      font-size: 6px;
+      font-size: 12px;
     }
     .seat-console {
       display: grid;
@@ -2873,22 +2896,22 @@
       padding: 2px;
     }
     .seat-number,
-    .seat-name small { font-size: 5px; }
+    .seat-name small { font-size: 10px; }
     .robot-token {
       width: 21px;
       height: 21px;
-      font-size: 6px;
+      font-size: 12px;
     }
-    .seat-name strong { font-size: 7px; }
+    .seat-name strong { font-size: 14px; }
     .seat-state { display: none; }
     .room-ready {
       margin-top: 2px;
       padding: 2px 3px;
-      font-size: 5px;
+      font-size: 10px;
     }
 
     .configured-race {
-      grid-template-columns: minmax(0, 1fr) minmax(330px, .9fr);
+      grid-template-columns: minmax(280px, .72fr) minmax(0, 1.28fr);
       gap: 7px;
       padding: 5px 0;
     }
@@ -2908,9 +2931,11 @@
     }
     .program-console {
       display: grid;
+      max-height: 100%;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 2px;
       margin: 0;
+      overflow: hidden;
       padding: 0;
       border: 0;
     }
@@ -2929,18 +2954,18 @@
       display: none;
     }
     .program-head h2,
-    .resolution-console h2 { font-size: 7px; }
-    .program-head span { font-size: 6px; }
+    .resolution-console h2 { font-size: 14px; }
+    .program-head span { font-size: 12px; }
     .power-control {
       grid-column: 1 / -1;
       min-height: 24px;
       padding: 2px;
-      font-size: 6px;
+      font-size: 12px;
     }
     .power-control[data-can-respond='false'] { display: none; }
     .power-control button {
       min-height: 21px;
-      font-size: 5px;
+      font-size: 10px;
     }
     .program-hand {
       grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -2949,16 +2974,16 @@
     .program-hand button {
       min-height: 24px;
       padding: 8px 1px 1px;
-      font-size: 6px;
+      font-size: 12px;
     }
-    .program-hand button small { top: 1px; left: 2px; font-size: 5px; }
+    .program-hand button small { top: 1px; left: 2px; font-size: 10px; }
     .chosen-registers {
       grid-column: 1 / -1;
       gap: 2px;
     }
     .chosen-registers li {
       min-height: 18px;
-      font-size: 5px;
+      font-size: 10px;
     }
     .register-order-controls {
       grid-template-columns: minmax(0, 1fr) repeat(3, 24px);
@@ -2969,16 +2994,16 @@
     .register-order-controls select,
     .register-order-controls button {
       min-height: 22px;
-      font-size: 6px;
+      font-size: 12px;
     }
     .program-console > button {
       min-height: 23px;
       padding: 0 4px;
-      font-size: 6px;
+      font-size: 12px;
     }
     .submission-state {
       padding: 3px;
-      font-size: 6px;
+      font-size: 12px;
     }
     .opponent-programs {
       gap: 2px;
@@ -2988,11 +3013,11 @@
     .deadline {
       min-height: 21px;
       padding: 2px 4px;
-      font-size: 6px;
+      font-size: 12px;
     }
     .deadline button {
       min-height: 20px;
-      font-size: 6px;
+      font-size: 12px;
     }
 
     .setup-summary.resolution-active .program-head,
@@ -3002,22 +3027,27 @@
       display: none;
     }
     .resolution-console {
+      align-self: stretch;
       gap: 2px;
+      height: 100%;
+      max-height: 100%;
+      overflow: hidden;
       padding: 0;
       border: 0;
+      line-height: 1;
     }
     .robot-state { gap: 2px; }
     .robot-state li {
       min-height: 19px;
       padding: 2px 3px;
-      font-size: 6px;
+      font-size: 12px;
     }
     .board-phase,
     .full-resolution {
       display: none;
     }
-    .setup-summary.resolution-active .resolution-console > ol {
-      max-height: 40px;
+    .setup-summary.resolution-active .resolution-console:has(.race-summary) > ol {
+      display: none;
     }
     .reentry-choice {
       gap: 2px;
@@ -3027,26 +3057,97 @@
     .reentry-choice button,
     .race-summary button {
       min-height: 22px;
-      font-size: 6px;
+      font-size: 12px;
     }
     .race-summary {
       gap: 2px;
       padding: 3px;
-      font-size: 6px;
+      font-size: 12px;
     }
-    .race-summary strong { font-size: 8px; }
+    .race-summary strong { font-size: 16px; }
   }
   @media (max-width: 560px) {
-    .configured-race {
-      grid-template-columns: minmax(0, 1fr) 145px;
+    .masthead {
+      display: grid;
+      width: 100%;
+      max-width: 100%;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 125px);
     }
-    .setup-summary h1 { font-size: 22px; }
-    .setup-summary .lede { font-size: 8px; }
+    .masthead > * { min-width: 0; max-width: 100%; }
+    .brand {
+      min-width: 0;
+      overflow: hidden;
+    }
+    .brand > span:last-child {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .brand small { display: none; }
+    .network { width: 100%; max-width: 125px; max-height: 100%; overflow: hidden; }
+    .hero:has(.join-panel) {
+      grid-template-rows: minmax(0, 1fr);
+    }
+    .hero:has(.join-panel) .copy {
+      display: block;
+      min-height: 0;
+    }
+    .hero:has(.join-panel) .copy > .eyebrow,
+    .hero:has(.join-panel) .copy > h1,
+    .hero:has(.join-panel) .copy > .lede,
+    .hero:has(.join-panel) .copy > .facts,
+    .hero:has(.join-panel) > .telemetry {
+      display: none;
+    }
+    .hero:has(.join-panel) .join-panel { margin-top: 0; }
+    .hero:not(:has(.join-panel)) .copy {
+      min-width: 0;
+      grid-template-columns: minmax(0, 1fr);
+      overflow: hidden;
+    }
+    .hero:not(:has(.join-panel)) .lede {
+      max-width: none;
+      margin: 12px 0 0;
+    }
+    .hero:not(:has(.join-panel)) .factory { display: none; }
+    .hero:not(:has(.join-panel)) .telemetry {
+      grid-template-rows: auto auto;
+      align-self: end;
+    }
+    .room-console { display: block; }
+    .room-console > .eyebrow,
+    .room-console > .lede {
+      display: none;
+    }
+    .room-console > h1 {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+    }
+    .preview-note {
+      max-height: 4.05em;
+      overflow: auto;
+    }
+    .configured-race {
+      grid-template-columns: 145px minmax(0, 1fr);
+    }
+    .setup-summary h1 { font-size: 44px; }
+    .setup-summary .lede { font-size: 16px; }
     .setup-order small { display: none; }
     .setup-summary.program-editing h1 {
       margin-bottom: 2px;
-      font-size: 18px;
+      font-size: 36px;
       line-height: 0.9;
+    }
+    .configured-race:has(.program-console) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .configured-race:has(.program-console) :global(.course-panel) {
+      display: none;
     }
   }
 
