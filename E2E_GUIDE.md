@@ -79,6 +79,14 @@ five board-laser hits, gains an exact random register lock, repeats the shutdown
 once, and powers up with the replacement lock retained. The observer view is
 asserted at the announcement and final barrier.
 
+Scenarios 011–013 complete the ordinary race path: public face-up Option
+ownership, all 26 executable card behaviors, and a twelve-turn Risky Exchange
+race through shutdown, destruction, Option loss, re-entry, victory, and
+rematch. Scenarios 014–015 inspect all ten board faces and all 34 course
+diagrams in product. Scenario 014 completes the compiled multi-board Around the
+World route; scenario 015 selects every expert/team entry and requires all
+fourteen exceptional-rule probes to pass.
+
 ## Scenario layout
 
 Use the next three-digit sequence and a short kebab-case capability name:

@@ -1,7 +1,7 @@
 # Robo Rally
 
-This repository is the documentation-first starting point for a realtime,
-browser-based implementation of the **2005 Avalon Hill edition** of Robo Rally
+This repository is a realtime, browser-based implementation of the **2005
+Avalon Hill edition** of Robo Rally
 for two to eight players. Players program five registers from one shared deck,
 resolve uniquely numbered cards from highest priority to lowest, survive the
 factory, and touch every flag in order.
@@ -35,10 +35,10 @@ and browser-level tracer bullets verified with Playwright.
 - Reconnect and replay from the complete immutable event history.
 - Keyboard-, touch-, phone-, tablet-, and desktop-friendly play.
 
-The first complete race will use **Risky Exchange**, the published medium course
-on the Exchange board for two to eight players. Later slices add the remaining
-board faces, Option cards, expert variants, team courses, and multi-board
-courses without replacing the real multiplayer path with a mock.
+The first complete production race uses **Risky Exchange**, the published
+medium course on the Exchange board for two to eight players. The same product
+also exposes the reviewed remaining board faces, Option cards, expert variants,
+team courses, and compiled multi-board course geometry.
 
 ## Technical foundation
 
@@ -61,7 +61,7 @@ enforces legal actions and masks information from its local display.
 
 ## Development status
 
-The first five end-to-end tracer bullets are implemented. The foundation
+The first fifteen end-to-end tracer bullets are implemented. The foundation
 provides the static SvelteKit shell, repository verification, and retained
 GitHub Pages previews. Players can now create join links, claim one of eight
 unique robots, fill a two-to-eight-player room, reload, and reconstruct the
@@ -139,8 +139,23 @@ and
 [a ten-turn race through repairs, flags, victory, and rematch](tests/e2e/009-flags-archives-repairs-and-victory/README.md).
 The suite also includes
 [an ordered consecutive power down with factory damage and exact random locks](tests/e2e/010-power-down/README.md).
-The Option framework is the next slice in
-[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+Face-up Option ownership and finite Dock-order decisions are covered by
+[the Option framework](tests/e2e/011-option-card-framework/README.md), followed
+by [all 26 executable Option cards](tests/e2e/012-all-option-cards/README.md).
+The
+[complete Risky Exchange production race](tests/e2e/013-complete-risky-exchange-race/README.md)
+plays twelve turns through Options, shutdown, destruction, re-entry, all three
+flags, victory, and rematch. The catalog tracers then cover
+[all board faces and beginner courses](tests/e2e/014-all-board-faces-and-beginner-courses/README.md)
+and [all expert/team diagrams and exceptional rules](tests/e2e/015-expert-and-team-course-catalog/README.md).
+
+All eight factory faces and both Docking Bay faces are pinned by golden
+semantic hashes. All 34 printed course diagrams are pinned as one transform and
+flag-coordinate fixture. The in-product catalog previews the same manifests
+used by the geometry compiler, while fourteen named reducer probes execute each
+published exception family. Around the World supplies the representative
+multi-board race: rotated Docking Bay geometry connects both 12×12 faces and a
+wall/pit-safe route reaches Flags 1–3 in order.
 
 Nix is always available and is the mandatory entry point for every tooling,
 development, test, build, emulator, formatting, and dependency-management
