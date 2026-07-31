@@ -8,6 +8,8 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  startAfter,
+  Timestamp,
   type Firestore,
   type Unsubscribe
 } from 'firebase/firestore';
@@ -32,6 +34,140 @@ import {
 } from './room-model';
 
 const ROOM_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+export const ROOM_CACHE_VERSION = 1;
+
+export interface RoomEventCursor {
+  createdAt: number;
+  id: string;
+}
+
+export interface RoomEventCache {
+  cacheVersion: typeof ROOM_CACHE_VERSION;
+  gameId: string;
+  schemaVersion: typeof ROOM_SCHEMA_VERSION;
+  reducerVersion: typeof ROOM_REDUCER_VERSION;
+  cursor: RoomEventCursor | null;
+  events: RoomEvent[];
+}
+
+export interface RoomSyncStatus {
+  source: 'room-cache' | 'firestore-cache' | 'server';
+  hasPendingWrites: boolean;
+  eventCount: number;
+  cursor: RoomEventCursor | null;
+}
+
+type CacheStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+function roomCacheKey(gameId: string) {
+  return `roborally.room-events.v${ROOM_CACHE_VERSION}.${gameId}`;
+}
+
+function cursorForEvents(events: readonly RoomEvent[]): RoomEventCursor | null {
+  const last = [...events]
+    .filter((event): event is RoomEvent & { createdAt: number } => event.createdAt !== null)
+    .sort(
+      (left, right) =>
+        left.createdAt - right.createdAt || left.id.localeCompare(right.id)
+    )
+    .at(-1);
+  return last ? { createdAt: last.createdAt, id: last.id } : null;
+}
+
+function validCachedEvent(value: unknown): value is RoomEvent {
+  if (!value || typeof value !== 'object') return false;
+  const event = value as Partial<RoomEvent>;
+  return (
+    typeof event.id === 'string' &&
+    typeof event.type === 'string' &&
+    typeof event.actorUid === 'string' &&
+    Number.isInteger(event.clientSeq) &&
+    (event.createdAt === null || typeof event.createdAt === 'number') &&
+    typeof event.schemaVersion === 'number' &&
+    typeof event.reducerVersion === 'string' &&
+    !!event.payload &&
+    typeof event.payload === 'object'
+  );
+}
+
+export function readRoomEventCache(
+  roomCode: string,
+  storage: CacheStorage = localStorage
+): RoomEventCache | null {
+  const gameId = gameIdForCode(roomCode);
+  const key = roomCacheKey(gameId);
+  try {
+    const raw = storage.getItem(key);
+    if (!raw) return null;
+    const cache = JSON.parse(raw) as Partial<RoomEventCache>;
+    if (
+      cache.cacheVersion !== ROOM_CACHE_VERSION ||
+      cache.gameId !== gameId ||
+      cache.schemaVersion !== ROOM_SCHEMA_VERSION ||
+      cache.reducerVersion !== ROOM_REDUCER_VERSION ||
+      !Array.isArray(cache.events) ||
+      !cache.events.every(validCachedEvent)
+    ) {
+      storage.removeItem(key);
+      return null;
+    }
+    const events = orderCachedEvents(cache.events);
+    return {
+      cacheVersion: ROOM_CACHE_VERSION,
+      gameId,
+      schemaVersion: ROOM_SCHEMA_VERSION,
+      reducerVersion: ROOM_REDUCER_VERSION,
+      cursor: cursorForEvents(events),
+      events
+    };
+  } catch {
+    storage.removeItem(key);
+    return null;
+  }
+}
+
+export function writeRoomEventCache(
+  roomCode: string,
+  events: readonly RoomEvent[],
+  storage: CacheStorage = localStorage
+): RoomEventCache {
+  const gameId = gameIdForCode(roomCode);
+  const ordered = orderCachedEvents(events);
+  const cache: RoomEventCache = {
+    cacheVersion: ROOM_CACHE_VERSION,
+    gameId,
+    schemaVersion: ROOM_SCHEMA_VERSION,
+    reducerVersion: ROOM_REDUCER_VERSION,
+    cursor: cursorForEvents(ordered),
+    events: ordered
+  };
+  storage.setItem(roomCacheKey(gameId), JSON.stringify(cache));
+  return cache;
+}
+
+export function clearRoomEventCache(
+  roomCode: string,
+  storage: CacheStorage = localStorage
+) {
+  storage.removeItem(roomCacheKey(gameIdForCode(roomCode)));
+}
+
+function orderCachedEvents(events: readonly RoomEvent[]) {
+  return [...new Map(events.map((event) => [event.id, event])).values()].sort(
+    (left, right) => {
+      const leftTime = left.createdAt ?? Number.MAX_SAFE_INTEGER;
+      const rightTime = right.createdAt ?? Number.MAX_SAFE_INTEGER;
+      return leftTime - rightTime || left.id.localeCompare(right.id);
+    }
+  );
+}
+
+export function mergeRoomEventPages(
+  cachedEvents: readonly RoomEvent[],
+  deltaEvents: readonly RoomEvent[]
+) {
+  return orderCachedEvents([...cachedEvents, ...deltaEvents]);
+}
 
 export function createRoomCode(randomValues = crypto.getRandomValues(new Uint8Array(6))): string {
   return Array.from(randomValues, (value) => ROOM_ALPHABET[value % ROOM_ALPHABET.length]).join('');
@@ -71,7 +207,9 @@ function samePersistedEvent(
   );
 }
 
-export async function appendRoomEvent(
+const pendingActorWrites = new Map<string, Promise<void>>();
+
+async function appendRoomEventUnlocked(
   db: Firestore,
   user: User,
   roomCode: string,
@@ -99,6 +237,29 @@ export async function appendRoomEvent(
   }
 
   rememberClientSequence(gameId, user.uid, clientSeq);
+}
+
+export function appendRoomEvent(
+  db: Firestore,
+  user: User,
+  roomCode: string,
+  type: RoomEventType,
+  payload: RoomEventPayload
+): Promise<void> {
+  const queueKey = `${gameIdForCode(roomCode)}:${user.uid}`;
+  const previous = pendingActorWrites.get(queueKey) ?? Promise.resolve();
+  const next = previous
+    .catch(() => {
+      // A rejected write consumes no local sequence, so the next queued intent
+      // retries from the same persisted cursor.
+    })
+    .then(() => appendRoomEventUnlocked(db, user, roomCode, type, payload));
+  pendingActorWrites.set(queueKey, next);
+  const cleanup = () => {
+    if (pendingActorWrites.get(queueKey) === next) pendingActorWrites.delete(queueKey);
+  };
+  void next.then(cleanup, cleanup);
+  return next;
 }
 
 export async function createRoom(
@@ -219,22 +380,40 @@ export function subscribeRoom(
   db: Firestore,
   roomCode: string,
   onState: (state: RoomState) => void,
-  onError: (error: Error) => void
+  onError: (error: Error) => void,
+  onSync: (status: RoomSyncStatus) => void = () => {},
+  storage: CacheStorage = localStorage
 ): Unsubscribe {
   const gameId = gameIdForCode(roomCode);
-  const eventsQuery = query(
-    collection(db, `games/${gameId}/events`),
-    orderBy('createdAt'),
-    orderBy(documentId())
-  );
+  const cached = readRoomEventCache(roomCode, storage);
+  const mergedEvents = new Map((cached?.events ?? []).map((event) => [event.id, event]));
+  if (cached) {
+    onState(replayRoom(cached.events));
+    onSync({
+      source: 'room-cache',
+      hasPendingWrites: false,
+      eventCount: cached.events.length,
+      cursor: cached.cursor
+    });
+  }
+
+  const eventsCollection = collection(db, `games/${gameId}/events`);
+  const eventsQuery = cached?.cursor
+    ? query(
+        eventsCollection,
+        orderBy('createdAt'),
+        orderBy(documentId()),
+        startAfter(Timestamp.fromMillis(cached.cursor.createdAt), cached.cursor.id)
+      )
+    : query(eventsCollection, orderBy('createdAt'), orderBy(documentId()));
 
   return onSnapshot(
     eventsQuery,
     { includeMetadataChanges: true },
     (snapshot) => {
-      const events = snapshot.docs.map((snapshotDocument) => {
+      for (const snapshotDocument of snapshot.docs) {
         const data = snapshotDocument.data();
-        return {
+        mergedEvents.set(snapshotDocument.id, {
           id: snapshotDocument.id,
           type: data.type,
           payload: data.payload,
@@ -243,9 +422,24 @@ export function subscribeRoom(
           createdAt: data.createdAt?.toMillis?.() ?? null,
           schemaVersion: data.schemaVersion,
           reducerVersion: data.reducerVersion
-        } as RoomEvent;
-      });
+        } as RoomEvent);
+      }
+      const events = mergeRoomEventPages([], [...mergedEvents.values()]);
       onState(replayRoom(events));
+      const source = snapshot.metadata.fromCache ? 'firestore-cache' : 'server';
+      const hasPendingWrites = snapshot.metadata.hasPendingWrites;
+      const cache =
+        source === 'server' && !hasPendingWrites
+          ? writeRoomEventCache(roomCode, events, storage)
+          : {
+              cursor: cursorForEvents(events)
+            };
+      onSync({
+        source,
+        hasPendingWrites,
+        eventCount: events.length,
+        cursor: cache.cursor
+      });
     },
     onError
   );

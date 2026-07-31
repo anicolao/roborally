@@ -32,11 +32,16 @@
   } from '$lib/room-model';
   import type * as RoomService from '$lib/room-service';
 
-  type ConnectionState = 'connecting' | 'synced' | 'error';
+  type ConnectionState = 'connecting' | 'synced' | 'offline' | 'error';
   type ViewMode = 'landing' | 'create' | 'join' | 'room';
 
   let connectionState: ConnectionState = 'connecting';
   let connectionMessage = 'Connecting to the factory network';
+  let browserOnline = true;
+  let cacheHydrated = false;
+  let roomWatchGeneration = 0;
+  let synchronizedEventCount = 0;
+  let synchronizedCursor = '';
   let mode: ViewMode = 'landing';
   let services: FirebaseServices | undefined;
   let roomService: typeof RoomService | undefined;
@@ -177,15 +182,20 @@
 
   function watchRoom(code: string) {
     if (!services || !roomService) return;
+    const generation = ++roomWatchGeneration;
     unsubscribe?.();
     roomCode = normalizeRoomCode(code);
     joinCode = roomCode;
     roomState = emptyRoomState();
+    cacheHydrated = false;
+    synchronizedEventCount = 0;
+    synchronizedCursor = '';
     formError = '';
     unsubscribe = roomService.subscribeRoom(
       services.db,
       roomCode,
       (nextState) => {
+        if (generation !== roomWatchGeneration) return;
         roomState = nextState;
         if (mode === 'join' && !nextState.gameId) {
           formError = `Room ${roomCode} was not found.`;
@@ -198,16 +208,64 @@
         }
       },
       (error) => {
+        if (generation !== roomWatchGeneration) return;
         console.error(error);
-        formError = 'The immutable room stream could not be read.';
+        if (!navigator.onLine) {
+          connectionState = 'offline';
+          connectionMessage = `Room ${roomCode} cached · ${synchronizedEventCount} events`;
+        } else {
+          connectionState = 'error';
+          formError = 'The immutable room stream could not be read.';
+        }
+      },
+      (status) => {
+        if (generation !== roomWatchGeneration) return;
+        synchronizedEventCount = status.eventCount;
+        synchronizedCursor = status.cursor
+          ? `${status.cursor.createdAt}:${status.cursor.id}`
+          : '';
+        if (status.source === 'room-cache') cacheHydrated = true;
+        if (status.source === 'server') {
+          connectionState = 'synced';
+          connectionMessage = `Room ${roomCode} synced`;
+        } else if (!navigator.onLine) {
+          connectionState = 'offline';
+          connectionMessage = `Room ${roomCode} cached · ${status.eventCount} events`;
+        } else {
+          connectionState = 'connecting';
+          connectionMessage = `Room ${roomCode} replaying cache`;
+        }
       }
     );
+  }
+
+  function handleOffline() {
+    browserOnline = false;
+    if (mode !== 'room') return;
+    connectionState = 'offline';
+    connectionMessage = `Room ${roomCode} cached · ${synchronizedEventCount} events`;
+  }
+
+  function handleOnline() {
+    browserOnline = true;
+    if (mode !== 'room') return;
+    connectionState = 'connecting';
+    connectionMessage = `Room ${roomCode} reconnecting`;
+  }
+
+  function retryRoomFromServer() {
+    if (!roomService || !navigator.onLine || !roomCode) return;
+    roomService.clearRoomEventCache(roomCode);
+    connectionState = 'connecting';
+    connectionMessage = `Room ${roomCode} replaying from server`;
+    watchRoom(roomCode);
   }
 
   onMount(async () => {
     try {
       const { initializeFirebase } = await import('$lib/firebase');
       services = await initializeFirebase();
+      browserOnline = navigator.onLine;
       roomService = await import('$lib/room-service');
       identityLabel = deterministicIdentity(services.user.uid);
       connectionState = 'synced';
@@ -222,6 +280,8 @@
         mode = 'join';
         watchRoom(requestedRoom);
       }
+      window.addEventListener('offline', handleOffline);
+      window.addEventListener('online', handleOnline);
       clockInterval = setInterval(() => (clockNow = Date.now()), 250);
     } catch (error) {
       console.error(error);
@@ -232,6 +292,8 @@
 
   onDestroy(() => {
     unsubscribe?.();
+    window.removeEventListener('offline', handleOffline);
+    window.removeEventListener('online', handleOnline);
     if (clockInterval) clearInterval(clockInterval);
   });
 
@@ -534,7 +596,20 @@
 
     <div class="network">
       <span class:online={connectionState === 'synced'} class="signal" aria-hidden="true"></span>
-      <span role="status" data-status={connectionState}>{connectionMessage}</span>
+      <span
+        role="status"
+        data-status={connectionState}
+        data-cache-hydrated={cacheHydrated}
+        data-event-count={synchronizedEventCount}
+        data-cursor={synchronizedCursor}
+      >
+        {connectionMessage}
+      </span>
+      {#if connectionState === 'offline'}
+        <button type="button" onclick={retryRoomFromServer} disabled={!browserOnline}>
+          Replay from server
+        </button>
+      {/if}
     </div>
   </header>
 
@@ -579,6 +654,16 @@
           Race epoch {roomState.raceEpoch} · {roomState.raceSummaries.length} retained
           {roomState.raceSummaries.length === 1 ? 'summary' : 'summaries'}
         </p>
+        {#if cacheHydrated}
+          <p class="reconnect-state">
+            <span aria-label={`Cache + cursor replay verified · ${synchronizedEventCount} immutable events`}>
+              Cache + cursor · {synchronizedEventCount} events
+            </span>
+            <button type="button" aria-label="Replay from server" onclick={retryRoomFromServer}>
+              Replay
+            </button>
+          </p>
+        {/if}
         <ol class="setup-order compact" aria-label="Original Dock order">
           {#each roomState.setup.players as player}
             {@const robot = ROBOTS.find((entry) => entry.id === player.robotId)}
@@ -1230,6 +1315,15 @@
     box-shadow: 0 0 9px rgba(255, 184, 77, 0.55);
   }
   .signal.online { background: #d2ff37; box-shadow: 0 0 10px rgba(210, 255, 55, 0.6); }
+  .network button {
+    min-height: 24px;
+    padding: 0 7px;
+    border: 1px solid #ffb84d;
+    color: #ffcf75;
+    background: #151b1c;
+    font: 700 8px 'Space Mono', monospace;
+    text-transform: uppercase;
+  }
 
   .hero {
     display: grid;
@@ -1703,6 +1797,26 @@
     color: #718083;
     font: 7px 'Space Mono', monospace;
     text-transform: uppercase;
+  }
+  .reconnect-state {
+    position: relative;
+    margin: 5px 0 0;
+    padding: 5px 48px 5px 7px;
+    border-left: 2px solid #d2ff37;
+    color: #a9b6b3;
+    background: #17201a;
+    font: 7px 'Space Mono', monospace;
+    text-transform: uppercase;
+  }
+  .reconnect-state button {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    bottom: 3px;
+    min-height: 0;
+    padding: 0 4px;
+    border-color: #8b9d53;
+    font-size: 6px;
   }
   .setup-facts {
     display: grid;

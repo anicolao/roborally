@@ -61,7 +61,7 @@ enforces legal actions and masks information from its local display.
 
 ## Development status
 
-The first fifteen end-to-end tracer bullets are implemented. The foundation
+The first sixteen end-to-end tracer bullets are implemented. The foundation
 provides the static SvelteKit shell, repository verification, and retained
 GitHub Pages previews. Players can now create join links, claim one of eight
 unique robots, fill a two-to-eight-player room, reload, and reconstruct the
@@ -148,6 +148,11 @@ plays twelve turns through Options, shutdown, destruction, re-entry, all three
 flags, victory, and rematch. The catalog tracers then cover
 [all board faces and beginner courses](tests/e2e/014-all-board-faces-and-beginner-courses/README.md)
 and [all expert/team diagrams and exceptional rules](tests/e2e/015-expert-and-team-course-catalog/README.md).
+The
+[reconnect and replay tracer](tests/e2e/016-reconnect-timers-conflicts-and-versioning/README.md)
+then disconnects a browser while a simultaneous programming barrier closes,
+retains the last confirmed prefix offline, catches up from a Firestore cursor,
+reloads from the versioned cache, and converges through owner-ordered re-entry.
 
 All eight factory faces and both Docking Bay faces are pinned by golden
 semantic hashes. All 34 printed course diagrams are pinned as one transform and
@@ -156,6 +161,13 @@ used by the geometry compiler, while fourteen named reducer probes execute each
 published exception family. Around the World supplies the representative
 multi-board race: rotated Docking Bay geometry connects both 12×12 faces and a
 wall/pit-safe route reaches Flags 1–3 in order.
+
+Room clients persist only server-confirmed immutable events in a
+schema/reducer-versioned local cache. A reload projects that prefix
+immediately, requests only the ordered cursor delta, and de-duplicates by event
+ID. A visible scratch-replay control clears the cache and rebuilds from
+Firestore. Writes from the same actor are serialized so two rapid controls
+cannot claim the same client sequence.
 
 Nix is always available and is the mandatory entry point for every tooling,
 development, test, build, emulator, formatting, and dependency-management

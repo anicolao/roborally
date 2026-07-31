@@ -103,6 +103,26 @@ every prior ready event. The first event prefix in which all currently seated
 players are ready closes the barrier and derives the immutable setup. A race
 cannot be reconfigured or joined after that point.
 
+## Replay, conflicts, and reconnects
+
+The rules projection is a pure replay of the room's immutable events, ordered
+by server timestamp and then event ID. Event IDs include the actor UID and
+monotonic client sequence. Exact duplicate IDs are ignored; stale sequences,
+incompatible schema/reducer versions, and illegal actions produce diagnostics
+without partially changing game state.
+
+A syntactically valid next sequence is consumed even when its domain action is
+illegal. This keeps a rejected stale choice or simultaneous-barrier loser from
+permanently blocking that actor's later legal events. Same-actor browser writes
+are serialized, while events from different actors remain deterministically
+ordered by the canonical stream.
+
+For reconnects, a client may first project a version-compatible,
+server-confirmed cached prefix, then merge the Firestore cursor delta by stable
+event ID. This transport optimization does not alter game rules:
+cache-plus-cursor replay and a scratch read of the entire stream must produce
+exactly the same state and diagnostics.
+
 ## Turn overview
 
 Each turn follows this sequence:
