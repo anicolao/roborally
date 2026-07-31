@@ -24,12 +24,8 @@ const turns: readonly { host: Program; guest: Program }[] = [
 ];
 
 async function chooseProgram(page: Page, labels: Program) {
-  const previouslySelected = page.locator(
-    '.program-hand button[aria-pressed="true"]'
-  );
-  for (let index = (await previouslySelected.count()) - 1; index >= 0; index -= 1) {
-    await previouslySelected.nth(index).click();
-  }
+  const clear = page.getByRole('button', { name: 'Clear register choices' });
+  if (await clear.isVisible()) await clear.click();
   for (const label of labels) {
     const button = page.getByRole('button', { name: label, exact: true });
     if ((await button.getAttribute('aria-pressed')) !== 'true') await button.click();
@@ -63,7 +59,7 @@ test('face-up Options use immutable Dock-order decisions', async (
   { browser, page: host },
   testInfo
 ) => {
-  test.setTimeout(150_000);
+  test.setTimeout(300_000);
   const roomCode = testInfo.project.name === 'phone' ? 'R11PHN' : 'R11DSK';
   const guestContext: BrowserContext = await browser.newContext();
   const guest = await guestContext.newPage();

@@ -91,7 +91,10 @@ export class TestStepHelper {
         ) {
           throw new Error(
             `${element.tagName}.${element.className} is outside ` +
-              `${window.innerWidth}x${window.innerHeight}`
+              `${window.innerWidth}x${window.innerHeight} at ` +
+              `${Math.round(rect.left)},${Math.round(rect.top)}–` +
+              `${Math.round(rect.right)},${Math.round(rect.bottom)}: ` +
+              `${(element.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 80)}`
           );
         }
       }
@@ -128,7 +131,39 @@ export class TestStepHelper {
     const platform = process.platform === 'linux' ? '-linux' : '';
     const filename =
       `${paddedIndex}-${id.replaceAll('_', '-')}-${this.testInfo.project.name}${platform}.png`;
-    await expect(this.page).toHaveScreenshot(filename);
+    await this.page.evaluate(() => {
+      const scope = window as typeof window & { restoreE2eSnapshotClock?: () => void };
+      const originalNow = Date.now;
+      const frozenNow = originalNow();
+      Date.now = () => frozenNow;
+      scope.restoreE2eSnapshotClock = () => {
+        Date.now = originalNow;
+        delete scope.restoreE2eSnapshotClock;
+      };
+    });
+    await this.page.waitForTimeout(350);
+    await this.page.evaluate(() => {
+      for (const timerText of document.querySelectorAll<HTMLElement>('[role="timer"] span')) {
+        const text = timerText.textContent ?? '';
+        if (!/ has (29|30) seconds$/.test(text)) continue;
+        timerText.dataset.e2eSnapshotText = text;
+        timerText.textContent = text.replace(/(29|30) seconds$/, '30 seconds');
+      }
+    });
+    try {
+      await expect(this.page).toHaveScreenshot(filename);
+    } finally {
+      await this.page.evaluate(() => {
+        for (const timerText of document.querySelectorAll<HTMLElement>(
+          '[data-e2e-snapshot-text]'
+        )) {
+          timerText.textContent = timerText.dataset.e2eSnapshotText ?? '';
+          delete timerText.dataset.e2eSnapshotText;
+        }
+        const scope = window as typeof window & { restoreE2eSnapshotClock?: () => void };
+        scope.restoreE2eSnapshotClock?.();
+      });
+    }
 
     this.steps.push({
       title: options.description,

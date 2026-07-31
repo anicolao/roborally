@@ -86,7 +86,7 @@
         projectedRobot.poweredDown));
   $: programmingPlayer = currentPlayer && activeProgramming
     ? activeProgramming.players.find((player) => player.uid === currentPlayer.uid) ??
-      (currentPlayerPoweredDown
+      (currentPlayerPoweredDown || activeProgramming.phase === 'programmed'
         ? ({
             uid: currentPlayer.uid,
             damage: 0,
@@ -695,6 +695,13 @@
                 onclick={submitProgramCards}
                 disabled={pending || selectedProgramCardIds.length !== openRegisterCount}
               >Submit immutable program</button>
+              {#if selectedProgramCardIds.length > 0}
+                <button
+                  type="button"
+                  class="clear-program"
+                  onclick={() => (selectedProgramCardIds = [])}
+                >Clear register choices</button>
+              {/if}
             {/if}
 
             <ul class="opponent-programs" aria-label="Program submission status">
@@ -2101,6 +2108,9 @@
     .setup-summary.resolution-active .epoch-state { display: none; }
     .setup-summary.resolution-active .setup-order.compact { display: none; }
     .setup-summary.resolution-active .resolution-console ol { max-height: 70px; }
+    .setup-summary.resolution-active:has(.robot-options-owned) .resolution-console > ol {
+      display: none;
+    }
     .robot-state { grid-template-columns: minmax(0, 1fr); }
     .robot-state li { flex-wrap: wrap; overflow: hidden; }
     .robot-progress { min-width: 0; overflow-wrap: anywhere; }
