@@ -76,13 +76,19 @@
   let playbackPhase: PlaybackPhase = 'idle';
   let playbackCountdown = 3;
   let playbackRegister: number | null = null;
+  let playbackStage: ProgramPlayback['frames'][number]['stage'] | null = null;
+  let playbackActorUid: string | null = null;
+  let playbackCardId: ProgramCard['id'] | null = null;
   let playbackRobots: RaceRobotPosition[] | undefined;
   let playbackTrace: ProgramPlayback['frames'][number]['trace'] = [];
-  let playbackFrameCount = 5;
+  let playbackFrameIndex = 0;
+  let playbackFrameCount = 0;
+  let playbackProductionDurationMs = 2_000;
   let playbackKey = '';
   let playbackTimeScale = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' ? 0.01 : 1;
   let playbackTimers: ReturnType<typeof setTimeout>[] = [];
-  const PRODUCTION_REGISTER_PLAYBACK_MS = 3_000;
+  const PRODUCTION_PROGRAM_CARD_MS = 2_000;
+  const PRODUCTION_FACTORY_STAGE_MS = 1_000;
   const PRODUCTION_COUNTDOWN_STEP_MS = 1_000;
   const buildHash = (import.meta.env.VITE_GIT_HASH ?? 'local-development').slice(0, 8);
 
@@ -153,8 +159,20 @@
   $: openRegisterSlots =
     programmingPlayer?.registers.flatMap((register, index) => (register.locked ? [] : [index])) ?? [];
   $: playbackIsActive = playbackPhase === 'countdown' || playbackPhase === 'register';
-  $: registerPlaybackMs = Math.round(PRODUCTION_REGISTER_PLAYBACK_MS * playbackTimeScale);
+  $: playbackTransitionMs = Math.round(playbackProductionDurationMs * playbackTimeScale);
   $: countdownStepMs = Math.round(PRODUCTION_COUNTDOWN_STEP_MS * playbackTimeScale);
+  $: playbackCard = PROGRAM_CARDS.find(({ id }) => id === playbackCardId);
+  $: playbackStageLabel = playbackStage === 'program-card'
+    ? `${roomState.players.find(({ uid }) => uid === playbackActorUid)?.name ?? 'Robot'} · ${playbackCard?.action.replaceAll('-', ' ') ?? 'Program card'} · priority ${playbackCard?.priority ?? '—'}`
+    : playbackStage === 'express-conveyors'
+      ? 'Express conveyors'
+    : playbackStage === 'conveyors'
+        ? 'All conveyors'
+        : playbackStage === 'pushers'
+          ? 'Pushers'
+          : playbackStage === 'gears'
+            ? 'Gears · lasers · flags'
+            : '';
   $: presentedResolutionRobots = playbackRobots ?? roomState.resolution?.robots;
   $: visibleResolutionTrace = playbackIsActive
     ? playbackTrace
@@ -163,7 +181,7 @@
   $: resolutionAnnouncement = playbackPhase === 'countdown'
     ? `Programs locked. Movement begins in ${playbackCountdown}`
     : playbackPhase === 'register' && playbackRegister
-      ? `Turn ${roomState.resolution?.turnNumber}, register ${playbackRegister} of ${playbackFrameCount}: ${latestResolutionEntry?.text ?? 'executing'}`
+      ? `Turn ${roomState.resolution?.turnNumber}, register ${playbackRegister}, ${playbackStageLabel}: ${latestResolutionEntry?.text ?? 'executing'}`
       : latestResolutionEntry
         ? `Turn ${roomState.resolution?.turnNumber}, ${
             latestResolutionEntry.register <= 5
@@ -208,13 +226,23 @@
     playbackPhase = 'idle';
     playbackCountdown = 3;
     playbackRegister = null;
+    playbackStage = null;
+    playbackActorUid = null;
+    playbackCardId = null;
     playbackRobots = undefined;
     playbackTrace = [];
-    playbackFrameCount = 5;
+    playbackFrameIndex = 0;
+    playbackFrameCount = 0;
+    playbackProductionDurationMs = PRODUCTION_PROGRAM_CARD_MS;
   }
 
   function schedulePlayback(callback: () => void, delay: number) {
     playbackTimers.push(setTimeout(callback, delay));
+  }
+
+  function productionDurationForFrame(frame: ProgramPlayback['frames'][number]) {
+    if (frame.stage === 'program-card') return PRODUCTION_PROGRAM_CARD_MS;
+    return PRODUCTION_FACTORY_STAGE_MS;
   }
 
   function startProgramPlayback(key: string, playback: ProgramPlayback) {
@@ -229,20 +257,31 @@
     schedulePlayback(() => (playbackCountdown = 1), countdownStepMs * 2);
 
     const countdownDuration = countdownStepMs * 3;
+    let frameStart = countdownDuration;
     for (const [index, frame] of playback.frames.entries()) {
+      const productionDuration = productionDurationForFrame(frame);
       schedulePlayback(() => {
         playbackPhase = 'register';
         playbackRegister = frame.register;
+        playbackStage = frame.stage;
+        playbackActorUid = frame.actorUid;
+        playbackCardId = frame.cardId;
         playbackRobots = frame.robots;
         playbackTrace = frame.trace;
-      }, countdownDuration + registerPlaybackMs * index);
+        playbackFrameIndex = index + 1;
+        playbackProductionDurationMs = productionDuration;
+      }, frameStart);
+      frameStart += Math.round(productionDuration * playbackTimeScale);
     }
     schedulePlayback(() => {
       playbackPhase = 'complete';
       playbackRegister = null;
+      playbackStage = null;
+      playbackActorUid = null;
+      playbackCardId = null;
       playbackRobots = undefined;
       playbackTrace = [];
-    }, countdownDuration + registerPlaybackMs * playback.frames.length);
+    }, frameStart);
   }
 
   $: {
@@ -794,11 +833,14 @@
       aria-atomic="true"
       data-testid="register-playback"
       data-register={playbackRegister}
-      data-production-duration-ms={PRODUCTION_REGISTER_PLAYBACK_MS}
+      data-stage={playbackStage}
+      data-card-id={playbackCardId}
+      data-frame={playbackFrameIndex}
+      data-production-duration-ms={playbackProductionDurationMs}
     >
-      <strong>REGISTER {playbackRegister} OF {playbackFrameCount}</strong>
-      <span>{latestResolutionEntry?.text ?? 'Executing programmed movement'}</span>
-      <i style={`--playback-progress:${playbackRegister / playbackFrameCount}`}></i>
+      <strong>REGISTER {playbackRegister} / {playbackStageLabel}</strong>
+      <span>{latestResolutionEntry?.text ?? `${playbackStageLabel} resolved with no movement`}</span>
+      <i style={`--playback-progress:${playbackFrameIndex / playbackFrameCount}`}></i>
     </div>
   {/if}
 
@@ -808,7 +850,7 @@
         setup={roomState.setup}
         robots={presentedResolutionRobots}
         animateRobots={playbackIsActive}
-        registerDurationMs={registerPlaybackMs}
+        transitionDurationMs={playbackTransitionMs}
       />
       <aside
         class:resolution-active={!!roomState.resolution}
@@ -1099,7 +1141,7 @@
                   {playbackPhase === 'countdown'
                     ? 'programs locked'
                     : playbackPhase === 'register'
-                      ? `register ${playbackRegister} of ${playbackFrameCount}`
+                      ? `register ${playbackRegister} · ${playbackStageLabel}`
                       : roomState.resolution.phase === 'turn-complete'
                         ? 'complete'
                         : roomState.resolution.phase === 'race-finished'

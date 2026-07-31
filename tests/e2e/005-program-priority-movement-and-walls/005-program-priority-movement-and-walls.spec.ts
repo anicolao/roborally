@@ -29,7 +29,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     const steps = new TestStepHelper(host, testInfo);
     steps.setMetadata(
       'Resolve Program priority movement and walls',
-      'Two ordinary five-card programs cover every 2005 instruction class. A large synchronized countdown introduces five visible register animations before the deterministic trace proves descending priority, stepwise movement, an open board seam, and a wall that blocks from either side.'
+      'Two ordinary five-card programs cover every 2005 instruction class. A large synchronized countdown introduces priority-ordered Program card, conveyor, and factory-element animations for all five registers before the deterministic trace proves descending priority, stepwise movement, an open board seam, and a wall that blocks from either side.'
     );
 
     await guest.goto(`/?room=${roomCode}&e2eIdentity=GUEST&e2ePlayback=slow`);
@@ -69,11 +69,24 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     const registerPlayback = host.getByTestId('register-playback');
     await expect(registerPlayback).toHaveAttribute('data-register', '1');
     await expect(host.getByTestId('resolution-live')).toContainText('register 1');
-    await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '3000');
+    await expect(registerPlayback).toHaveAttribute('data-stage', 'program-card');
+    await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '2000');
+    await expect(registerPlayback).toContainText('Grace · back up');
+    await expect(registerPlayback).toContainText('priority 450');
+    await expect(registerPlayback).toContainText('Ada · rotate right');
+    await expect(registerPlayback).toContainText('priority 110');
+    await expect(registerPlayback).toHaveAttribute('data-stage', 'express-conveyors');
+    await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '1000');
+    await expect(registerPlayback).toHaveAttribute('data-stage', 'conveyors');
+    await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '1000');
+    await expect(registerPlayback).toHaveAttribute('data-stage', 'pushers');
+    await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '1000');
+    await expect(registerPlayback).toHaveAttribute('data-stage', 'gears');
+    await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '1000');
     await expect(host.locator('[data-playback-robot]')).toHaveCount(2);
     const playbackEvidence = {
       countdownObserved: true,
-      productionDurationObserved: true,
+      stageDurationsObserved: true,
       animatedLayerObserved: true
     };
 
@@ -111,8 +124,8 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
           check: async () => expect(playbackEvidence.countdownObserved).toBe(true)
         },
         {
-          spec: 'Production playback reserves three seconds for every register',
-          check: async () => expect(playbackEvidence.productionDurationObserved).toBe(true)
+          spec: 'Each Program card gets two seconds and each ordered factory stage gets one',
+          check: async () => expect(playbackEvidence.stageDurationsObserved).toBe(true)
         },
         {
           spec: 'Both robot tokens use the animated board layer during playback',
