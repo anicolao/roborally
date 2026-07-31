@@ -446,16 +446,26 @@ Flag Fry, Frenetic Factory, and Marathon Madness.
 Tandem Carnage, All for One or One for All?, Capture the Flag, Toggle Boggle,
 and War Zone.
 
-Each course manifest must encode the exact board faces, positions, rotations,
+Each course manifest encodes the exact board faces, positions, rotations,
 Docking Bay face, flag cells, allowed player counts, length/difficulty metadata,
 team layout, and special rules. Extra copies of physical boards required by
 Frenetic Factory and Marathon Madness must become explicit virtual board
 instances.
 
-Risky Exchange is the first implementation course: one Exchange board, two to
-eight players, three flags, and no special rules. Its diagram must be
-independently reviewed against page 13 of the course manual before gameplay
-work starts.
+All 34 diagrams are reviewed in
+`courses-avalon-hill-2005-complete-v1`. Their combined placements and flag
+coordinates are one golden fixture; each board instance is compiled into world
+coordinates with quarter-turn transforms and overlap rejection. Risky Exchange
+remains the production multiplayer course. Around the World is the
+representative multi-board geometry race.
+
+The exceptional-course reducer explicitly covers both published clocks, moving
+flags and pit reset, doubled damaging robot lasers, altered Option/repair
+awards, starting damage/Options, disabled power down, SuperBot repair and
+transfer, Interference racer/blocker hands, board rotation without moving
+occupants, shared versus individual team flag progress, Capture the Flag home
+boards and re-entry, persistent Toggle Boggle control, and War Zone
+elimination.
 
 ## Open transcription gates
 
@@ -466,10 +476,12 @@ are reviewed:
    Step 3 manifest;
 2. ~~all 26 Option cards and effects~~ — reviewed and executable in
    `avalon-hill-2005-options-v1`;
-3. every wall, pit, conveyor, pusher, gear, laser, and repair cell on all eight
-   board faces;
-4. both Docking Bay faces; and
-5. all 34 course diagrams and special rules.
+3. ~~every wall, pit, conveyor, pusher, gear, laser, and repair cell on all
+   eight board faces~~ — reviewed in
+   `boards-avalon-hill-2005-complete-v1`;
+4. ~~both Docking Bay faces~~ — reviewed in the complete board manifest; and
+5. ~~all 34 course diagrams and special rules~~ — reviewed and executable in
+   `courses-avalon-hill-2005-complete-v1`.
 
 Unreviewed manifests may be used only in clearly marked development fixtures,
 never silently exposed as a published course.

@@ -8,6 +8,7 @@
   import type { Unsubscribe } from 'firebase/firestore';
   import type { FirebaseServices } from '$lib/firebase';
   import CourseBoard from '$lib/components/CourseBoard.svelte';
+  import CourseCatalog from '$lib/components/CourseCatalog.svelte';
   import { PROGRAM_CARDS, type ProgramCard } from '$lib/game/program-manifest';
   import {
     OPTION_CARDS,
@@ -941,6 +942,7 @@
           <div><dt>{roomState.diagnostics.length}</dt><dd>replay diagnostics</dd></div>
         </dl>
         <p class="identity">Identity <strong>{identityLabel}</strong> · Seat {currentPlayer.seat}</p>
+        <CourseCatalog />
         {#if roomState.players.length >= 2}
           <div class="race-config" aria-label="Risky Exchange configuration">
             {#if isHost}

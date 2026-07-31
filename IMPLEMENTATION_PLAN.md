@@ -564,6 +564,8 @@ event replay used by the product and is executed only through visible controls.
 
 ### 14. All board faces and beginner courses
 
+**Status:** Implemented as the fourteenth vertical tracer.
+
 - Transcribe and review Island, Chop Shop, Spin Zone, Maelstrom, Chess, Cross,
   and Vault plus the second Docking Bay face.
 - Encode all ten beginner course diagrams and metadata.
@@ -571,7 +573,15 @@ event replay used by the product and is executed only through visible controls.
   golden geometry for every face and one complete representative race on a
   multi-board course.
 
+All eight 12×12 faces and both Docking Bay faces are pinned by semantic hashes.
+The ten beginner diagrams use explicit printed transforms and flag cells.
+Scenario 014 selects every face and beginner course, then compiles Around the
+World and completes a safe ordered route from Dock 1 through Flags 1–3 across
+both factory faces.
+
 ### 15. Expert and team catalog
+
+**Status:** Implemented as the fifteenth vertical tracer.
 
 - Encode all 19 expert and five team courses.
 - Implement each published exception, including timed programming, moving
@@ -580,6 +590,11 @@ event replay used by the product and is executed only through visible controls.
   instances, and alternative victory conditions.
 - Add `015-expert-and-team-course-catalog` and focused scenarios for every
   special rule. Do not generalize a special rule from its title.
+
+The 19 expert and five team diagrams are explicit reviewed fixtures, including
+duplicated physical-face instances and nonstandard Docking Bay placement.
+Fourteen named reducer probes execute every exception family, and scenario 015
+selects all 34 entries before asserting every probe in the ordinary catalog UI.
 
 ### 16. Reconnect, conflicts, timers, and versions
 
