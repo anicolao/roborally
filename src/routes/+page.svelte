@@ -107,6 +107,9 @@
     ? roomState.readyPlayerUids.includes(currentPlayer.uid)
     : false;
   $: isHost = currentPlayer?.uid === roomState.hostUid;
+  $: currentRobot = currentPlayer
+    ? ROBOTS.find(({ id }) => id === currentPlayer.robotId)
+    : undefined;
   $: selectedCourse = PUBLISHED_COURSES_BY_ID.get(selectedCourseId)!;
   $: configuredCourse = roomState.configuration
     ? PUBLISHED_COURSES_BY_ID.get(roomState.configuration.courseId)
@@ -863,6 +866,7 @@
       <CourseBoard
         setup={roomState.setup}
         robots={presentedResolutionRobots}
+        currentPlayerUid={currentPlayer.uid}
         animateRobots={playbackIsActive}
         transitionDurationMs={playbackTransitionMs}
       />
@@ -887,6 +891,11 @@
           {showProgramming ? 'Program.' : 'Ready.'}<br />
           <em>{showProgramming ? 'Secret.' : 'Race.'}</em>
         </h1>
+        <div class="your-robot" aria-label={`Your robot is ${currentRobot?.name ?? 'unknown'}`}>
+          <span>YOUR ROBOT</span>
+          <strong>{currentRobot?.name ?? 'Unknown'}</strong>
+          <small>{currentPlayer.name} · {currentRobot?.mark ?? '—'} · BRIGHT YELLOW ON BOARD</small>
+        </div>
         <p class="lede">
           {#if showProgramming}
             Seed <strong>{roomState.configuration.seed}</strong> deals one shared 84-card deck in
@@ -2224,6 +2233,21 @@
   .setup-summary h1 { font-size: clamp(84px, 9.2vw, 128px); }
   .setup-summary h1 em { color: #d2ff37; -webkit-text-stroke: 0; }
   .setup-summary .lede strong { color: #eef4ee; font-family: 'Space Mono', monospace; }
+  .your-robot {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px 10px;
+    align-items: baseline;
+    margin-top: 12px;
+    padding: 8px 10px;
+    border: 2px solid #d2ff37;
+    color: #101510;
+    background: #d2ff37;
+    box-shadow: 6px 6px 0 rgba(210, 255, 55, .2);
+  }
+  .your-robot span { grid-column: 1 / -1; font: 700 13px 'Space Mono', monospace; letter-spacing: .12em; }
+  .your-robot strong { font: 700 27px 'Space Mono', monospace; text-transform: uppercase; }
+  .your-robot small { font: 700 13px 'Space Mono', monospace; text-transform: uppercase; }
   .setup-summary.resolution-active .setup-order.compact { display: none; }
   .setup-summary.next-turn-programming .lede,
   .setup-summary.next-turn-programming .setup-facts,
@@ -2694,6 +2718,9 @@
     }
     .setup-summary .eyebrow { margin-bottom: 7px; }
     .setup-summary h1 { font-size: 56px; }
+    .your-robot { margin-top: 8px; padding: 6px 8px; }
+    .your-robot strong { font-size: 22px; }
+    .your-robot small { font-size: 11px; }
     .setup-summary .lede { max-width: none; margin: 8px 0 0; font-size: 18px; }
     .setup-facts { margin-top: 8px; }
     .setup-facts div { padding: 5px 2px; }
