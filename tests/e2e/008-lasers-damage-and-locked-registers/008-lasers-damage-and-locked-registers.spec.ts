@@ -130,6 +130,19 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
             await expect(state).toContainText(
               'Margaret active · 3 Lives · 6 Damage · Locked R4/R5'
             );
+            const margaretVitals = await state
+              .getByRole('listitem')
+              .filter({ hasText: /^Margaret/ })
+              .locator('.robot-vitals')
+              .boundingBox();
+            const adaVitals = await state
+              .getByRole('listitem')
+              .filter({ hasText: /^Ada/ })
+              .locator('.robot-vitals')
+              .boundingBox();
+            expect(margaretVitals).not.toBeNull();
+            expect(adaVitals).not.toBeNull();
+            expect(Math.abs((margaretVitals?.y ?? 0) - (adaVitals?.y ?? 0))).toBeLessThan(1);
           }
         },
         {
