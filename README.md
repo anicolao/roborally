@@ -61,7 +61,7 @@ enforces legal actions and masks information from its local display.
 
 ## Development status
 
-The first sixteen end-to-end tracer bullets are implemented. The foundation
+All seventeen planned end-to-end tracer bullets are implemented. The foundation
 provides the static SvelteKit shell, repository verification, and retained
 GitHub Pages previews. Players can now create join links, claim one of eight
 unique robots, fill a two-to-eight-player room, reload, and reconstruct the
@@ -153,6 +153,12 @@ The
 then disconnects a browser while a simultaneous programming barrier closes,
 retains the last confirmed prefix offline, catches up from a Firestore cursor,
 reloads from the versioned cache, and converges through owner-ordered re-entry.
+Finally, the
+[responsive accessible complete race](tests/e2e/017-responsive-accessible-complete-race/README.md)
+plays the same twelve turns at phone portrait, phone landscape, tablet, and
+desktop sizes while proving keyboard board navigation, keyboard and touch
+register ordering, focus flow, textual state cues, reduced motion, safe areas,
+and the same immutable winner.
 
 All eight factory faces and both Docking Bay faces are pinned by golden
 semantic hashes. All 34 printed course diagrams are pinned as one transform and

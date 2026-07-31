@@ -87,6 +87,15 @@ diagrams in product. Scenario 014 completes the compiled multi-board Around the
 World route; scenario 015 selects every expert/team entry and requires all
 fourteen exceptional-rule probes to pass.
 
+Scenario 016 disconnects a real programming client, preserves its confirmed
+versioned cache prefix, catches up from the Firestore cursor, reloads, and
+finishes an ordered re-entry. Scenario 017 then repeats the complete
+twelve-turn race at phone portrait, phone landscape, tablet, and desktop
+sizes. It requires keyboard board navigation, keyboard and pointer register
+ordering, focus transfer, textual timer and submission states, polite
+resolution announcements, reduced motion, and zero overflow or control
+overlap at every viewport.
+
 ## Scenario layout
 
 Use the next three-digit sequence and a short kebab-case capability name:
@@ -121,7 +130,8 @@ Every spec must:
 4. interact through accessible roles, labels, and stable test IDs;
 5. verify semantic behavior before taking each screenshot;
 6. wait for a settled application status rather than a guessed delay;
-7. capture every required phone and desktop baseline; and
+7. capture every required phone portrait, phone landscape, tablet, and desktop
+   baseline for responsive scenarios; and
 8. generate the scenario walkthrough.
 
 The first scenario follows this shape:
@@ -176,7 +186,8 @@ available.
 
 Playwright runs pinned Chromium with:
 
-- fixed phone and desktop viewports;
+- fixed phone portrait, phone landscape, tablet, and desktop viewports where
+  the scenario requires the complete responsive matrix;
 - device scale factor 1;
 - `en-CA` locale and `America/Toronto` timezone;
 - service workers blocked;

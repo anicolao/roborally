@@ -370,6 +370,8 @@ commits.
 
 ### 1. Application shell, harness, CI, and preview
 
+**Status:** Implemented as the first vertical tracer.
+
 - Scaffold static SvelteKit, Firebase initialization, local fonts, accessible
   shell, and installable metadata.
 - Add Vitest, Playwright, Firebase emulators, deterministic Chromium settings,
@@ -513,6 +515,8 @@ focused reducer and room-protocol fixtures.
 
 ### 11. Option framework
 
+**Status:** Implemented as the eleventh vertical tracer.
+
 - Finish and review the complete 26-card manifest before enabling draws.
 - Add face-up draws/ownership/discards, Dock-order decision windows, one-Option
   damage prevention, Option loss on destruction, and general effect targeting.
@@ -529,6 +533,8 @@ order. The same slice replaces the transcription placeholder with a versioned
 damage prevention, and mandatory destruction loss before re-entry.
 
 ### 12. Every Option card
+
+**Status:** Implemented as the twelfth vertical tracer.
 
 - Implement each card's movement, weapon, priority, damage, persistent, and
   discard effects strictly from the reviewed 2005 card text.
@@ -617,6 +623,8 @@ and recovery after a domain-invalid event consumes its actor sequence.
 
 ### 17. Responsive and accessibility completion
 
+**Status:** Implemented as the seventeenth and final vertical tracer.
+
 - Finish keyboard and touch register ordering, focus flow, board navigation,
   live resolution announcements, non-color cues, reduced motion, safe areas,
   countdown alternatives, and reconnection affordances.
@@ -624,6 +632,14 @@ and recovery after a domain-invalid event consumes its actor sequence.
   portrait/landscape, tablet, and desktop sizes.
 - Add `017-responsive-accessible-complete-race` and audit every earlier
   baseline.
+
+Scenario 017 repeats the production twelve-turn race in ordinary two-client
+browser sessions at phone portrait, phone landscape, tablet, and desktop
+viewports. It proves focus transfer into programming, arrow-key semantic board
+navigation, keyboard and pointer register reordering, a textual countdown,
+non-color submission cues, polite resolution announcements, reduced motion,
+safe-area-aware layouts, and the same immutable Flag 3 winner at every size.
+All earlier E2E baselines remain covered by the repository-wide verifier.
 
 ## Testing strategy
 

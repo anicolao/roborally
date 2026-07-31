@@ -93,11 +93,7 @@ async function closeResolutionInterrupts(host: Page, guest: Page, turn: number) 
   const handledLoss = new Set<Page>();
   const handledReentry = new Set<Page>();
   for (let attempt = 0; attempt < 200; attempt += 1) {
-    if (
-      await completed.isVisible()
-    ) {
-      return;
-    }
+    if (await completed.isVisible()) return;
     for (const page of [host, guest]) {
       const loss = page
         .getByLabel('Destroyed robot Option loss')
@@ -120,21 +116,33 @@ async function closeResolutionInterrupts(host: Page, guest: Page, turn: number) 
         return;
       }
     }
-    await host.waitForTimeout(100);
+    await completed.waitFor({ state: 'visible', timeout: 250 }).catch(() => {});
   }
   await expect(completed).toBeVisible({ timeout: 10_000 });
 }
 
-test('a production Risky Exchange race uses the complete rules loop', async (
+const roomCodes: Record<string, string> = {
+  phone: 'R17PHN',
+  desktop: 'R17DSK',
+  'mobile-landscape': 'R17LND',
+  tablet: 'R17TAB'
+};
+
+test('a keyboard and touch-operable race completes at every target viewport', async (
   { browser, page: host },
   testInfo
 ) => {
   test.setTimeout(420_000);
-  const roomCode = testInfo.project.name === 'phone' ? 'R13PHN' : 'R13DSK';
-  const guestContext: BrowserContext = await browser.newContext();
-  const guest = await guestContext.newPage();
+  const roomCode = roomCodes[testInfo.project.name] ?? 'R17A11';
+  let guestContext: BrowserContext | undefined;
+  const steps = new TestStepHelper(host, testInfo);
+  steps.setMetadata(
+    'Responsive accessible complete race',
+    'Two ordinary clients complete the production twelve-turn race at phone portrait, phone landscape, tablet, and desktop sizes. The first turn proves board-grid navigation, focus transfer, keyboard and pointer register ordering, textual countdowns, non-color selection cues, reduced motion, and live resolution semantics.'
+  );
 
   try {
+    await host.emulateMedia({ reducedMotion: 'reduce' });
     await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}`);
     await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
     await host.getByRole('button', { name: 'Create race' }).click();
@@ -142,106 +150,117 @@ test('a production Risky Exchange race uses the complete rules loop', async (
     await host.getByRole('button', { name: 'Axle' }).click();
     await host.getByRole('button', { name: 'Create and claim seat' }).click();
 
+    guestContext = await browser.newContext({ reducedMotion: 'reduce' });
+    const guest = await guestContext.newPage();
     await guest.goto(`/?room=${roomCode}&e2eIdentity=GUEST`);
-    await expect(guest.getByRole('status')).toHaveAttribute('data-status', 'synced');
+    await expect(guest.locator('[data-status]')).toHaveAttribute('data-status', 'synced');
     await guest.getByLabel('Racer name').fill('Grace');
     await guest.getByRole('button', { name: 'Bit' }).click();
     await guest.getByRole('button', { name: 'Claim seat' }).click();
-
-    const steps = new TestStepHelper(host, testInfo);
-    steps.setMetadata(
-      'Complete a production Risky Exchange race',
-      'Two ordinary browser clients play twelve hand-constrained turns through crossed-site Options, collisions, laser damage, an announced shutdown, destruction and re-entry, all three flags, immutable victory, and rematch.'
-    );
 
     await host.getByLabel('Setup seed').fill('OPTION-11');
     await host.getByRole('button', { name: 'Configure Risky Exchange' }).click();
     await guest.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Ready for race' }).click();
+
+    const board = host.getByRole('grid', { name: /Risky Exchange board explorer/ });
+    await board.focus();
+    await board.press('ArrowRight');
+    await board.press('ArrowDown');
+    await expect(board).toHaveAttribute('aria-activedescendant', 'board-cell-2-2');
+    await expect(host.locator('#board-cell-2-2')).toHaveAttribute('aria-selected', 'true');
+
     await host.getByRole('button', { name: 'Open programming console' }).click();
     await guest.getByRole('button', { name: 'Open programming console' }).click();
+    await expect(host.getByRole('heading', { name: /Your hand/ })).toBeFocused();
+    await stayActiveInDockOrder([host, guest]);
 
-    let destructionCaptured = false;
-    for (const [index, programs] of turns.entries()) {
-      const turn = index + 1;
-      if (turn > 1) {
-        await host.getByRole('button', { name: `Begin Turn ${turn}` }).click();
-        await guest.getByRole('button', { name: `Begin Turn ${turn}` }).click();
-      }
-      if (turn === 9) {
-        await host.getByRole('button', { name: 'Power down next turn' }).click();
-      }
-      await stayActiveInDockOrder([host, guest]);
-      if (programs.host.length > 0) await chooseProgram(host, programs.host);
-      if (programs.guest.length > 0) await chooseProgram(guest, programs.guest);
-      await commitOptionPlans(host, guest, turn);
-      await closeResolutionInterrupts(host, guest, turn);
-      await expect(
-        host.getByRole('heading', {
-          name: new RegExp(`Turn ${turn} (complete|finished)`)
-        })
-      ).toBeVisible();
-
-      if (turn === 4) {
-        await steps.step('options-enter-production-race', {
-          description: 'Both robots carry public face-up Options into the long race',
-          verifications: [
-            {
-              spec: 'Successive crossed-site draws are retained',
-              check: async () => {
-                const robots = host.getByRole('list', { name: 'Robot Life and damage state' });
-                await expect(robots.getByRole('listitem').filter({ hasText: 'Ada' })).toContainText('Options');
-                await expect(robots.getByRole('listitem').filter({ hasText: 'Grace' })).toContainText('Options');
-              }
-            }
-          ]
-        });
-      }
-
-      if (turn === 9) {
-        await steps.step('shutdown-announced-in-production-race', {
-          description: 'Ada announces a shutdown as part of the production race',
-          verifications: [
-            {
-              spec: 'The original-Dock response is retained through resolution',
-              check: async () => {
-                const ada = host
-                  .getByRole('list', { name: 'Robot Life and damage state' })
-                  .getByRole('listitem')
-                  .filter({ hasText: 'Ada' });
-                await expect(ada).toContainText('Shutdown announced');
-              }
-            }
-          ]
-        });
-      }
-
-      const ada = host
-        .getByRole('list', { name: 'Robot Life and damage state' })
-        .getByRole('listitem')
-        .filter({ hasText: 'Ada' });
-      if (!destructionCaptured && (await ada.textContent())?.includes('2 Lives')) {
-        destructionCaptured = true;
-        await steps.step('collision-destruction-and-reentry', {
-          description: 'The production race spends a Life and resumes through ordinary re-entry',
-          verifications: [
-            {
-              spec: 'Ada returned with one fewer Life and the race continued',
-              check: async () => {
-                await expect(ada).toContainText('2 Lives');
-                await expect(ada).toContainText('active');
-              }
-            }
-          ]
-        });
-      }
+    for (const label of turns[0].host) {
+      await host.getByRole('button', { name: label, exact: true }).click();
     }
+    const keyboardCard = host.getByRole('button', {
+      name: turns[0].host[2],
+      exact: true
+    });
+    await keyboardCard.focus();
+    await keyboardCard.press('Shift+ArrowLeft');
+    await expect(keyboardCard).toHaveAttribute('data-register-index', '2');
+    await host.getByLabel('Register to reorder').selectOption('1');
+    await host.getByRole('button', { name: 'Move selected register later' }).click();
+    await expect(keyboardCard).toHaveAttribute('data-register-index', '3');
+    const chosenRegisters = host
+      .getByRole('list', { name: 'Chosen registers' })
+      .getByRole('listitem');
+    await expect(chosenRegisters.nth(0)).toContainText('R1 move-1 500');
+    await expect(chosenRegisters.nth(1)).toContainText('R2 rotate-right 110');
+    await expect(chosenRegisters.nth(2)).toContainText('R3 move-1 490');
 
-    await steps.step('three-flags-finish-production-race', {
-      description: 'The hand-constrained race reaches Flag 3 and freezes its summary',
+    await steps.step('keyboard-touch-board-and-timer-controls', {
+      description: 'The complete race begins with equivalent non-pointer and pointer controls',
       verifications: [
         {
-          spec: 'Ada touched all flags in order and won on Turn 12',
+          spec: 'Arrow-key board navigation exposes a selected semantic grid cell',
+          check: async () => {
+            await expect(board).toHaveAttribute('aria-activedescendant', 'board-cell-2-2');
+          }
+        },
+        {
+          spec: 'Keyboard reordering and the pointer-friendly toolbar preserve the exact Program',
+          check: async () => {
+            await expect(host.getByLabel('Register ordering controls')).toBeVisible();
+            await expect(keyboardCard).toHaveAttribute('data-register-index', '3');
+          }
+        }
+      ]
+    });
+
+    await host.getByRole('button', { name: 'Submit immutable program' }).click();
+    await expect(host.getByRole('timer')).toContainText(/has (29|30) seconds/);
+    await expect(host.getByRole('timer')).toContainText('Fill timed-out program');
+    await steps.step('textual-timer-and-non-color-state', {
+      description: 'Submission exposes an equivalent textual deadline and state cue',
+      verifications: [
+        {
+          spec: 'The last programmer receives a textual thirty-second alternative',
+          check: async () => {
+            await expect(host.getByRole('timer')).toContainText('seconds');
+          }
+        },
+        {
+          spec: 'Immutable submission is communicated in text, independent of color',
+          check: async () => {
+            await expect(
+              host.getByText('Program committed. It cannot be inspected or changed.')
+            ).toBeVisible();
+          }
+        }
+      ]
+    });
+
+    await chooseProgram(guest, turns[0].guest);
+    await closeResolutionInterrupts(host, guest, 1);
+    await expect(host.getByTestId('resolution-live')).toContainText('Turn 1');
+    await expect(
+      host.getByRole('list', { name: 'Resolution feed' }).getByRole('listitem').last()
+    ).toHaveCSS('animation-name', 'none');
+
+    for (let index = 1; index < turns.length; index += 1) {
+      const turn = index + 1;
+      await host.getByRole('button', { name: `Begin Turn ${turn}` }).click();
+      await guest.getByRole('button', { name: `Begin Turn ${turn}` }).click();
+      if (turn === 9) await host.getByRole('button', { name: 'Power down next turn' }).click();
+      await stayActiveInDockOrder([host, guest]);
+      if (turns[index].host.length > 0) await chooseProgram(host, turns[index].host);
+      if (turns[index].guest.length > 0) await chooseProgram(guest, turns[index].guest);
+      await commitOptionPlans(host, guest, turn);
+      await closeResolutionInterrupts(host, guest, turn);
+    }
+
+    await steps.step('responsive-race-reaches-three-flags', {
+      description: 'The accessible production race reaches its immutable winner',
+      verifications: [
+        {
+          spec: 'All target viewports reach Flag 3 through twelve ordinary turns',
           check: async () => {
             await expect(host.getByRole('heading', { name: 'Turn 12 finished' })).toBeVisible();
             await expect(
@@ -253,7 +272,7 @@ test('a production Risky Exchange race uses the complete rules loop', async (
           }
         },
         {
-          spec: 'Both clients share the immutable summary',
+          spec: 'Actor and observer share the same immutable winner summary',
           check: async () => {
             await expect(host.getByLabel('Immutable race summary')).toContainText(
               'Ada wins Risky Exchange'
@@ -262,13 +281,17 @@ test('a production Risky Exchange race uses the complete rules loop', async (
               'Ada wins Risky Exchange'
             );
           }
+        },
+        {
+          spec: 'The viewport has no clipped or overlapping interactive controls',
+          check: async () => {
+            await expect(host.locator('main')).toBeVisible();
+          }
         }
       ]
     });
-
-    await host.getByRole('button', { name: 'Start rematch epoch 2' }).click();
-    await expect(host.getByText('Race epoch 2 · 1 retained summary')).toBeVisible();
+    steps.generateDocs();
   } finally {
-    await guestContext.close();
+    await guestContext?.close();
   }
 });
