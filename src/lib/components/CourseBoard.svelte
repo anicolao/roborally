@@ -16,6 +16,8 @@
   let zoom = $state(1);
   let panX = $state(0);
   let panY = $state(0);
+  let activeX = $state(1);
+  let activeY = $state(1);
   const displayedRobots = $derived(
     robots
       ?.filter(({ status }) => status === 'active')
@@ -73,6 +75,20 @@
     for (const robot of robots) contents.push(`${robot.name}'s ${robot.robotId}, facing ${robot.facing}`);
     return contents.length ? `Column ${x}, row ${y}: ${contents.join(', ')}` : `Column ${x}, row ${y}: floor`;
   }
+
+  function moveBoardCursor(event: KeyboardEvent) {
+    const next = { x: activeX, y: activeY };
+    if (event.key === 'ArrowLeft') next.x = Math.max(1, activeX - 1);
+    else if (event.key === 'ArrowRight') next.x = Math.min(12, activeX + 1);
+    else if (event.key === 'ArrowUp') next.y = Math.max(1, activeY - 1);
+    else if (event.key === 'ArrowDown') next.y = Math.min(16, activeY + 1);
+    else if (event.key === 'Home') next.x = 1;
+    else if (event.key === 'End') next.x = 12;
+    else return;
+    event.preventDefault();
+    activeX = next.x;
+    activeY = next.y;
+  }
 </script>
 
 <section class="course-panel" aria-labelledby="course-heading">
@@ -95,17 +111,26 @@
     <div
       class="course-board"
       style={`--zoom:${zoom};--pan-x:${panX};--pan-y:${panY}`}
-      role="img"
-      aria-label="Risky Exchange course: Exchange factory above Docking Bay A, with three flags and starting robots"
+      role="grid"
+      tabindex="0"
+      aria-label="Risky Exchange board explorer. Use arrow keys to inspect cells."
+      aria-rowcount="16"
+      aria-colcount="12"
+      aria-activedescendant={`board-cell-${activeX}-${activeY}`}
+      onkeydown={moveBoardCursor}
     >
       {#each cells as position}
         {@const manifestCell = boardCells.get(`${position.x},${position.y}`)}
         {@const flag = flags.get(`${position.x},${position.y}`)}
         <div
           class:dock-bay={position.y > 12}
+          class:active-cell={position.x === activeX && position.y === activeY}
           class="board-cell"
+          id={`board-cell-${position.x}-${position.y}`}
           data-coordinate={`${position.x},${position.y}`}
-          aria-hidden="true"
+          role="gridcell"
+          aria-label={describeCell(position.x, position.y)}
+          aria-selected={position.x === activeX && position.y === activeY}
         >
           {#each manifestCell?.elements ?? [] as element}
             {#if element.kind === 'pit'}
@@ -138,6 +163,9 @@
       {/each}
     </div>
   </div>
+  <p class="board-position" aria-live="polite" aria-atomic="true">
+    {describeCell(activeX, activeY)}
+  </p>
 
   <details class="text-equivalent">
     <summary>Course text equivalent</summary>
@@ -196,6 +224,10 @@
     transform-origin: center;
     transition: transform 120ms ease;
   }
+  .course-board:focus-visible {
+    outline: 3px solid #d2ff37;
+    outline-offset: 2px;
+  }
   .board-cell {
     position: relative;
     min-width: 0;
@@ -206,6 +238,7 @@
   .board-cell:nth-child(12n + 1) { border-left: 1px solid #344346; }
   .board-cell:nth-child(-n + 12) { border-top: 1px solid #344346; }
   .board-cell.dock-bay { background: #222a2b; }
+  .course-board:focus .board-cell.active-cell { box-shadow: inset 0 0 0 2px #d2ff37; }
   .pit {
     position: absolute; inset: 4px;
     display: grid; place-items: center;
@@ -261,6 +294,15 @@
     color: #9da9a8;
     font-size: 10px;
   }
+  .board-position {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
   summary { color: #d2ff37; cursor: pointer; font: 9px 'Space Mono', monospace; text-transform: uppercase; }
   details:not([open]) > p, details:not([open]) > ul { display: none; }
   .text-equivalent p { margin: 8px 0; font: 10px/1.4 'Atkinson Hyperlegible', sans-serif; }
@@ -270,6 +312,27 @@
     h2 { font-size: 14px; }
     .board-controls { display: grid; grid-template-columns: repeat(3, auto); }
     .course-board { min-height: 300px; }
+  }
+  @media (max-height: 560px) and (orientation: landscape) {
+    .course-panel {
+      gap: 3px;
+      padding: 4px;
+    }
+    header { gap: 4px; }
+    header p { display: none; }
+    h2 { margin: 0; font-size: 10px; }
+    button {
+      min-width: 23px;
+      min-height: 23px;
+      padding: 0 4px;
+      font-size: 6px;
+    }
+    output {
+      min-width: 27px;
+      font-size: 6px;
+    }
+    .course-board { min-height: 0; }
+    .text-equivalent { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
     .course-board { transition: none; }

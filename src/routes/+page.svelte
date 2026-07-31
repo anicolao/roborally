@@ -4,7 +4,7 @@
   import '@fontsource/space-mono/400.css';
   import '@fontsource/space-mono/700.css';
   import { replaceState } from '$app/navigation';
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import type { Unsubscribe } from 'firebase/firestore';
   import type { FirebaseServices } from '$lib/firebase';
   import CourseBoard from '$lib/components/CourseBoard.svelte';
@@ -58,6 +58,8 @@
   let setupSeed = 'RISKY-2005';
   let setupLives: 3 | 4 = 3;
   let selectedProgramCardIds: ProgramCard['id'][] = [];
+  let editingRegisterIndex = 0;
+  let programHeadingElement: HTMLHeadingElement | undefined;
   let clockNow = Date.now();
   let clockInterval: ReturnType<typeof setInterval> | undefined;
   let showProgramming = false;
@@ -131,6 +133,18 @@
   $: programPreview = programmingPlayer
     ? previewProgram(programmingPlayer, selectedProgramCardIds)
     : [];
+  $: openRegisterSlots =
+    programmingPlayer?.registers.flatMap((register, index) => (register.locked ? [] : [index])) ?? [];
+  $: latestResolutionEntry = roomState.resolution?.trace.at(-1);
+  $: resolutionAnnouncement = latestResolutionEntry
+    ? `Turn ${roomState.resolution?.turnNumber}, ${
+        latestResolutionEntry.register <= 5
+          ? `register ${latestResolutionEntry.register}`
+          : 'cleanup'
+      }: ${latestResolutionEntry.text}`
+    : roomState.resolution
+      ? `Turn ${roomState.resolution.turnNumber} ${roomState.resolution.phase.replaceAll('-', ' ')}`
+      : '';
   $: deadlineSeconds = activeProgramming?.deadline
     ? Math.max(0, Math.ceil((activeProgramming.deadline - clockNow) / 1000))
     : null;
@@ -400,11 +414,53 @@
 
   function toggleProgramCard(cardId: ProgramCard['id']) {
     if (programmingPlayer?.submitted) return;
-    if (selectedProgramCardIds.includes(cardId)) {
+    const selectedIndex = selectedProgramCardIds.indexOf(cardId);
+    if (selectedIndex >= 0) {
       selectedProgramCardIds = selectedProgramCardIds.filter((selected) => selected !== cardId);
+      editingRegisterIndex = Math.max(
+        0,
+        Math.min(selectedIndex, selectedProgramCardIds.length - 1)
+      );
     } else if (selectedProgramCardIds.length < openRegisterCount) {
       selectedProgramCardIds = [...selectedProgramCardIds, cardId];
+      editingRegisterIndex = selectedProgramCardIds.length - 1;
     }
+  }
+
+  function moveSelectedProgramCard(index: number, offset: -1 | 1) {
+    const destination = index + offset;
+    if (index < 0 || destination < 0 || destination >= selectedProgramCardIds.length) return;
+    const reordered = [...selectedProgramCardIds];
+    [reordered[index], reordered[destination]] = [reordered[destination], reordered[index]];
+    selectedProgramCardIds = reordered;
+    editingRegisterIndex = destination;
+  }
+
+  function removeSelectedProgramCard(index: number) {
+    if (index < 0 || index >= selectedProgramCardIds.length) return;
+    selectedProgramCardIds = selectedProgramCardIds.filter((_, candidate) => candidate !== index);
+    editingRegisterIndex = Math.max(0, Math.min(index, selectedProgramCardIds.length - 1));
+  }
+
+  function handleProgramCardKeydown(event: KeyboardEvent, cardId: ProgramCard['id']) {
+    const index = selectedProgramCardIds.indexOf(cardId);
+    if (index < 0) return;
+    if (event.shiftKey && event.key === 'ArrowLeft') {
+      event.preventDefault();
+      moveSelectedProgramCard(index, -1);
+    } else if (event.shiftKey && event.key === 'ArrowRight') {
+      event.preventDefault();
+      moveSelectedProgramCard(index, 1);
+    } else if (event.key === 'Delete' || event.key === 'Backspace') {
+      event.preventDefault();
+      removeSelectedProgramCard(index);
+    }
+  }
+
+  async function openProgrammingConsole() {
+    showProgramming = true;
+    await tick();
+    programHeadingElement?.focus();
   }
 
   async function submitProgramCards() {
@@ -424,6 +480,7 @@
         activeProgramming?.turnId
       );
       selectedProgramCardIds = [];
+      editingRegisterIndex = 0;
     } catch (error) {
       console.error(error);
       formError = 'The immutable Program submission could not be written.';
@@ -546,6 +603,7 @@
       });
       requestedTurnNumber = 1;
       selectedProgramCardIds = [];
+      editingRegisterIndex = 0;
     } catch (error) {
       console.error(error);
       formError = 'The immutable rematch event could not be written.';
@@ -612,6 +670,9 @@
       {/if}
     </div>
   </header>
+  <div class="sr-only" aria-live="polite" aria-atomic="true" data-testid="resolution-live">
+    {resolutionAnnouncement}
+  </div>
 
   {#if mode === 'room' && currentPlayer && roomState.setup && roomState.configuration}
     <section class="configured-race" aria-labelledby="race-heading">
@@ -622,6 +683,7 @@
           !!activeProgramming &&
           activeProgramming.turnNumber > roomState.resolution.turnNumber}
         class:many-robots={roomState.setup.players.length >= 3}
+        class:program-editing={selectedProgramCardIds.length > 0 && !programmingPlayer?.submitted}
         class="setup-summary"
       >
         <p class="eyebrow">
@@ -678,7 +740,9 @@
         {#if showProgramming && programmingPlayer && activeProgramming}
           <section class="program-console" aria-labelledby="hand-heading">
             <div class="program-head">
-              <h2 id="hand-heading">Your hand · {programmingPlayer.hand.length || 'submitted'}</h2>
+              <h2 id="hand-heading" tabindex="-1" bind:this={programHeadingElement}>
+                Your hand · {programmingPlayer.hand.length || 'submitted'}
+              </h2>
               <span>{selectedProgramCardIds.length}/{openRegisterCount} open</span>
             </div>
             <p class="conservation" data-testid="program-conservation">
@@ -741,6 +805,11 @@
             {#if programmingPlayer.submitted}
               <p class="submission-state">Program committed. It cannot be inspected or changed.</p>
             {:else}
+              <p class="sr-only" id="register-order-help">
+                Select cards in register order. On a selected card, use Shift plus Left or Right
+                Arrow to reorder it, or Delete to remove it. Touch users can use the register
+                ordering controls below.
+              </p>
               <div class="program-hand" aria-label="Your Program hand">
                 {#each programmingPlayer.hand as cardId}
                   {@const card = cardForId(cardId)}
@@ -750,7 +819,10 @@
                     class:selected={selectedIndex >= 0}
                     aria-pressed={selectedIndex >= 0}
                     aria-label={`${card?.action} priority ${card?.priority}`}
+                    aria-describedby="register-order-help"
+                    data-register-index={selectedIndex >= 0 ? selectedIndex + 1 : ''}
                     onclick={() => toggleProgramCard(cardId)}
+                    onkeydown={(event) => handleProgramCardKeydown(event, cardId)}
                   >
                     <small>{selectedIndex >= 0 ? `R${selectedIndex + 1}` : card?.priority}</small>
                     <strong>{card?.action.replaceAll('-', ' ')}</strong>
@@ -772,6 +844,41 @@
                   </li>
                 {/each}
               </ol>
+              {#if selectedProgramCardIds.length > 0}
+                <div class="register-order-controls" aria-label="Register ordering controls">
+                  <label>
+                    <span>Edit register</span>
+                    <select bind:value={editingRegisterIndex} aria-label="Register to reorder">
+                      {#each selectedProgramCardIds as cardId, index}
+                        {@const selectedCard = cardForId(cardId)}
+                        <option value={index}>
+                          R{openRegisterSlots[index] + 1}: {selectedCard?.action} {selectedCard?.priority}
+                        </option>
+                      {/each}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    aria-label="Move selected register earlier"
+                    title="Move selected register earlier"
+                    onclick={() => moveSelectedProgramCard(editingRegisterIndex, -1)}
+                    disabled={editingRegisterIndex === 0}
+                  >←</button>
+                  <button
+                    type="button"
+                    aria-label="Move selected register later"
+                    title="Move selected register later"
+                    onclick={() => moveSelectedProgramCard(editingRegisterIndex, 1)}
+                    disabled={editingRegisterIndex >= selectedProgramCardIds.length - 1}
+                  >→</button>
+                  <button
+                    type="button"
+                    aria-label="Remove selected register card"
+                    title="Remove selected register card"
+                    onclick={() => removeSelectedProgramCard(editingRegisterIndex)}
+                  >×</button>
+                </div>
+              {/if}
               <p class="preview-note">
                 Preview excludes robots and unrevealed board outcomes.
                 {programPreview.join(' · ')}
@@ -785,7 +892,10 @@
                 <button
                   type="button"
                   class="clear-program"
-                  onclick={() => (selectedProgramCardIds = [])}
+                  onclick={() => {
+                    selectedProgramCardIds = [];
+                    editingRegisterIndex = 0;
+                  }}
                 >Clear register choices</button>
               {/if}
             {/if}
@@ -953,6 +1063,7 @@
                     onclick={() => {
                       requestedTurnNumber = roomState.nextProgramming?.turnNumber ?? requestedTurnNumber;
                       selectedProgramCardIds = [];
+                      editingRegisterIndex = 0;
                     }}
                   >
                     Begin Turn {roomState.nextProgramming.turnNumber}
@@ -1002,7 +1113,7 @@
             Every robot’s archive begins on its Dock cell. Option cards remain disabled until their
             complete 2005 manifest is reviewed.
           </p>
-          <button class="open-programming" type="button" onclick={() => (showProgramming = true)}>
+          <button class="open-programming" type="button" onclick={openProgrammingConsole}>
             Open programming console
           </button>
         {/if}
@@ -1248,14 +1359,32 @@
       linear-gradient(135deg, #12191b 0%, #090c0d 64%);
     font-family: 'Atkinson Hyperlegible', sans-serif;
   }
-  :global(button), :global(input) { font: inherit; }
+  :global(button), :global(input), :global(select) { font: inherit; }
+  :global(:focus-visible) {
+    outline: 3px solid #ffcf4b;
+    outline-offset: 2px;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
 
   .shell {
     display: grid;
     grid-template-rows: 68px minmax(0, 1fr) 46px;
-    width: min(100% - 48px, 1180px);
+    width: min(100%, 1228px);
     height: 100dvh;
     margin: 0 auto;
+    padding:
+      env(safe-area-inset-top)
+      max(24px, env(safe-area-inset-right))
+      env(safe-area-inset-bottom)
+      max(24px, env(safe-area-inset-left));
   }
 
   .masthead, footer {
@@ -1865,6 +1994,12 @@
     padding-top: 9px;
     border-top: 1px solid #344043;
   }
+  .setup-summary.program-editing .lede,
+  .setup-summary.program-editing .setup-facts,
+  .setup-summary.program-editing .epoch-state,
+  .setup-summary.program-editing > .archive-note {
+    display: none;
+  }
   .program-head {
     display: flex;
     align-items: center;
@@ -1934,6 +2069,35 @@
     white-space: nowrap;
   }
   .chosen-registers span { color: #d2ff37; }
+  .register-order-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) repeat(3, auto);
+    gap: 3px;
+    align-items: end;
+    padding: 4px;
+    border: 1px solid #536164;
+    background: #0d1314;
+  }
+  .register-order-controls label {
+    display: grid;
+    gap: 2px;
+    color: #ffcf4b;
+    font: 6px 'Space Mono', monospace;
+    text-transform: uppercase;
+  }
+  .register-order-controls select {
+    min-width: 0;
+    min-height: 26px;
+    border: 1px solid #536164;
+    color: #eef4ee;
+    background: #11191a;
+    font: 7px 'Space Mono', monospace;
+  }
+  .register-order-controls button {
+    min-height: 26px;
+    padding: 0 4px;
+    font-size: 6px;
+  }
   .preview-note, .submission-state {
     margin: 0;
     color: #778487;
@@ -2135,7 +2299,12 @@
   footer span:nth-child(2) { color: #95a3a1; }
 
   @media (max-width: 820px) {
-    .shell { grid-template-rows: 58px minmax(0, 1fr) 34px; width: min(100% - 28px, 560px); }
+    .shell {
+      grid-template-rows: 58px minmax(0, 1fr) 34px;
+      width: min(100%, 588px);
+      padding-right: max(14px, env(safe-area-inset-right));
+      padding-left: max(14px, env(safe-area-inset-left));
+    }
     .masthead { align-items: center; }
     .brand { gap: 9px; font-size: 13px; }
     .brand-mark { grid-template-columns: repeat(3, 4px); gap: 2px; padding: 7px; }
@@ -2245,6 +2414,10 @@
     .program-hand { grid-template-columns: repeat(3, 1fr); }
     .program-hand button { min-height: 37px; padding: 10px 2px 2px; }
     .chosen-registers li { min-height: 23px; }
+    .register-order-controls {
+      grid-template-columns: minmax(0, 1fr) repeat(3, 24px);
+    }
+    .register-order-controls label > span { display: none; }
     .seats { grid-template-rows: repeat(4, 1fr); gap: 4px; }
     .seats li {
       min-height: 0;
@@ -2263,6 +2436,354 @@
     .copy { grid-template-columns: 1fr; }
     .actions { margin-top: 9px; }
   }
+  @media (max-height: 560px) and (orientation: landscape) {
+    .shell {
+      grid-template-rows: 38px minmax(0, 1fr) 18px;
+      width: 100%;
+      padding-top: env(safe-area-inset-top);
+      padding-right: max(10px, env(safe-area-inset-right));
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: max(10px, env(safe-area-inset-left));
+    }
+    .masthead { align-items: center; }
+    .brand { gap: 6px; font-size: 10px; }
+    .brand-mark { grid-template-columns: repeat(3, 3px); gap: 2px; padding: 4px; }
+    .brand-mark i { width: 3px; height: 3px; }
+    .network { max-width: 130px; margin-left: auto; font-size: 6px; text-align: right; }
+    footer {
+      justify-content: center;
+      border-top: 0;
+      font-size: 5px;
+    }
+    footer span:first-child,
+    footer span:last-child { display: none; }
+
+    .hero {
+      grid-template-columns: 330px minmax(0, 1fr);
+      gap: 8px;
+      align-items: stretch;
+      padding: 5px 0;
+    }
+    .copy {
+      min-width: 0;
+      min-height: 0;
+    }
+    .copy > .eyebrow {
+      margin: 0 0 3px;
+      font-size: 6px;
+    }
+    .copy h1 {
+      font-size: 27px;
+      line-height: .86;
+    }
+    .copy > .lede,
+    .copy > .facts,
+    .actions p { display: none; }
+    .actions {
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      margin-top: 7px;
+    }
+    .actions button {
+      min-height: 27px;
+      padding: 0 5px;
+      font-size: 7px;
+    }
+    .telemetry {
+      display: grid;
+      min-width: 0;
+      min-height: 0;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      padding: 5px;
+      box-shadow: 5px 5px 0 rgba(0, 0, 0, .16);
+    }
+    .telemetry-head {
+      margin-bottom: 3px;
+      font-size: 6px;
+    }
+    .factory {
+      height: auto;
+      min-height: 0;
+    }
+    .registers {
+      gap: 2px;
+      margin-top: 3px;
+    }
+    .registers li {
+      min-height: 34px;
+      padding: 2px;
+    }
+    .registers strong { font-size: 10px; }
+    .register-number,
+    .registers small,
+    .registers li > span:nth-of-type(2) { font-size: 4px; }
+    .registers small { top: 2px; right: 2px; }
+    .join-panel {
+      gap: 4px;
+      margin-top: 4px;
+      padding: 5px;
+    }
+    .form-head { font-size: 7px; }
+    button.close {
+      width: 22px;
+      min-height: 22px;
+      font-size: 14px;
+    }
+    .join-panel label,
+    .join-panel legend { gap: 2px; font-size: 6px; }
+    .join-panel legend { margin-bottom: 2px; }
+    .join-panel input {
+      min-height: 25px;
+      padding: 0 5px;
+      font-size: 8px;
+    }
+    .robot-options { gap: 2px; }
+    .robot-options button {
+      min-height: 27px;
+      gap: 2px;
+      padding: 2px;
+      font-size: 5px;
+    }
+    .robot-options button span { font-size: 6px; }
+    .join-panel > button[type='submit'] {
+      min-height: 25px;
+      padding: 0 4px;
+      font-size: 6px;
+    }
+
+    .lobby {
+      grid-template-columns: 330px minmax(0, 1fr);
+      gap: 7px;
+      align-items: stretch;
+      padding: 5px 0;
+    }
+    .room-console {
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .room-console > .eyebrow,
+    .room-console > .lede,
+    .room-console > .room-facts,
+    .room-console > .identity,
+    .room-console :global(.catalog) {
+      display: none;
+    }
+    .room-console h1 {
+      font-size: 22px;
+      line-height: .85;
+    }
+    .room-actions {
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .room-actions button {
+      min-height: 25px;
+      padding: 0 5px;
+      font-size: 6px;
+    }
+    .text-link { font-size: 6px; }
+    .race-config {
+      gap: 3px;
+      margin-top: 5px;
+      padding: 4px;
+    }
+    .race-config label,
+    .race-config p { gap: 2px; font-size: 6px; }
+    .race-config input,
+    .race-config select {
+      height: 24px;
+      padding: 0 4px;
+      font-size: 6px;
+    }
+    .race-config button {
+      min-height: 24px;
+      padding: 0 4px;
+      font-size: 6px;
+    }
+    .seat-console {
+      display: grid;
+      min-width: 0;
+      min-height: 0;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      padding: 4px;
+      box-shadow: 5px 5px 0 rgba(0, 0, 0, .16);
+    }
+    .seats {
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: repeat(4, minmax(0, 1fr));
+      gap: 2px;
+    }
+    .seats li {
+      min-height: 0;
+      grid-template-columns: 14px 22px minmax(0, 1fr);
+      gap: 3px;
+      padding: 2px;
+    }
+    .seat-number,
+    .seat-name small { font-size: 5px; }
+    .robot-token {
+      width: 21px;
+      height: 21px;
+      font-size: 6px;
+    }
+    .seat-name strong { font-size: 7px; }
+    .seat-state { display: none; }
+    .room-ready {
+      margin-top: 2px;
+      padding: 2px 3px;
+      font-size: 5px;
+    }
+
+    .configured-race {
+      grid-template-columns: minmax(0, 1fr) minmax(330px, .9fr);
+      gap: 7px;
+      padding: 5px 0;
+    }
+    .setup-summary {
+      align-self: stretch;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .setup-summary > .eyebrow,
+    .setup-summary > h1,
+    .setup-summary > .lede,
+    .setup-summary > .setup-facts,
+    .setup-summary > .epoch-state,
+    .setup-summary > .setup-order,
+    .setup-summary > .archive-note {
+      display: none;
+    }
+    .program-console {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 2px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+    .program-head,
+    .program-hand,
+    .register-order-controls,
+    .submission-state,
+    .opponent-programs,
+    .deadline,
+    .resolution-console {
+      grid-column: 1 / -1;
+    }
+    .conservation,
+    .option-catalog,
+    .preview-note {
+      display: none;
+    }
+    .program-head h2,
+    .resolution-console h2 { font-size: 7px; }
+    .program-head span { font-size: 6px; }
+    .power-control {
+      grid-column: 1 / -1;
+      min-height: 24px;
+      padding: 2px;
+      font-size: 6px;
+    }
+    .power-control[data-can-respond='false'] { display: none; }
+    .power-control button {
+      min-height: 21px;
+      font-size: 5px;
+    }
+    .program-hand {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 2px;
+    }
+    .program-hand button {
+      min-height: 24px;
+      padding: 8px 1px 1px;
+      font-size: 6px;
+    }
+    .program-hand button small { top: 1px; left: 2px; font-size: 5px; }
+    .chosen-registers {
+      grid-column: 1 / -1;
+      gap: 2px;
+    }
+    .chosen-registers li {
+      min-height: 18px;
+      font-size: 5px;
+    }
+    .register-order-controls {
+      grid-template-columns: minmax(0, 1fr) repeat(3, 24px);
+      min-height: 26px;
+      padding: 1px;
+    }
+    .register-order-controls label > span { display: none; }
+    .register-order-controls select,
+    .register-order-controls button {
+      min-height: 22px;
+      font-size: 6px;
+    }
+    .program-console > button {
+      min-height: 23px;
+      padding: 0 4px;
+      font-size: 6px;
+    }
+    .submission-state {
+      padding: 3px;
+      font-size: 6px;
+    }
+    .opponent-programs {
+      gap: 2px;
+      margin: 0;
+    }
+    .opponent-programs li,
+    .deadline {
+      min-height: 21px;
+      padding: 2px 4px;
+      font-size: 6px;
+    }
+    .deadline button {
+      min-height: 20px;
+      font-size: 6px;
+    }
+
+    .setup-summary.resolution-active .program-head,
+    .setup-summary.resolution-active .submission-state,
+    .setup-summary.resolution-active .opponent-programs,
+    .setup-summary.resolution-active .deadline {
+      display: none;
+    }
+    .resolution-console {
+      gap: 2px;
+      padding: 0;
+      border: 0;
+    }
+    .robot-state { gap: 2px; }
+    .robot-state li {
+      min-height: 19px;
+      padding: 2px 3px;
+      font-size: 6px;
+    }
+    .board-phase,
+    .full-resolution {
+      display: none;
+    }
+    .setup-summary.resolution-active .resolution-console > ol {
+      max-height: 40px;
+    }
+    .reentry-choice {
+      gap: 2px;
+      padding: 2px;
+    }
+    .reentry-choice select,
+    .reentry-choice button,
+    .race-summary button {
+      min-height: 22px;
+      font-size: 6px;
+    }
+    .race-summary {
+      gap: 2px;
+      padding: 3px;
+      font-size: 6px;
+    }
+    .race-summary strong { font-size: 8px; }
+  }
   @media (max-width: 560px) {
     .configured-race {
       grid-template-columns: minmax(0, 1fr) 145px;
@@ -2270,6 +2791,11 @@
     .setup-summary h1 { font-size: 22px; }
     .setup-summary .lede { font-size: 8px; }
     .setup-order small { display: none; }
+    .setup-summary.program-editing h1 {
+      margin-bottom: 2px;
+      font-size: 18px;
+      line-height: 0.9;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
