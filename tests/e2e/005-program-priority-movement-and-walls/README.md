@@ -1,10 +1,20 @@
 # Resolve Program priority movement and walls
 
-Two ordinary five-card programs cover every 2005 instruction class. The deterministic trace proves descending priority, stepwise movement, an open board seam, and a wall that blocks from either side.
+Two ordinary five-card programs cover every 2005 instruction class. A large synchronized countdown introduces five visible register animations before the deterministic trace proves descending priority, stepwise movement, an open board seam, and a wall that blocks from either side.
+
+## A 3–2–1 warning hands off to slow register-one movement
+
+![A 3–2–1 warning hands off to slow register-one movement](./screenshots/000-priority-movement-resolved-desktop.png)
+
+**Verifications:**
+
+- [x] The full-screen countdown announces that all Programs are locked
+- [x] Production playback reserves three seconds for every register
+- [x] Both robot tokens use the animated board layer during playback
 
 ## All seven instructions resolve into one wall-safe final projection
 
-![All seven instructions resolve into one wall-safe final projection](./screenshots/000-priority-movement-resolved-desktop.png)
+![All seven instructions resolve into one wall-safe final projection](./screenshots/001-wall-safe-final-projection-desktop.png)
 
 **Verifications:**
 

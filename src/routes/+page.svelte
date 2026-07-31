@@ -15,7 +15,12 @@
     OPTION_CARDS_BY_ID,
     type OptionCardId
   } from '$lib/game/option-manifest';
-  import { beginNextTurnPowerDowns, legalReentryChoices } from '$lib/game/movement';
+  import {
+    beginNextTurnPowerDowns,
+    legalReentryChoices,
+    type ProgramPlayback,
+    type RaceRobotPosition
+  } from '$lib/game/movement';
   import {
     previewProgram,
     programCardZones,
@@ -34,6 +39,7 @@
 
   type ConnectionState = 'connecting' | 'synced' | 'offline' | 'error';
   type ViewMode = 'landing' | 'create' | 'join' | 'room';
+  type PlaybackPhase = 'idle' | 'countdown' | 'register' | 'complete';
 
   let connectionState: ConnectionState = 'connecting';
   let connectionMessage = 'Connecting to the factory network';
@@ -67,6 +73,17 @@
   let selectedReentryChoice = '';
   let reentryPoweredDown = false;
   let selectedOptionPreventionIds: OptionCardId[] = [];
+  let playbackPhase: PlaybackPhase = 'idle';
+  let playbackCountdown = 3;
+  let playbackRegister: number | null = null;
+  let playbackRobots: RaceRobotPosition[] | undefined;
+  let playbackTrace: ProgramPlayback['frames'][number]['trace'] = [];
+  let playbackFrameCount = 5;
+  let playbackKey = '';
+  let playbackTimeScale = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' ? 0.01 : 1;
+  let playbackTimers: ReturnType<typeof setTimeout>[] = [];
+  const PRODUCTION_REGISTER_PLAYBACK_MS = 3_000;
+  const PRODUCTION_COUNTDOWN_STEP_MS = 1_000;
   const buildHash = (import.meta.env.VITE_GIT_HASH ?? 'local-development').slice(0, 8);
 
   $: currentPlayer = services
@@ -135,16 +152,27 @@
     : [];
   $: openRegisterSlots =
     programmingPlayer?.registers.flatMap((register, index) => (register.locked ? [] : [index])) ?? [];
-  $: latestResolutionEntry = roomState.resolution?.trace.at(-1);
-  $: resolutionAnnouncement = latestResolutionEntry
-    ? `Turn ${roomState.resolution?.turnNumber}, ${
-        latestResolutionEntry.register <= 5
-          ? `register ${latestResolutionEntry.register}`
-          : 'cleanup'
-      }: ${latestResolutionEntry.text}`
-    : roomState.resolution
-      ? `Turn ${roomState.resolution.turnNumber} ${roomState.resolution.phase.replaceAll('-', ' ')}`
-      : '';
+  $: playbackIsActive = playbackPhase === 'countdown' || playbackPhase === 'register';
+  $: registerPlaybackMs = Math.round(PRODUCTION_REGISTER_PLAYBACK_MS * playbackTimeScale);
+  $: countdownStepMs = Math.round(PRODUCTION_COUNTDOWN_STEP_MS * playbackTimeScale);
+  $: presentedResolutionRobots = playbackRobots ?? roomState.resolution?.robots;
+  $: visibleResolutionTrace = playbackIsActive
+    ? playbackTrace
+    : (roomState.resolution?.trace ?? []);
+  $: latestResolutionEntry = visibleResolutionTrace.at(-1);
+  $: resolutionAnnouncement = playbackPhase === 'countdown'
+    ? `Programs locked. Movement begins in ${playbackCountdown}`
+    : playbackPhase === 'register' && playbackRegister
+      ? `Turn ${roomState.resolution?.turnNumber}, register ${playbackRegister} of ${playbackFrameCount}: ${latestResolutionEntry?.text ?? 'executing'}`
+      : latestResolutionEntry
+        ? `Turn ${roomState.resolution?.turnNumber}, ${
+            latestResolutionEntry.register <= 5
+              ? `register ${latestResolutionEntry.register}`
+              : 'cleanup'
+          }: ${latestResolutionEntry.text}`
+        : roomState.resolution
+          ? `Turn ${roomState.resolution.turnNumber} ${roomState.resolution.phase.replaceAll('-', ' ')}`
+          : '';
   $: deadlineSeconds = activeProgramming?.deadline
     ? Math.max(0, Math.ceil((activeProgramming.deadline - clockNow) / 1000))
     : null;
@@ -169,6 +197,67 @@
     !pending &&
     !unavailableRobots.has(selectedRobot) &&
     (mode !== 'join' || (!!roomState.gameId && !roomIsFull));
+
+  function clearPlaybackTimers() {
+    for (const timer of playbackTimers) clearTimeout(timer);
+    playbackTimers = [];
+  }
+
+  function resetProgramPlayback() {
+    clearPlaybackTimers();
+    playbackPhase = 'idle';
+    playbackCountdown = 3;
+    playbackRegister = null;
+    playbackRobots = undefined;
+    playbackTrace = [];
+    playbackFrameCount = 5;
+  }
+
+  function schedulePlayback(callback: () => void, delay: number) {
+    playbackTimers.push(setTimeout(callback, delay));
+  }
+
+  function startProgramPlayback(key: string, playback: ProgramPlayback) {
+    resetProgramPlayback();
+    playbackKey = key;
+    playbackPhase = 'countdown';
+    playbackCountdown = 3;
+    playbackRobots = playback.initialRobots;
+    playbackFrameCount = playback.frames.length;
+
+    schedulePlayback(() => (playbackCountdown = 2), countdownStepMs);
+    schedulePlayback(() => (playbackCountdown = 1), countdownStepMs * 2);
+
+    const countdownDuration = countdownStepMs * 3;
+    for (const [index, frame] of playback.frames.entries()) {
+      schedulePlayback(() => {
+        playbackPhase = 'register';
+        playbackRegister = frame.register;
+        playbackRobots = frame.robots;
+        playbackTrace = frame.trace;
+      }, countdownDuration + registerPlaybackMs * index);
+    }
+    schedulePlayback(() => {
+      playbackPhase = 'complete';
+      playbackRegister = null;
+      playbackRobots = undefined;
+      playbackTrace = [];
+    }, countdownDuration + registerPlaybackMs * playback.frames.length);
+  }
+
+  $: {
+    const resolution = roomState.resolution;
+    const nextPlaybackKey = resolution
+      ? `${roomState.raceEpoch}:${resolution.turnNumber}`
+      : '';
+    if (
+      resolution?.playback.frames.length &&
+      nextPlaybackKey &&
+      nextPlaybackKey !== playbackKey
+    ) {
+      startProgramPlayback(nextPlaybackKey, resolution.playback);
+    }
+  }
 
   function deterministicIdentity(userId: string) {
     const requested = new URLSearchParams(window.location.search).get('e2eIdentity');
@@ -199,6 +288,8 @@
     const generation = ++roomWatchGeneration;
     unsubscribe?.();
     roomCode = normalizeRoomCode(code);
+    playbackKey = '';
+    resetProgramPlayback();
     joinCode = roomCode;
     roomState = emptyRoomState();
     cacheHydrated = false;
@@ -277,6 +368,12 @@
 
   onMount(async () => {
     try {
+      if (
+        import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' &&
+        new URLSearchParams(window.location.search).get('e2ePlayback') === 'slow'
+      ) {
+        playbackTimeScale = 0.5;
+      }
       const { initializeFirebase } = await import('$lib/firebase');
       services = await initializeFirebase();
       browserOnline = navigator.onLine;
@@ -306,6 +403,7 @@
 
   onDestroy(() => {
     unsubscribe?.();
+    clearPlaybackTimers();
     window.removeEventListener('offline', handleOffline);
     window.removeEventListener('online', handleOnline);
     if (clockInterval) clearInterval(clockInterval);
@@ -674,9 +772,44 @@
     {resolutionAnnouncement}
   </div>
 
+  {#if playbackPhase === 'countdown'}
+    <div
+      class="program-countdown"
+      role="timer"
+      aria-live="assertive"
+      aria-atomic="true"
+      data-testid="program-countdown"
+    >
+      <small>ALL PROGRAMS LOCKED</small>
+      {#key playbackCountdown}
+        <strong>{playbackCountdown}</strong>
+      {/key}
+      <span>Movement incoming</span>
+    </div>
+  {:else if playbackPhase === 'register' && playbackRegister}
+    <div
+      class="register-playback"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      data-testid="register-playback"
+      data-register={playbackRegister}
+      data-production-duration-ms={PRODUCTION_REGISTER_PLAYBACK_MS}
+    >
+      <strong>REGISTER {playbackRegister} OF {playbackFrameCount}</strong>
+      <span>{latestResolutionEntry?.text ?? 'Executing programmed movement'}</span>
+      <i style={`--playback-progress:${playbackRegister / playbackFrameCount}`}></i>
+    </div>
+  {/if}
+
   {#if mode === 'room' && currentPlayer && roomState.setup && roomState.configuration}
     <section class="configured-race" aria-labelledby="race-heading">
-      <CourseBoard setup={roomState.setup} robots={roomState.resolution?.robots} />
+      <CourseBoard
+        setup={roomState.setup}
+        robots={presentedResolutionRobots}
+        animateRobots={playbackIsActive}
+        registerDurationMs={registerPlaybackMs}
+      />
       <aside
         class:resolution-active={!!roomState.resolution}
         class:next-turn-programming={!!roomState.resolution &&
@@ -963,15 +1096,19 @@
               <section class="resolution-console" aria-labelledby="resolution-heading">
                 <h2 id="resolution-heading">
                   Turn {roomState.resolution.turnNumber}
-                  {roomState.resolution.phase === 'turn-complete'
-                    ? 'complete'
-                    : roomState.resolution.phase === 'race-finished'
-                      ? 'finished'
-                      : 'awaiting re-entry'}
-                  · {roomState.resolution.trace.length} microsteps
+                  {playbackPhase === 'countdown'
+                    ? 'programs locked'
+                    : playbackPhase === 'register'
+                      ? `register ${playbackRegister} of ${playbackFrameCount}`
+                      : roomState.resolution.phase === 'turn-complete'
+                        ? 'complete'
+                        : roomState.resolution.phase === 'race-finished'
+                          ? 'finished'
+                          : 'awaiting re-entry'}
+                  · {visibleResolutionTrace.length} microsteps
                 </h2>
                 <ul class="robot-state" aria-label="Robot Life and damage state">
-                  {#each roomState.resolution.robots as robot}
+                  {#each presentedResolutionRobots ?? [] as robot}
                     <li>
                       <strong>{robot.name}</strong>
                       <span class="robot-vitals">
@@ -1008,7 +1145,7 @@
                   one laser snapshot. Exchange prints no pushers; fixtures cover that stage.
                   Damage 9 repeats all five locked registers.
                 </p>
-                {#if optionLossRobot}
+                {#if !playbackIsActive && optionLossRobot}
                   {#if optionLossRobot.uid === currentPlayer?.uid}
                     <div class="option-loss-choice" aria-label="Destroyed robot Option loss">
                       <strong>Discard one Option before re-entry</strong>
@@ -1028,7 +1165,7 @@
                     </p>
                   {/if}
                 {/if}
-                {#if reentryChoices.length > 0}
+                {#if !playbackIsActive && reentryChoices.length > 0}
                   <div class="reentry-choice">
                     <label>
                       Re-entry cell and facing
@@ -1053,11 +1190,11 @@
                       disabled={pending || !selectedReentryChoice}
                     >Confirm re-entry</button>
                   </div>
-                {:else if roomState.resolution.nextReentryUid}
+                {:else if !playbackIsActive && roomState.resolution.nextReentryUid}
                   {@const nextReentryPlayer = roomState.players.find(({ uid }) => uid === roomState.resolution?.nextReentryUid)}
                   <p class="reentry-wait">Waiting for {nextReentryPlayer?.name} to choose re-entry.</p>
                 {/if}
-                {#if roomState.nextProgramming && requestedTurnNumber < roomState.nextProgramming.turnNumber}
+                {#if !playbackIsActive && roomState.nextProgramming && requestedTurnNumber < roomState.nextProgramming.turnNumber}
                   <button
                     type="button"
                     onclick={() => {
@@ -1069,7 +1206,7 @@
                     Begin Turn {roomState.nextProgramming.turnNumber}
                   </button>
                 {/if}
-                {#if roomState.resolution.summary}
+                {#if !playbackIsActive && roomState.resolution.summary}
                   {@const winner = roomState.players.find(
                     ({ uid }) => uid === roomState.resolution?.summary?.winnerUid
                   )}
@@ -1087,7 +1224,7 @@
                   </section>
                 {/if}
                 <ol aria-label="Resolution feed" aria-live="polite">
-                  {#each roomState.resolution.trace.slice(-5) as entry, index}
+                  {#each visibleResolutionTrace.slice(-5) as entry, index}
                     <li style={`--trace-index:${index}`}>
                       <span>{entry.register <= 5 ? `R${entry.register}` : 'CLEANUP'} · {entry.priority ?? 'SYS'}</span>
                       {entry.text}
@@ -1097,7 +1234,7 @@
                 <details class="full-resolution">
                   <summary>Full resolution text</summary>
                   <ol aria-label="Full resolution feed">
-                    {#each roomState.resolution.trace as entry}
+                    {#each visibleResolutionTrace as entry}
                       <li><span>{entry.register <= 5 ? `R${entry.register}` : 'CLEANUP'} · {entry.priority ?? 'SYS'}</span>{entry.text}</li>
                     {/each}
                   </ol>
@@ -1372,6 +1509,79 @@
     overflow: hidden;
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
+  }
+
+  .program-countdown {
+    position: fixed;
+    z-index: 100;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    place-items: center;
+    gap: 8px;
+    pointer-events: none;
+    color: #eef4ee;
+    background:
+      radial-gradient(circle, rgba(210, 255, 55, 0.16), transparent 38%),
+      rgba(4, 8, 9, 0.88);
+    text-align: center;
+  }
+  .program-countdown small,
+  .program-countdown span {
+    font: 700 clamp(10px, 1.5vw, 16px) 'Space Mono', monospace;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .program-countdown small { color: #ffcf4b; }
+  .program-countdown span { color: #aebbb9; }
+  .program-countdown strong {
+    color: #d2ff37;
+    font: 700 clamp(120px, 30vmin, 280px)/0.82 'Space Mono', monospace;
+    text-shadow: 0 0 42px rgba(210, 255, 55, 0.28);
+    animation: countdown-pulse 900ms ease-out both;
+  }
+  .register-playback {
+    position: fixed;
+    z-index: 90;
+    top: max(76px, calc(env(safe-area-inset-top) + 68px));
+    left: 50%;
+    display: grid;
+    width: min(520px, calc(100vw - 32px));
+    gap: 3px;
+    padding: 9px 12px;
+    pointer-events: none;
+    border: 1px solid #d2ff37;
+    color: #eef4ee;
+    background: rgba(8, 14, 15, 0.94);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.48);
+    font-family: 'Space Mono', monospace;
+    transform: translateX(-50%);
+  }
+  .register-playback strong {
+    color: #d2ff37;
+    font-size: 13px;
+    letter-spacing: 0.16em;
+  }
+  .register-playback span {
+    overflow: hidden;
+    color: #aebbb9;
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .register-playback i {
+    width: 100%;
+    height: 2px;
+    margin-top: 3px;
+    background: linear-gradient(
+      90deg,
+      #d2ff37 0 calc(var(--playback-progress) * 100%),
+      #344043 calc(var(--playback-progress) * 100%) 100%
+    );
+  }
+  @keyframes countdown-pulse {
+    from { opacity: 0; transform: scale(1.28); }
+    to { opacity: 1; transform: scale(1); }
   }
 
   .shell {

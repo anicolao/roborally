@@ -139,12 +139,32 @@ describe('priority Program movement', () => {
 
     const resolution = resolveProgrammedTurn(programming, setup);
     expect(resolution?.trace.filter(({ kind }) => kind === 'reveal')).toHaveLength(10);
+    expect(resolution?.playback.initialRobots).toEqual(
+      expect.arrayContaining(
+        setup.players.map((player) =>
+          expect.objectContaining({
+            uid: player.uid,
+            x: player.position.x,
+            y: player.position.y,
+            facing: player.facing
+          })
+        )
+      )
+    );
+    expect(resolution?.playback.frames.map(({ register }) => register)).toEqual([1, 2, 3, 4, 5]);
     for (let register = 1; register <= 5; register += 1) {
       const priorities = resolution!.trace
         .filter((entry) => entry.register === register && entry.kind === 'reveal')
         .map(({ priority }) => priority!);
       expect(priorities).toEqual([...priorities].sort((left, right) => right - left));
+      expect(resolution?.playback.frames[register - 1].trace).not.toHaveLength(0);
+      expect(
+        resolution?.playback.frames[register - 1].trace.every(
+          (entry) => entry.register === register
+        )
+      ).toBe(true);
     }
+    expect(resolution?.playback.frames.at(-1)?.robots).toEqual(resolution?.robots);
     expect(resolution?.phase).toBe('turn-complete');
   });
 
@@ -281,7 +301,8 @@ describe('priority Program movement', () => {
       nextReentryUid: 'first',
       winnerUid: null,
       runnersUpUids: [],
-      summary: null
+      summary: null,
+      playback: { initialRobots: [], frames: [] }
     };
 
     expect(legalReentryChoices(resolution, 'second')).toEqual([]);
@@ -330,7 +351,8 @@ describe('priority Program movement', () => {
       nextReentryUid: destroyed.uid,
       winnerUid: null,
       runnersUpUids: [],
-      summary: null
+      summary: null,
+      playback: { initialRobots: [], frames: [] }
     };
 
     const reenteredDown = applyReentryChoice(awaiting, destroyed.uid, {
@@ -899,7 +921,8 @@ describe('priority Program movement', () => {
       nextReentryUid: target.uid,
       winnerUid: null,
       runnersUpUids: [],
-      summary: null
+      summary: null,
+      playback: { initialRobots: [], frames: [] }
     };
     const reentered = applyReentryChoice(awaiting, target.uid, {
       x: 3,
@@ -938,7 +961,8 @@ describe('priority Program movement', () => {
       nextReentryUid: null,
       winnerUid: null,
       runnersUpUids: [],
-      summary: null
+      summary: null,
+      playback: { initialRobots: [], frames: [] }
     };
 
     expect(applyOptionLossChoice(awaiting, 'other', 'brakes')).toBe(awaiting);

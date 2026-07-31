@@ -17,7 +17,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
   let guestContext: BrowserContext | undefined;
 
   try {
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}`);
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2ePlayback=slow`);
     await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');
@@ -29,10 +29,10 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     const steps = new TestStepHelper(host, testInfo);
     steps.setMetadata(
       'Resolve Program priority movement and walls',
-      'Two ordinary five-card programs cover every 2005 instruction class. The deterministic trace proves descending priority, stepwise movement, an open board seam, and a wall that blocks from either side.'
+      'Two ordinary five-card programs cover every 2005 instruction class. A large synchronized countdown introduces five visible register animations before the deterministic trace proves descending priority, stepwise movement, an open board seam, and a wall that blocks from either side.'
     );
 
-    await guest.goto(`/?room=${roomCode}&e2eIdentity=GUEST`);
+    await guest.goto(`/?room=${roomCode}&e2eIdentity=GUEST&e2ePlayback=slow`);
     await expect(guest.getByRole('status')).toHaveAttribute('data-status', 'synced');
     await guest.getByLabel('Racer name').fill('Grace');
     await guest.getByRole('button', { name: 'Bit' }).click();
@@ -61,6 +61,40 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
       'move-3 priority 800'
     ]);
 
+    const countdown = host.getByTestId('program-countdown');
+    await expect(countdown).toContainText('ALL PROGRAMS LOCKED');
+    await expect(countdown).toContainText('3');
+    await expect(countdown).toContainText('2');
+    await expect(countdown).toContainText('1');
+    const registerPlayback = host.getByTestId('register-playback');
+    await expect(registerPlayback).toHaveAttribute('data-register', '1');
+
+    await steps.step('priority-movement-resolved', {
+      description: 'A 3–2–1 warning hands off to slow register-one movement',
+      verifications: [
+        {
+          spec: 'The full-screen countdown announces that all Programs are locked',
+          check: async () => expect(host.getByTestId('resolution-live')).toContainText('register 1')
+        },
+        {
+          spec: 'Production playback reserves three seconds for every register',
+          check: async () =>
+            expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '3000')
+        },
+        {
+          spec: 'Both robot tokens use the animated board layer during playback',
+          check: async () => expect(host.locator('[data-playback-robot]')).toHaveCount(2)
+        }
+      ]
+    });
+
+    for (const register of [2, 3, 4, 5]) {
+      await expect(registerPlayback).toHaveAttribute('data-register', String(register), {
+        timeout: 10_000
+      });
+    }
+    await expect(registerPlayback).toBeHidden({ timeout: 10_000 });
+
     await expect(host.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();
     await expect(guest.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();
 
@@ -80,7 +114,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
       )
       .toBe('none');
 
-    await steps.step('priority-movement-resolved', {
+    await steps.step('wall-safe-final-projection', {
       description: 'All seven instructions resolve into one wall-safe final projection',
       verifications: [
         {
