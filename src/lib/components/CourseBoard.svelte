@@ -15,12 +15,12 @@
     setup,
     robots,
     animateRobots = false,
-    registerDurationMs = 3_000
+    transitionDurationMs = 2_000
   }: {
     setup: RaceSetup;
     robots?: RaceRobotPosition[];
     animateRobots?: boolean;
-    registerDurationMs?: number;
+    transitionDurationMs?: number;
   } = $props();
 
   let zoom = $state(1);
@@ -179,7 +179,7 @@
             aria-hidden="true"
             class={`animated-race-robot facing-${player.facing}`}
             data-playback-robot={player.uid}
-            style={`left:${((player.position.x - 0.5) / 12) * 100}%;top:${((player.position.y - 0.5) / 16) * 100}%;--register-duration:${registerDurationMs}ms`}
+            style={`left:${((player.position.x - 0.5) / 12) * 100}%;top:${((player.position.y - 0.5) / 16) * 100}%;--playback-duration:${transitionDurationMs}ms`}
           >
             <i></i>{robot?.mark}
           </span>
@@ -321,9 +321,9 @@
     font: 700 7px 'Space Mono', monospace;
     transform: translate(-50%, -50%);
     transition:
-      left var(--register-duration) ease-in-out,
-      top var(--register-duration) ease-in-out,
-      transform var(--register-duration) ease-in-out;
+      left var(--playback-duration) ease-in-out,
+      top var(--playback-duration) ease-in-out,
+      transform var(--playback-duration) ease-in-out;
   }
   .race-robot i, .animated-race-robot i {
     position: absolute; top: -7px; left: 8px;

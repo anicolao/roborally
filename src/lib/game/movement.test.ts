@@ -151,21 +151,88 @@ describe('priority Program movement', () => {
         )
       )
     );
-    expect(resolution?.playback.frames.map(({ register }) => register)).toEqual([1, 2, 3, 4, 5]);
+    expect(resolution?.playback.frames).toHaveLength(30);
     for (let register = 1; register <= 5; register += 1) {
       const priorities = resolution!.trace
         .filter((entry) => entry.register === register && entry.kind === 'reveal')
         .map(({ priority }) => priority!);
       expect(priorities).toEqual([...priorities].sort((left, right) => right - left));
-      expect(resolution?.playback.frames[register - 1].trace).not.toHaveLength(0);
+      const registerFrames = resolution!.playback.frames.filter(
+        (frame) => frame.register === register
+      );
+      expect(registerFrames.map(({ stage }) => stage)).toEqual([
+        'program-card',
+        'program-card',
+        'express-conveyors',
+        'conveyors',
+        'pushers',
+        'gears'
+      ]);
       expect(
-        resolution?.playback.frames[register - 1].trace.every(
-          (entry) => entry.register === register
+        registerFrames
+          .filter(({ stage }) => stage === 'program-card')
+          .map(({ trace }) => trace.find(({ kind }) => kind === 'reveal')?.priority)
+      ).toEqual(priorities);
+      expect(
+        registerFrames.every(({ trace }) =>
+          trace.every((entry) => entry.register === register)
         )
       ).toBe(true);
     }
     expect(resolution?.playback.frames.at(-1)?.robots).toEqual(resolution?.robots);
     expect(resolution?.phase).toBe('turn-complete');
+  });
+
+  it('keeps Program movement, conveyors, and gear rotation in separate playback stages', () => {
+    const config = riskyExchangeConfig('STAGED-PLAYBACK');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'hex', name: 'Hex', robotId: 'hex' },
+        { uid: 'rivet', name: 'Rivet', robotId: 'rivet' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    programming.phase = 'programmed';
+    const hexProgram = programming.players.find(({ uid }) => uid === 'hex')!;
+    hexProgram.submitted = true;
+    hexProgram.registers[0].cardId = card('move-1').id;
+    hexProgram.registers[1].cardId = card('move-3').id;
+    const robot = raceRobot({ uid: 'hex', name: 'Hex', x: 4, y: 11, facing: 'north' });
+    const spectator = raceRobot({ uid: 'rivet', name: 'Rivet', x: 12, y: 12 });
+
+    const resolution = resolveProgrammedTurn(programming, setup, [robot, spectator]);
+    const firstRegister = resolution!.playback.frames.filter(({ register }) => register === 1);
+
+    expect(firstRegister.map(({ stage }) => stage)).toEqual([
+      'program-card',
+      'express-conveyors',
+      'conveyors',
+      'pushers',
+      'gears'
+    ]);
+    expect(firstRegister[0].robots[0]).toMatchObject({ x: 4, y: 10, facing: 'north' });
+    expect(firstRegister[1].robots[0]).toMatchObject({ x: 4, y: 10, facing: 'north' });
+    expect(firstRegister[2].robots[0]).toMatchObject({ x: 4, y: 9, facing: 'north' });
+    expect(firstRegister[3].robots[0]).toMatchObject({ x: 4, y: 9, facing: 'north' });
+    expect(firstRegister[4].robots[0]).toMatchObject({ x: 4, y: 9, facing: 'west' });
+    expect(firstRegister[2].trace.map(({ kind }) => kind)).toContain('conveyor');
+    expect(firstRegister[4].trace.map(({ kind }) => kind)).toContain('gear');
+
+    const secondRegister = resolution!.playback.frames.filter(({ register }) => register === 2);
+    expect(secondRegister[0]).toMatchObject({ stage: 'program-card' });
+    expect(secondRegister[0].robots[0]).toMatchObject({
+      x: 1,
+      y: 9,
+      facing: 'west',
+      status: 'active',
+      lives: 3
+    });
+    expect(secondRegister[1]).toMatchObject({ stage: 'express-conveyors' });
+    expect(secondRegister[1].robots[0]).toMatchObject({ status: 'active', lives: 3 });
+    expect(secondRegister[2]).toMatchObject({ stage: 'conveyors' });
+    expect(secondRegister[2].robots[0]).toMatchObject({ status: 'destroyed', lives: 2 });
+    expect(secondRegister[2].trace.map(({ kind }) => kind)).toContain('destroyed-edge');
   });
 
   it('pushes chains transactionally and cancels the entire chain at a wall', () => {

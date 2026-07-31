@@ -1,6 +1,6 @@
 # Resolve Program priority movement and walls
 
-Two ordinary five-card programs cover every 2005 instruction class. A large synchronized countdown introduces five visible register animations before the deterministic trace proves descending priority, stepwise movement, an open board seam, and a wall that blocks from either side.
+Two ordinary five-card programs cover every 2005 instruction class. A large synchronized countdown introduces priority-ordered Program card, conveyor, and factory-element animations for all five registers before the deterministic trace proves descending priority, stepwise movement, an open board seam, and a wall that blocks from either side.
 
 ## All seven instructions resolve into one wall-safe final projection
 
@@ -9,7 +9,7 @@ Two ordinary five-card programs cover every 2005 instruction class. A large sync
 **Verifications:**
 
 - [x] The full-screen countdown announces that all Programs are locked
-- [x] Production playback reserves three seconds for every register
+- [x] Each Program card gets two seconds and each ordered factory stage gets one
 - [x] Both robot tokens use the animated board layer during playback
 - [x] Register cards resolve from highest unique priority to lowest
 - [x] The wall between Dock 1 and Dock 2 stops eastward movement at (6,15)

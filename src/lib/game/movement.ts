@@ -99,6 +99,9 @@ export interface ResolutionTraceEntry {
 
 export interface ProgramPlaybackFrame {
   register: RegisterNumber;
+  stage: 'program-card' | 'express-conveyors' | 'conveyors' | 'pushers' | 'gears';
+  actorUid: string | null;
+  cardId: ProgramCard['id'] | null;
   robots: RaceRobotPosition[];
   trace: ResolutionTraceEntry[];
 }
@@ -652,7 +655,7 @@ function resolveConveyorSubstep(
   }
 }
 
-export function resolveBoardElements(
+function resolveExpressConveyors(
   robots: RaceRobotPosition[],
   register: number,
   trace: ResolutionTraceEntry[],
@@ -660,8 +663,25 @@ export function resolveBoardElements(
   optionPlans: Readonly<Record<string, OptionTurnPlan>> = {}
 ) {
   resolveConveyorSubstep(robots, register, trace, true, cells, optionPlans);
-  resolveConveyorSubstep(robots, register, trace, false, cells, optionPlans);
+}
 
+function resolveNormalConveyors(
+  robots: RaceRobotPosition[],
+  register: number,
+  trace: ResolutionTraceEntry[],
+  cells: readonly BoardCell[] = worldBoardCells,
+  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {}
+) {
+  resolveConveyorSubstep(robots, register, trace, false, cells, optionPlans);
+}
+
+function resolvePushers(
+  robots: RaceRobotPosition[],
+  register: number,
+  trace: ResolutionTraceEntry[],
+  cells: readonly BoardCell[] = worldBoardCells,
+  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {}
+) {
   for (const robot of [...robots]) {
     if (robot.status !== 'active') continue;
     const pusher = elementAt(cells, robot.x, robot.y, 'pusher') as
@@ -679,7 +699,15 @@ export function resolveBoardElements(
       'pusher'
     );
   }
+}
 
+function resolveGears(
+  robots: RaceRobotPosition[],
+  register: number,
+  trace: ResolutionTraceEntry[],
+  cells: readonly BoardCell[] = worldBoardCells,
+  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {}
+) {
   for (const robot of robots) {
     if (robot.status !== 'active') continue;
     const gear = elementAt(cells, robot.x, robot.y, 'gear') as
@@ -713,6 +741,19 @@ export function resolveBoardElements(
       `${robot.name} rotated ${gear.rotation} from ${before} to ${robot.facing}.`
     );
   }
+}
+
+export function resolveBoardElements(
+  robots: RaceRobotPosition[],
+  register: number,
+  trace: ResolutionTraceEntry[],
+  cells: readonly BoardCell[] = worldBoardCells,
+  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {}
+) {
+  resolveExpressConveyors(robots, register, trace, cells, optionPlans);
+  resolveNormalConveyors(robots, register, trace, cells, optionPlans);
+  resolvePushers(robots, register, trace, cells, optionPlans);
+  resolveGears(robots, register, trace, cells, optionPlans);
 }
 
 export function lockedRegisterNumbersForDamage(damage: number): RegisterNumber[] {
@@ -1381,7 +1422,6 @@ export function resolveProgrammedTurn(
   const cards = new Map(PROGRAM_CARDS.map((card) => [card.id, card]));
 
   for (let register = 1; register <= 5; register += 1) {
-    const registerTraceStart = trace.length;
     const queue = programming.players
       .map((player) => {
         const cardId = player.registers[register - 1].cardId;
@@ -1391,6 +1431,7 @@ export function resolveProgrammedTurn(
       .filter((entry): entry is { uid: string; card: ProgramCard } => entry !== null)
       .sort((left, right) => right.card.priority - left.card.priority);
     for (const entry of queue) {
+      const cardTraceStart = trace.length;
       applyProgramCard(
         robots,
         entry.uid,
@@ -1399,8 +1440,52 @@ export function resolveProgrammedTurn(
         trace,
         optionPlanFor(optionPlans, entry.uid)
       );
+      if (trace.length === cardTraceStart) continue;
+      playback.frames.push({
+        register: register as RegisterNumber,
+        stage: 'program-card',
+        actorUid: entry.uid,
+        cardId: entry.card.id,
+        robots: cloneRobots(robots),
+        trace: trace.slice(cardTraceStart)
+      });
     }
-    resolveBoardElements(robots, register, trace, worldBoardCells, optionPlans);
+
+    const expressTraceStart = trace.length;
+    resolveExpressConveyors(robots, register, trace, worldBoardCells, optionPlans);
+    playback.frames.push({
+      register: register as RegisterNumber,
+      stage: 'express-conveyors',
+      actorUid: null,
+      cardId: null,
+      robots: cloneRobots(robots),
+      trace: trace.slice(expressTraceStart)
+    });
+
+    const conveyorTraceStart = trace.length;
+    resolveNormalConveyors(robots, register, trace, worldBoardCells, optionPlans);
+    playback.frames.push({
+      register: register as RegisterNumber,
+      stage: 'conveyors',
+      actorUid: null,
+      cardId: null,
+      robots: cloneRobots(robots),
+      trace: trace.slice(conveyorTraceStart)
+    });
+
+    const pusherTraceStart = trace.length;
+    resolvePushers(robots, register, trace, worldBoardCells, optionPlans);
+    playback.frames.push({
+      register: register as RegisterNumber,
+      stage: 'pushers',
+      actorUid: null,
+      cardId: null,
+      robots: cloneRobots(robots),
+      trace: trace.slice(pusherTraceStart)
+    });
+
+    const gearTraceStart = trace.length;
+    resolveGears(robots, register, trace, worldBoardCells, optionPlans);
     resolveLaserSnapshot(
       robots,
       register,
@@ -1412,11 +1497,6 @@ export function resolveProgrammedTurn(
       optionPlans
     );
     const finishers = resolveFlagsAndArchives(robots, register, trace);
-    playback.frames.push({
-      register: register as RegisterNumber,
-      robots: cloneRobots(robots),
-      trace: trace.slice(registerTraceStart)
-    });
     if (finishers.length > 0) {
       const winnerUid = finishers[0];
       const runnersUpUids = includeRunnersUp ? finishers.slice(1) : [];
@@ -1429,6 +1509,14 @@ export function resolveProgrammedTurn(
         'winner',
         `${winner.name} touched Flag 3 in order and won the race.`
       );
+      playback.frames.push({
+        register: register as RegisterNumber,
+        stage: 'gears',
+        actorUid: null,
+        cardId: null,
+        robots: cloneRobots(robots),
+        trace: trace.slice(gearTraceStart)
+      });
       return {
         turnNumber: programming.turnNumber,
         phase: 'race-finished',
@@ -1443,6 +1531,14 @@ export function resolveProgrammedTurn(
         playback
       };
     }
+    playback.frames.push({
+      register: register as RegisterNumber,
+      stage: 'gears',
+      actorUid: null,
+      cardId: null,
+      robots: cloneRobots(robots),
+      trace: trace.slice(gearTraceStart)
+    });
   }
 
   resolveRepairCleanup(robots, trace, worldBoardCells, optionDeck);
