@@ -216,7 +216,8 @@ export function timeOutProgram(
   current: ProgrammingState,
   targetUid: string,
   createdAt: number,
-  seed: string
+  seed: string,
+  preservedCardIds: readonly ProgramCard['id'][] = []
 ): ProgrammingState {
   const state = cloneState(current);
   const target = state.players.find(({ uid }) => uid === targetUid);
@@ -232,17 +233,32 @@ export function timeOutProgram(
     return state;
   }
 
+  const needed = target.registers.filter(({ locked }) => !locked).length;
+  if (
+    preservedCardIds.length > needed ||
+    new Set(preservedCardIds).size !== preservedCardIds.length ||
+    preservedCardIds.some((cardId) => !target.hand.includes(cardId))
+  ) {
+    state.diagnostics.push(`invalid-timeout-program:${targetUid}`);
+    return state;
+  }
+
   // Anonymous Firebase UIDs differ between otherwise identical runs. Deal order is
   // Dock order, so it is the canonical stable identity for timeout randomization.
   const targetDealIndex = state.players.indexOf(target);
   const random = createPrng(`${seed}:${state.turnId}:timeout:dock-${targetDealIndex + 1}`);
-  const available = [...target.hand];
+  const preserved = new Set(preservedCardIds);
+  const available = target.hand.filter((cardId) => !preserved.has(cardId));
   for (let index = available.length - 1; index > 0; index -= 1) {
     const selected = Math.floor(random() * (index + 1));
     [available[index], available[selected]] = [available[selected], available[index]];
   }
-  const needed = target.registers.filter(({ locked }) => !locked).length;
-  placeProgram(state, target, available.slice(0, needed), true);
+  placeProgram(
+    state,
+    target,
+    [...preservedCardIds, ...available.slice(0, needed - preservedCardIds.length)],
+    true
+  );
   closeProgrammingIfComplete(state);
   return state;
 }

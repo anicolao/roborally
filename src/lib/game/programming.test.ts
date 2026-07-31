@@ -134,6 +134,62 @@ describe('shared Program deck', () => {
     expect(programCardZones(timedOut)).toHaveLength(84);
   });
 
+  it('preserves selected registers and fills only the empty timeout slots', () => {
+    const initial = createProgrammingState(setup, config);
+    const first = initial.players[0];
+    const submitted = submitProgram(initial, first.uid, first.hand.slice(0, 5), 5_000);
+    const target = submitted.players.find(
+      ({ uid }) => uid === submitted.deadlinePlayerUid
+    )!;
+    const preserved = [target.hand[3], target.hand[1]];
+
+    const timedOut = timeOutProgram(
+      submitted,
+      target.uid,
+      submitted.deadline!,
+      config.seed,
+      preserved
+    );
+
+    expect(timedOut.phase).toBe('programmed');
+    expect(timedOut.players.find(({ uid }) => uid === target.uid)?.registers.slice(0, 2))
+      .toEqual(preserved.map((cardId) => ({ cardId, locked: false })));
+    expect(
+      timedOut.players.find(({ uid }) => uid === target.uid)?.registers
+        .map(({ cardId }) => cardId)
+        .filter(Boolean)
+    ).toHaveLength(5);
+    expect(programCardZones(timedOut)).toHaveLength(84);
+  });
+
+  it('rejects timeout prefixes that are duplicated or are not in the target hand', () => {
+    const initial = createProgrammingState(setup, config);
+    const first = initial.players[0];
+    const submitted = submitProgram(initial, first.uid, first.hand.slice(0, 5), 5_000);
+    const targetUid = submitted.deadlinePlayerUid!;
+    const targetCard = submitted.players.find(({ uid }) => uid === targetUid)!.hand[0];
+
+    const duplicated = timeOutProgram(
+      submitted,
+      targetUid,
+      submitted.deadline!,
+      config.seed,
+      [targetCard, targetCard]
+    );
+    expect(duplicated.diagnostics).toContain(`invalid-timeout-program:${targetUid}`);
+    expect(duplicated.players.find(({ uid }) => uid === targetUid)?.submitted).toBe(false);
+
+    const foreign = timeOutProgram(
+      submitted,
+      targetUid,
+      submitted.deadline!,
+      config.seed,
+      [first.hand[0]]
+    );
+    expect(foreign.diagnostics).toContain(`invalid-timeout-program:${targetUid}`);
+    expect(foreign.players.find(({ uid }) => uid === targetUid)?.submitted).toBe(false);
+  });
+
   it('randomizes timeout fills by stable Dock order rather than ephemeral UIDs', () => {
     const replacementSetup = {
       ...setup,

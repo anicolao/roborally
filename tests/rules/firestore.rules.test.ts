@@ -157,7 +157,32 @@ describe('append-only game stream rules', () => {
         clientSeq: 3,
         payload: {
           targetUid: 'robot-b',
-          turnId: 'turn-002'
+          turnId: 'turn-002',
+          cardIds: []
+        }
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, 'games/room/events/robot-a-000004'), {
+        ...eventData('robot-a'),
+        type: 'program/timed-out',
+        clientSeq: 4,
+        payload: {
+          targetUid: 'robot-b',
+          turnId: 'turn-002',
+          cardIds: ['program-010']
+        }
+      })
+    );
+    await assertSucceeds(
+      setDoc(doc(db, 'games/room/events/robot-a-000005'), {
+        ...eventData('robot-a'),
+        type: 'program/timed-out',
+        clientSeq: 5,
+        payload: {
+          targetUid: 'robot-a',
+          turnId: 'turn-002',
+          cardIds: ['program-010']
         }
       })
     );

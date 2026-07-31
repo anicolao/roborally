@@ -636,8 +636,11 @@
         services.user,
         roomCode,
         targetUid,
-        activeProgramming?.turnId
+        activeProgramming?.turnId,
+        selectedProgramCardIds
       );
+      selectedProgramCardIds = [];
+      editingRegisterIndex = 0;
     } catch (error) {
       console.error(error);
       formError = 'The timeout claim could not be written.';

@@ -90,6 +90,7 @@ export interface ProgramSubmittedPayload {
 export interface ProgramTimedOutPayload {
   targetUid: string;
   turnId: TurnId;
+  cardIds?: ProgramCard['id'][];
 }
 
 export interface EffectChosenPayload {
@@ -639,6 +640,8 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       if (
         !payload ||
         typeof payload.targetUid !== 'string' ||
+        (payload.cardIds !== undefined && !Array.isArray(payload.cardIds)) ||
+        (event.actorUid !== payload.targetUid && (payload.cardIds?.length ?? 0) > 0) ||
         !eventProgramming ||
         !state.configuration
       ) {
@@ -650,7 +653,8 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         eventProgramming,
         payload.targetUid,
         event.createdAt ?? 0,
-        state.configuration.seed
+        state.configuration.seed,
+        payload.cardIds ?? []
       );
       if (next.diagnostics.length !== eventProgramming.diagnostics.length) {
         diagnostic(state, event, 'invalid-timeout', 'The timeout claim is not yet legal.');

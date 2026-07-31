@@ -85,7 +85,7 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
 
     guestContext = await browser.newContext();
     const guest = await guestContext.newPage();
-    const steps = new TestStepHelper(guest, testInfo);
+    const steps = new TestStepHelper(host, testInfo);
     steps.setMetadata(
       'Deal and commit programs from one shared deck',
       'Two clients receive one seeded round-robin deal. Programs cross the immutable event stream, stay masked to the observer, and a timeout is tested with an explicit emulator timestamp rather than a sleep.'
@@ -110,12 +110,12 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
     await expect(host.getByTestId('program-conservation')).toContainText('84/84 cards accounted');
     await expect(host.getByTestId('program-conservation')).toContainText('66 undealt');
 
-    const hostCards = host.getByLabel('Your Program hand').getByRole('button');
-    for (let index = 0; index < 5; index += 1) await hostCards.nth(index).click();
-    await expect(host.getByRole('list', { name: 'Chosen registers' }).getByRole('listitem'))
+    const guestCards = guest.getByLabel('Your Program hand').getByRole('button');
+    for (let index = 0; index < 5; index += 1) await guestCards.nth(index).click();
+    await expect(guest.getByRole('list', { name: 'Chosen registers' }).getByRole('listitem'))
       .not.toContainText(['empty', 'empty', 'empty', 'empty', 'empty']);
-    await expect(host.getByText(/Preview excludes robots and unrevealed board outcomes/)).toBeVisible();
-    await host.getByRole('button', { name: 'Submit immutable program' }).click();
+    await expect(guest.getByText(/Preview excludes robots and unrevealed board outcomes/)).toBeVisible();
+    await guest.getByRole('button', { name: 'Submit immutable program' }).click();
 
     await steps.step('opponent-program-masked', {
       description: 'The first immutable submission stays face down to its observer',
@@ -132,40 +132,62 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
         {
           spec: 'The submitter can no longer inspect, rearrange, or resubmit the program',
           check: async () => {
-            await expect(host.getByText(/Program committed/)).toBeVisible();
-            await expect(host.getByLabel('Your Program hand')).toHaveCount(0);
-            await expect(host.getByRole('button', { name: 'Submit immutable program' })).toHaveCount(0);
+            await expect(guest.getByText(/Program committed/)).toBeVisible();
+            await expect(guest.getByLabel('Your Program hand')).toHaveCount(0);
+            await expect(guest.getByRole('button', { name: 'Submit immutable program' })).toHaveCount(0);
           }
         },
         {
           spec: 'The observer sees five face-down registers and no card priorities',
           check: async () => {
             await expect(
-              guest.getByRole('list', { name: 'Program submission status' })
+              host.getByRole('list', { name: 'Program submission status' })
             ).toContainText('▰ ▰ ▰ ▰ ▰');
           }
         },
         {
           spec: 'The last programmer receives the canonical 30-second deadline',
           check: async () => {
-            await expect(guest.getByRole('timer')).toContainText(/Grace has (29|30) seconds/);
+            await expect(host.getByRole('timer')).toContainText(/Ada has (29|30) seconds/);
           }
         }
       ]
     });
 
     await rewindSubmissionDeadline(roomCode);
-    await expect(host.getByRole('timer')).toContainText('Grace has 0 seconds');
+    await host.reload();
+    await host.getByRole('button', { name: 'Open programming console' }).click();
+    await expect(host.getByRole('timer')).toContainText('Ada has 0 seconds');
+
+    const timedOutHand = host.getByLabel('Your Program hand').getByRole('button');
+    const preservedPriorities: string[] = [];
+    for (let index = 0; index < 2; index += 1) {
+      const label = await timedOutHand.nth(index).getAttribute('aria-label');
+      const priority = label?.match(/priority (\d+)$/)?.[1];
+      if (!priority) throw new Error(`Timed-out card has no priority: ${label}`);
+      preservedPriorities.push(priority);
+      await timedOutHand.nth(index).click();
+    }
+    await expect(
+      host.getByRole('list', { name: 'Chosen registers' }).getByRole('listitem').nth(0)
+    ).toContainText(preservedPriorities[0]);
+    await expect(
+      host.getByRole('list', { name: 'Chosen registers' }).getByRole('listitem').nth(1)
+    ).toContainText(preservedPriorities[1]);
+
     await host.getByRole('button', { name: 'Fill timed-out program' }).click();
 
     await steps.step('timeout-filled-and-revealed', {
       description: 'An explicit canonical timestamp enables deterministic timeout fill',
       verifications: [
         {
-          spec: 'The timeout claim fills all five open registers without a real-time sleep',
+          spec: 'The timeout claim preserves chosen registers and fills only empty slots',
           check: async () => {
-            await expect(guest.getByText(/Program committed/)).toBeVisible();
-            await expect(guest.getByRole('timer')).toHaveCount(0);
+            await expect(host.getByText(/Program committed/)).toBeVisible();
+            await expect(host.getByRole('timer')).toHaveCount(0);
+            await expect(
+              guest.getByRole('list', { name: 'Program submission status' }).getByRole('listitem')
+            ).toContainText(`${preservedPriorities[0]} · ${preservedPriorities[1]} ·`);
           }
         },
         {
@@ -191,9 +213,9 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
         {
           spec: 'Reloading the submitter replays the committed program without reopening it',
           check: async () => {
-            await host.reload();
-            await host.getByRole('button', { name: 'Open programming console' }).click();
-            await expect(host.getByText(/Program committed/)).toBeVisible();
+            await guest.reload();
+            await guest.getByRole('button', { name: 'Open programming console' }).click();
+            await expect(guest.getByText(/Program committed/)).toBeVisible();
           }
         }
       ]
