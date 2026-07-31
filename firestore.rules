@@ -73,6 +73,11 @@ service cloud.firestore {
             request.resource.data.type == 'program/timed-out'
             && request.resource.data.payload.targetUid is string
             && request.resource.data.payload.turnId.matches('turn-[0-9]+')
+            && request.resource.data.payload.cardIds is list
+            && (
+              request.resource.data.payload.targetUid == request.auth.uid
+              || request.resource.data.payload.cardIds.size() == 0
+            )
           )
           ||
           (

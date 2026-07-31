@@ -7,6 +7,8 @@ async function chooseProgram(page: Page, labels: readonly string[]) {
     await page.getByRole('button', { name: label, exact: true }).click();
   }
   await page.getByRole('button', { name: 'Submit immutable program' }).click();
+  await expect(page.getByText(/Program committed/)).toBeVisible();
+  await expect(page.getByText('0/5 open')).toBeVisible();
 }
 
 function roomStatus(page: Page) {

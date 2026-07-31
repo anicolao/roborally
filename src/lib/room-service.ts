@@ -333,11 +333,13 @@ export async function claimProgramTimeout(
   user: User,
   roomCode: string,
   targetUid: string,
-  turnId: ProgramTimedOutPayload['turnId'] = 'turn-001'
+  turnId: ProgramTimedOutPayload['turnId'] = 'turn-001',
+  cardIds: ProgramTimedOutPayload['cardIds'] = []
 ) {
   await appendRoomEvent(db, user, roomCode, 'program/timed-out', {
     targetUid,
-    turnId
+    turnId,
+    cardIds: targetUid === user.uid ? cardIds : []
   });
 }
 

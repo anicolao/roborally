@@ -178,9 +178,9 @@ export class TestStepHelper {
     await this.page.evaluate(() => {
       for (const timerText of document.querySelectorAll<HTMLElement>('[role="timer"] span')) {
         const text = timerText.textContent ?? '';
-        if (!/ has (29|30) seconds$/.test(text)) continue;
+        if (!/ has \d+ seconds$/.test(text)) continue;
         timerText.dataset.e2eSnapshotText = text;
-        timerText.textContent = text.replace(/(29|30) seconds$/, '30 seconds');
+        timerText.textContent = text.replace(/\d+ seconds$/, '30 seconds');
       }
     });
     try {

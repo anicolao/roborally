@@ -19,7 +19,7 @@ Two clients receive one seeded round-robin deal. Programs cross the immutable ev
 
 **Verifications:**
 
-- [x] The timeout claim fills all five open registers without a real-time sleep
+- [x] The timeout claim preserves chosen registers and fills only empty slots
 - [x] The closed barrier reveals numeric priorities to both clients
 - [x] Every Program card remains in exactly one canonical zone after cleanup
 - [x] Reloading the submitter replays the committed program without reopening it
