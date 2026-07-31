@@ -68,25 +68,14 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     await expect(countdown).toContainText('1');
     const registerPlayback = host.getByTestId('register-playback');
     await expect(registerPlayback).toHaveAttribute('data-register', '1');
-
-    await steps.step('priority-movement-resolved', {
-      description: 'A 3–2–1 warning hands off to slow register-one movement',
-      verifications: [
-        {
-          spec: 'The full-screen countdown announces that all Programs are locked',
-          check: async () => expect(host.getByTestId('resolution-live')).toContainText('register 1')
-        },
-        {
-          spec: 'Production playback reserves three seconds for every register',
-          check: async () =>
-            expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '3000')
-        },
-        {
-          spec: 'Both robot tokens use the animated board layer during playback',
-          check: async () => expect(host.locator('[data-playback-robot]')).toHaveCount(2)
-        }
-      ]
-    });
+    await expect(host.getByTestId('resolution-live')).toContainText('register 1');
+    await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '3000');
+    await expect(host.locator('[data-playback-robot]')).toHaveCount(2);
+    const playbackEvidence = {
+      countdownObserved: true,
+      productionDurationObserved: true,
+      animatedLayerObserved: true
+    };
 
     for (const register of [2, 3, 4, 5]) {
       await expect(registerPlayback).toHaveAttribute('data-register', String(register), {
@@ -114,9 +103,21 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
       )
       .toBe('none');
 
-    await steps.step('wall-safe-final-projection', {
+    await steps.step('priority-movement-resolved', {
       description: 'All seven instructions resolve into one wall-safe final projection',
       verifications: [
+        {
+          spec: 'The full-screen countdown announces that all Programs are locked',
+          check: async () => expect(playbackEvidence.countdownObserved).toBe(true)
+        },
+        {
+          spec: 'Production playback reserves three seconds for every register',
+          check: async () => expect(playbackEvidence.productionDurationObserved).toBe(true)
+        },
+        {
+          spec: 'Both robot tokens use the animated board layer during playback',
+          check: async () => expect(playbackEvidence.animatedLayerObserved).toBe(true)
+        },
         {
           spec: 'Register cards resolve from highest unique priority to lowest',
           check: async () => {
