@@ -157,6 +157,9 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
     await rewindSubmissionDeadline(roomCode);
     await host.reload();
     await host.getByRole('button', { name: 'Open programming console' }).click();
+    await expect(
+      host.getByRole('list', { name: 'Program submission status' })
+    ).toContainText('▰ ▰ ▰ ▰ ▰');
     await expect(host.getByRole('timer')).toContainText('Ada has 0 seconds');
 
     const timedOutHand = host.getByLabel('Your Program hand').getByRole('button');
