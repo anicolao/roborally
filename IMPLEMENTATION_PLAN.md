@@ -598,12 +598,22 @@ selects all 34 entries before asserting every probe in the ordinary catalog UI.
 
 ### 16. Reconnect, conflicts, timers, and versions
 
+**Status:** Implemented as the sixteenth vertical tracer.
+
 - Rehydrate from cache plus cursor and replay from scratch.
 - Handle retries, duplicate IDs, stale submissions, simultaneous barriers,
   timeout claims, network loss, re-entry interrupts, and incompatible
   manifests or reducer versions.
 - Add `016-reconnect-timers-conflicts-and-versioning`, proving convergence when
   clients disconnect during programming and pending resolution.
+
+Scenario 016 disconnects one real browser after its Program is server-confirmed
+and lets the connected peer close the simultaneous barrier. The offline client
+retains its versioned prefix, then catches up from the ordered Firestore cursor,
+reloads from cache, and completes owner-authored re-entry in destruction order.
+Focused fixtures prove cache invalidation, pending-timestamp handling,
+idempotent page merging, deterministic timestamp ties, incompatible versions,
+and recovery after a domain-invalid event consumes its actor sequence.
 
 ### 17. Responsive and accessibility completion
 

@@ -459,6 +459,10 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       );
       continue;
     }
+    // A protocol-valid immutable event consumes its actor's sequence even when
+    // its domain payload is rejected. Otherwise one stale submission would
+    // permanently poison every later retry from that client.
+    lastSequence.set(event.actorUid, event.clientSeq);
 
     if (event.type === 'game/created') {
       const payload = event.payload as GameCreatedPayload;
@@ -837,7 +841,6 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       continue;
     }
 
-    lastSequence.set(event.actorUid, event.clientSeq);
     state.acceptedEventIds.push(event.id);
   }
 

@@ -221,6 +221,14 @@ The application exposes a visible connection status:
 The helper waits on this explicit status. A fixed timeout is only a failure
 bound, never a synchronization mechanism.
 
+Reconnect scenarios must exercise the browser transport itself, not a mocked
+store. Before disconnecting, wait for the visible event count to confirm the
+server prefix. While offline, assert that the cached prefix remains usable and
+that scratch replay is disabled. After reconnect, assert the cursor delta,
+reload once to prove cache hydration, and compare the resulting semantic state
+and event count with a connected peer. Cache-version invalidation and
+cache-plus-cursor equivalence also require focused pure tests.
+
 Clear emulator data between scenarios that require isolation. Use unique room
 codes and deterministic identities when independent scenarios can coexist.
 The client accepts `e2eIdentity` and `e2eRoomCode` query parameters only while

@@ -119,6 +119,54 @@ describe('immutable room replay', () => {
     ]);
   });
 
+  it('consumes a valid actor sequence even when its domain action is rejected', () => {
+    const rejectedCreation = event('host', 2, 'game/created', {
+      gameId: 'replacement',
+      roomCode: 'REPLAC',
+      hostUid: 'host'
+    }, 2);
+    const recoveredJoin = event('host', 3, 'player/joined', {
+      uid: 'host',
+      name: 'Ada',
+      robotId: 'axle'
+    }, 3);
+
+    const state = replayRoom([created, rejectedCreation, recoveredJoin]);
+
+    expect(state.players).toEqual([
+      { uid: 'host', name: 'Ada', robotId: 'axle', seat: 1 }
+    ]);
+    expect(state.diagnostics.map(({ code }) => code)).toEqual(['invalid-event']);
+  });
+
+  it('uses event IDs as the deterministic tie-breaker for simultaneous timestamps', () => {
+    const hostJoined = event('host', 2, 'player/joined', {
+      uid: 'host',
+      name: 'Ada',
+      robotId: 'axle'
+    }, 2);
+    const guestB = event('guest-b', 1, 'player/joined', {
+      uid: 'guest-b',
+      name: 'Babbage',
+      robotId: 'bit'
+    }, 3);
+    const guestA = event('guest-a', 1, 'player/joined', {
+      uid: 'guest-a',
+      name: 'Curie',
+      robotId: 'cog'
+    }, 3);
+
+    const first = replayRoom([guestB, hostJoined, created, guestA]);
+    const second = replayRoom([created, guestA, guestB, hostJoined]);
+
+    expect(first.players.map(({ uid, seat }) => ({ uid, seat }))).toEqual([
+      { uid: 'host', seat: 1 },
+      { uid: 'guest-a', seat: 2 },
+      { uid: 'guest-b', seat: 3 }
+    ]);
+    expect(second).toEqual(first);
+  });
+
   it('caps rooms at eight players and produces the same projection for every replay', () => {
     const joins = ROBOTS.map((robot, index) =>
       event(`player-${index}`, 1, 'player/joined', {
