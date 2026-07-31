@@ -2607,7 +2607,7 @@
       display: none;
     }
     .robot-state { grid-template-columns: minmax(0, 1fr); }
-    .robot-state li { flex-wrap: wrap; overflow: hidden; }
+    .robot-state li { align-content: flex-start; flex-wrap: wrap; overflow: hidden; }
     .robot-progress { min-width: 0; overflow-wrap: anywhere; }
     .setup-summary.resolution-active.many-robots .robot-state {
       grid-template-columns: repeat(2, minmax(0, 1fr));
