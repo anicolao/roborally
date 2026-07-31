@@ -547,10 +547,20 @@ decision proof.
 
 ### 13. Complete Risky Exchange race
 
+**Status:** Implemented as the thirteenth vertical tracer.
+
 - Play a production-size race through repeated turns, collisions, damage,
   power down, Options, all three flags, winner, summary, and rematch.
 - Drive `013-complete-risky-exchange-race` entirely through ordinary UI actions
   in real browser clients without reducer shortcuts.
+
+Scenario 013 plays twelve deterministic turns through two ordinary browser
+clients. Ada carries a face-up Option, reaches Flags 1 and 2, announces a
+shutdown in original Dock order, is destroyed by the live factory while powered
+down, discards the Option, re-enters through the owner-authored decision window,
+and reaches Flag 3. The tracer then verifies the immutable winner summary and a
+retained-summary rematch; its Program sequence was found against the same pure
+event replay used by the product and is executed only through visible controls.
 
 ### 14. All board faces and beginner courses
 

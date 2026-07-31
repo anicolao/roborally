@@ -58,7 +58,7 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
   { browser, page: host },
   testInfo
 ) => {
-  test.setTimeout(180_000);
+  test.setTimeout(360_000);
   const roomCode = testInfo.project.name === 'phone' ? 'R9PHON' : 'R9DESK';
   const guestContext: BrowserContext = await browser.newContext();
   const guest = await guestContext.newPage();

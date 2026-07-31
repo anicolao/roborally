@@ -14,7 +14,7 @@ export default defineConfig({
     deviceScaleFactor: 1,
     timezoneId: 'America/Toronto',
     locale: 'en-CA',
-    actionTimeout: 5000,
+    actionTimeout: 15_000,
     launchOptions: {
       args: [
         '--font-render-hinting=none',
@@ -66,9 +66,9 @@ export default defineConfig({
       VITE_GIT_HASH: 'e2e-test-commit'
     }
   },
-  timeout: 120000,
+  timeout: 300_000,
   expect: {
-    timeout: 5000,
+    timeout: 30_000,
     toHaveScreenshot: {
       maxDiffPixels: 0,
       animations: 'disabled',

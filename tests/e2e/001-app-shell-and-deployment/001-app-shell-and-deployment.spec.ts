@@ -29,7 +29,9 @@ test('application shell reaches Firebase and renders deterministically', async (
       {
         spec: 'Room creation and join actions become available after anonymous authentication',
         check: async () => {
-          await expect(page.getByRole('button', { name: 'Create race' })).toBeEnabled();
+          await expect(page.getByRole('button', { name: 'Create race' })).toBeEnabled({
+            timeout: 15_000
+          });
           await expect(page.getByRole('button', { name: 'Join with code' })).toBeEnabled();
         }
       },

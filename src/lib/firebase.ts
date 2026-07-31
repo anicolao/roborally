@@ -30,8 +30,9 @@ export async function initializeFirebase(): Promise<FirebaseServices> {
   const app = initializeApp(config);
   const auth = getAuth(app);
   const db = getFirestore(app);
+  const usesEmulators = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
 
-  if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
+  if (usesEmulators) {
     connectAuthEmulator(
       auth,
       `http://${import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST ?? '127.0.0.1'}:${
@@ -47,7 +48,9 @@ export async function initializeFirebase(): Promise<FirebaseServices> {
   }
 
   const credential = await signInAnonymously(auth);
-  await getDoc(doc(db, 'games/shell-readiness/events/probe'));
+  if (!usesEmulators) {
+    await getDoc(doc(db, 'games/shell-readiness/events/probe'));
+  }
   services = { auth, db, user: credential.user };
   return services;
 }

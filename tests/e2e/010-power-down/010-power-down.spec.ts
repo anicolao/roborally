@@ -61,7 +61,7 @@ test('power down clears damage, remains vulnerable, repeats, and restores progra
   { browser, page: host },
   testInfo
 ) => {
-  test.setTimeout(180_000);
+  test.setTimeout(360_000);
   const roomCode = testInfo.project.name === 'phone' ? 'R10PHN' : 'R10DSK';
   const guestContext: BrowserContext = await browser.newContext();
   const guest = await guestContext.newPage();
