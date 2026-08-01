@@ -36,8 +36,8 @@ export interface RaceRobotPosition {
   lives: number;
   damage: number;
   lockedRegisters: LockedRegisterState[];
-  touchedFlags: (1 | 2 | 3)[];
-  nextFlag: 1 | 2 | 3 | null;
+  touchedFlags: number[];
+  nextFlag: number | null;
   pendingOptionDraws: number;
   options: OwnedOption[];
   poweredDown: boolean;
@@ -132,7 +132,7 @@ export interface RaceSummary {
   runnersUpUids: readonly string[];
   standings: readonly {
     uid: string;
-    touchedFlags: readonly (1 | 2 | 3)[];
+    touchedFlags: readonly number[];
     lives: number;
     damage: number;
     status: RobotBoardStatus;
@@ -993,11 +993,7 @@ export function resolveFlagsAndArchives(
   register: number,
   trace: ResolutionTraceEntry[],
   cells: readonly BoardCell[] = defaultCourseCells,
-  flags: readonly { number: 1 | 2 | 3; x: number; y: number }[] = defaultCourse.course.flags as readonly {
-    number: 1 | 2 | 3;
-    x: number;
-    y: number;
-  }[],
+  flags: readonly { number: number; x: number; y: number }[] = defaultCourse.course.flags,
   course: CompiledCourse = defaultCourse
 ): string[] {
   const finishers: string[] = [];
@@ -1052,7 +1048,8 @@ export function resolveFlagsAndArchives(
     }
     if (!flag || flag.number !== robot.nextFlag) continue;
     robot.touchedFlags.push(flag.number);
-    robot.nextFlag = flag.number === 3 ? null : ((flag.number + 1) as 2 | 3);
+    const finalFlag = Math.max(...flags.map(({ number }) => number));
+    robot.nextFlag = flag.number === finalFlag ? null : flag.number + 1;
     addTrace(
       trace,
       register,
@@ -1416,11 +1413,7 @@ export function resolveProgrammedTurn(
   if (programming.phase !== 'programmed') return null;
   const course = compilePlayableCourse(setup.courseId);
   const courseCells: BoardCell[] = [...course.cells.values()];
-  const flags = course.course.flags as readonly {
-    number: 1 | 2 | 3;
-    x: number;
-    y: number;
-  }[];
+  const flags = course.course.flags;
   const robots = initialRobots.map((robot) => ({
     ...robot,
     archive: { ...robot.archive },
@@ -1529,7 +1522,14 @@ export function resolveProgrammedTurn(
       optionPlans,
       course
     );
-    const finishers = resolveFlagsAndArchives(robots, register, trace, courseCells, flags, course);
+    const finishers = resolveFlagsAndArchives(
+      robots,
+      register,
+      trace,
+      courseCells,
+      flags,
+      course
+    );
     if (finishers.length > 0) {
       const winnerUid = finishers[0];
       const runnersUpUids = includeRunnersUp ? finishers.slice(1) : [];
@@ -1540,7 +1540,7 @@ export function resolveProgrammedTurn(
         winnerUid,
         null,
         'winner',
-        `${winner.name} touched Flag 3 in order and won the race.`
+        `${winner.name} touched the final Flag in order and won the race.`
       );
       playback.frames.push({
         register: register as RegisterNumber,

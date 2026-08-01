@@ -1082,8 +1082,14 @@ describe('priority Program movement', () => {
   it('updates archives every register but only touches flags in order', () => {
     const robot = raceRobot({ uid: 'runner', name: 'Runner', x: 10, y: 8 });
     const trace: ResolutionTraceEntry[] = [];
+    const flags = [
+      { number: 1, x: 8, y: 2 },
+      { number: 2, x: 10, y: 8 },
+      { number: 3, x: 2, y: 5 },
+      { number: 4, x: 1, y: 1 }
+    ];
 
-    expect(resolveFlagsAndArchives([robot], 1, trace)).toEqual([]);
+    expect(resolveFlagsAndArchives([robot], 1, trace, undefined, flags)).toEqual([]);
     expect(robot).toMatchObject({
       archive: { x: 10, y: 8 },
       touchedFlags: [],
@@ -1092,20 +1098,23 @@ describe('priority Program movement', () => {
 
     robot.x = 8;
     robot.y = 2;
-    resolveFlagsAndArchives([robot], 2, trace);
+    resolveFlagsAndArchives([robot], 2, trace, undefined, flags);
     robot.x = 10;
     robot.y = 8;
-    resolveFlagsAndArchives([robot], 3, trace);
+    resolveFlagsAndArchives([robot], 3, trace, undefined, flags);
     robot.x = 2;
     robot.y = 5;
-    expect(resolveFlagsAndArchives([robot], 4, trace)).toEqual(['runner']);
+    expect(resolveFlagsAndArchives([robot], 4, trace, undefined, flags)).toEqual([]);
+    robot.x = 1;
+    robot.y = 1;
+    expect(resolveFlagsAndArchives([robot], 5, trace, undefined, flags)).toEqual(['runner']);
     expect(robot).toMatchObject({
       archive: { x: 2, y: 5 },
-      touchedFlags: [1, 2, 3],
+      touchedFlags: [1, 2, 3, 4],
       nextFlag: null
     });
-    expect(trace.filter(({ kind }) => kind === 'flag-touched')).toHaveLength(3);
-    expect(trace.filter(({ kind }) => kind === 'archive-updated')).toHaveLength(4);
+    expect(trace.filter(({ kind }) => kind === 'flag-touched')).toHaveLength(4);
+    expect(trace.filter(({ kind }) => kind === 'archive-updated')).toHaveLength(5);
   });
 
   it('repairs once in cleanup, unlocks low registers first, and preserves Option draws', () => {
