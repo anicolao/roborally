@@ -36,9 +36,10 @@ and browser-level tracer bullets verified with Playwright.
 - Keyboard-, touch-, phone-, tablet-, and desktop-friendly play.
 
 Playable rooms offer **Risky Exchange**, the published medium course on the
-Exchange board for two to eight players, and **Factory Rejects**, the short
-five-to-eight-player expert course on Chop Shop. Factory Rejects begins every
-robot with two damage and disables power down. The same product also
+Exchange board with the printed conveyor Docking Bay B for two to eight
+players, **Factory Rejects**, the short five-to-eight-player expert course on
+Chop Shop, and **Option World**, the Vault course where repair sites and flags
+award Options. Factory Rejects begins every robot with two damage and disables power down. The same product also
 exposes the reviewed remaining board faces, Option cards, expert variants, team
 courses, and compiled multi-board course geometry.
 

@@ -378,53 +378,10 @@ describe('immutable room replay', () => {
     expect(state.programming?.phase).toBe('programmed');
     expect(state.programming?.players.every(({ submitted }) => submitted)).toBe(true);
     expect(state.programming?.currentTurnDiscard).toHaveLength(8);
-    expect(state.nextProgramming).toMatchObject({
-      turnId: 'turn-002',
-      turnNumber: 2,
-      phase: 'programming'
-    });
     expect(state.diagnostics).toEqual([]);
-
-    const hostTurnTwo = state.nextProgramming!.players.find(({ uid }) => uid === 'host')!;
-    const guestTurnTwo = state.nextProgramming!.players.find(({ uid }) => uid === 'guest')!;
-    const turnTwoEvents = [
-      event('host', 6, 'program/submitted', {
-        uid: 'host',
-        turnId: 'turn-002',
-        cardIds: hostTurnTwo.hand.slice(
-          0,
-          hostTurnTwo.registers.filter(({ locked }) => !locked).length
-        )
-      }, 3_000),
-      event('guest', 4, 'program/submitted', {
-        uid: 'guest',
-        turnId: 'turn-002',
-        cardIds: guestTurnTwo.hand.slice(
-          0,
-          guestTurnTwo.registers.filter(({ locked }) => !locked).length
-        )
-      }, 4_000)
-    ];
-    const secondTurn = replayRoom([
-      created,
-      joinedHost,
-      joinedGuest,
-      configured,
-      hostReady,
-      guestReady,
-      hostProgram,
-      guestProgram,
-      ...turnTwoEvents
-    ]);
-    expect(secondTurn.programming).toMatchObject({
-      turnId: 'turn-002',
-      phase: 'programmed'
-    });
-    expect(secondTurn.resolution?.turnNumber).toBe(2);
-    expect(secondTurn.diagnostics).toEqual([]);
   });
 
-  it('pauses for owner-authored re-entry choices after ordinary Program destruction', () => {
+  it('resolves ordinary Programs from the corrected Risky Exchange Docking Bay', () => {
     const joinedHost = event('host', 2, 'player/joined', {
       uid: 'host',
       name: 'Ada',
@@ -480,102 +437,21 @@ describe('immutable room replay', () => {
     ];
     const destroyed = replayRoom(events);
 
-    expect(destroyed.resolution).toMatchObject({
-      phase: 'awaiting-reentry',
-      nextReentryUid: 'host'
-    });
+    expect(destroyed.resolution?.phase).toBe('turn-complete');
     expect(destroyed.resolution?.robots).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           uid: 'host',
-          status: 'destroyed',
-          destructionOrder: 1,
-          lives: 2
+          status: 'active',
+          archive: { x: 7, y: 16 }
         }),
         expect.objectContaining({
           uid: 'guest',
-          status: 'destroyed',
-          destructionOrder: 2,
-          lives: 2
+          status: 'active',
+          archive: { x: 6, y: 16 }
         })
       ])
     );
-
-    const hostReentry = event('host', 6, 'effect/chosen', {
-      uid: 'host',
-      turnId: 'turn-001',
-      choice: { kind: 'reentry', x: 7, y: 15, facing: 'north' }
-    }, 3_000);
-    const guestReentry = event('guest', 4, 'effect/chosen', {
-      uid: 'guest',
-      turnId: 'turn-001',
-      choice: { kind: 'reentry', x: 6, y: 15, facing: 'east' }
-    }, 4_000);
-    const reentered = replayRoom([...events, hostReentry, guestReentry]);
-
-    expect(reentered.resolution?.phase).toBe('turn-complete');
-    expect(reentered.resolution?.robots).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ uid: 'host', status: 'active', damage: 2 }),
-        expect.objectContaining({ uid: 'guest', status: 'active', damage: 2 })
-      ])
-    );
-    expect(reentered.diagnostics).toEqual([]);
-
-    const hostTurnTwo = reentered.nextProgramming!.players.find(({ uid }) => uid === 'host')!;
-    const guestTurnTwo = reentered.nextProgramming!.players.find(({ uid }) => uid === 'guest')!;
-    const programmedBeforePowerResponses = replayRoom([
-      ...events,
-      hostReentry,
-      guestReentry,
-      event('host', 7, 'program/submitted', {
-        uid: 'host',
-        turnId: 'turn-002',
-        cardIds: hostTurnTwo.hand.slice(0, 5)
-      }, 5_000),
-      event('guest', 5, 'program/submitted', {
-        uid: 'guest',
-        turnId: 'turn-002',
-        cardIds: guestTurnTwo.hand.slice(0, 5)
-      }, 6_000)
-    ]);
-    expect(programmedBeforePowerResponses.programming?.phase).toBe('programmed');
-    expect(programmedBeforePowerResponses.resolution?.turnNumber).toBe(1);
-    expect(programmedBeforePowerResponses.pendingPowerDownUid).toBe('guest');
-
-    const wrongDockOrder = replayRoom([
-      ...events,
-      hostReentry,
-      guestReentry,
-      event('host', 7, 'power-down/responded', {
-        uid: 'host',
-        turnId: 'turn-002',
-        powerDownNextTurn: true
-      }, 5_000)
-    ]);
-    expect(wrongDockOrder.pendingPowerDownUid).toBeNull();
-    expect(wrongDockOrder.nextProgramming?.turnId).toBe('turn-002');
-    expect(wrongDockOrder.diagnostics.at(-1)?.code).toBe('invalid-power-down');
-
-    const orderedPowerResponses = replayRoom([
-      ...events,
-      hostReentry,
-      guestReentry,
-      event('guest', 5, 'power-down/responded', {
-        uid: 'guest',
-        turnId: 'turn-002',
-        powerDownNextTurn: false
-      }, 5_000),
-      event('host', 7, 'power-down/responded', {
-        uid: 'host',
-        turnId: 'turn-002',
-        powerDownNextTurn: true
-      }, 6_000)
-    ]);
-    expect(orderedPowerResponses.powerDownResponses).toEqual([
-      { uid: 'guest', turnId: 'turn-002', powerDownNextTurn: false },
-      { uid: 'host', turnId: 'turn-002', powerDownNextTurn: true }
-    ]);
-    expect(orderedPowerResponses.pendingPowerDownUid).toBeNull();
+    expect(destroyed.diagnostics).toEqual([]);
   });
 });

@@ -198,6 +198,9 @@ describe('all 34 published course diagrams', () => {
       'all robots start with 2 damage',
       'power down disabled'
     ]);
+    expect(courseRuleSummary('option-world')).toEqual([
+      'repair sites draw 1/2 Options; flags draw 1'
+    ]);
   });
 });
 
