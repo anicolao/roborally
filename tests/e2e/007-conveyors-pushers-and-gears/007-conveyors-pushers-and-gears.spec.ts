@@ -112,27 +112,22 @@ test('board phases resolve conveyors, dependency conflicts, and gears atomically
           }
         },
         {
-          spec: 'The ambiguous occupancy dependency leaves both conveyor riders still',
+          spec: 'Docking Bay B resolves the conveyor chain without a conflicting rider',
           check: async () => {
             await host.getByText('Full resolution text').click();
             const trace = host.getByRole('list', { name: 'Full resolution feed' });
-            await expect(trace).toContainText(
-              "Grace's conveyor intent to (6,13) conflicted; the robot stayed still"
-            );
-            await expect(trace).toContainText(
-              "Linus's conveyor intent to (6,12) conflicted; the robot stayed still"
-            );
+            await expect(trace).toContainText('Linus rode the conveyor to (6,13)');
             await host.getByText('Full resolution text').click();
           }
         },
         {
           spec: 'All clients converge on the atomic final cells and facings',
           check: async () => {
-            await expect(host.locator('[data-coordinate="6,13"] .race-robot')).toHaveAttribute(
+            await expect(host.locator('[data-coordinate="6,14"] .race-robot')).toHaveAttribute(
               'title',
               /Ada, Axle, facing north/
             );
-            await expect(grace.locator('[data-coordinate="6,12"] .race-robot')).toHaveAttribute(
+            await expect(grace.locator('[data-coordinate="7,15"] .race-robot')).toHaveAttribute(
               'title',
               /Grace, Bit, facing west/
             );
