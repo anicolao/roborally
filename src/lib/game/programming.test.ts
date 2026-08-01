@@ -7,7 +7,8 @@ import {
   previewProgram,
   programCardZones,
   submitProgram,
-  timeOutProgram
+  timeOutProgram,
+  updateProgramDraft
 } from './programming';
 import { deriveRaceSetup, riskyExchangeConfig } from './setup';
 
@@ -160,6 +161,21 @@ describe('shared Program deck', () => {
         .filter(Boolean)
     ).toHaveLength(5);
     expect(programCardZones(timedOut)).toHaveLength(84);
+  });
+
+  it('uses a persisted draft when another player claims the timeout', () => {
+    const initial = createProgrammingState(setup, config);
+    const submitted = submitProgram(initial, initial.players[0].uid, initial.players[0].hand.slice(0, 5), 5_000);
+    const targetUid = submitted.deadlinePlayerUid!;
+    const target = submitted.players.find(({ uid }) => uid === targetUid)!;
+    const draft = [target.hand[2], target.hand[0]];
+    const drafted = updateProgramDraft(submitted, targetUid, draft);
+    const timedOut = timeOutProgram(drafted, targetUid, drafted.deadline!, config.seed);
+
+    expect(timedOut.players.find(({ uid }) => uid === targetUid)?.registers.slice(0, 2)).toEqual(
+      draft.map((cardId) => ({ cardId, locked: false }))
+    );
+    expect(timedOut.players.find(({ uid }) => uid === targetUid)?.draftCardIds).toEqual([]);
   });
 
   it('rejects timeout prefixes that are duplicated or are not in the target hand', () => {

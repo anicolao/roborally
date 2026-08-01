@@ -172,6 +172,12 @@ PRNG to fill empty registers from that player's remaining hand. This is the
 online equivalent of the right-hand player choosing blindly; the choice must
 not depend on which browser claims the timeout.
 
+Editable Program selections are also persisted as `program/draft-updated`
+events. They remain private in the normal UI, are never treated as submitted,
+and are cleared when the immutable submission or timeout is accepted. A timeout
+therefore preserves the target player's server-confirmed draft and randomizes
+only the still-empty registers.
+
 The implementation keeps each stable Program card in exactly one zone: draw
 pile, a player's hand, an unlocked register, a locked register, or the current
 turn discard. Submissions contain card IDs, are accepted only once, and cannot

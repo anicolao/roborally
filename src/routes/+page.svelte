@@ -70,6 +70,7 @@
   let setupSeed = 'RALLY-2005';
   let setupLives: 3 | 4 = 3;
   let selectedProgramCardIds: ProgramCard['id'][] = [];
+  let programDraftDirty = false;
   let editingRegisterIndex = 0;
   let programHeadingElement: HTMLHeadingElement | undefined;
   let clockNow = Date.now();
@@ -78,6 +79,7 @@
   let requestedTurnNumber = 1;
   let selectedReentryChoice = '';
   let reentryPoweredDown = false;
+  let effectDraftDirty = false;
   let selectedOptionPreventionIds: OptionCardId[] = [];
   let playbackPhase: PlaybackPhase = 'idle';
   let playbackCountdown = 3;
@@ -137,6 +139,7 @@
             damage: 0,
             hand: [],
             registers: Array.from({ length: 5 }, () => ({ cardId: null, locked: false })),
+            draftCardIds: [],
             submitted: true,
             timedOut: false
           } satisfies ProgrammingPlayer)
@@ -349,12 +352,56 @@
     synchronizedEventCount = 0;
     synchronizedCursor = '';
     formError = '';
+    requestedTurnNumber = 1;
+    selectedProgramCardIds = [];
+    programDraftDirty = false;
+    selectedOptionPreventionIds = [];
+    selectedReentryChoice = '';
+    reentryPoweredDown = false;
+    effectDraftDirty = false;
     unsubscribe = roomService.subscribeRoom(
       services.db,
       roomCode,
       (nextState) => {
         if (generation !== roomWatchGeneration) return;
         roomState = nextState;
+        const draftProgramming =
+          nextState.nextProgramming?.turnNumber === requestedTurnNumber
+            ? nextState.nextProgramming
+            : nextState.programming;
+        const currentDraft =
+          draftProgramming?.players.find((player) => player.uid === services?.user.uid)?.draftCardIds ??
+          [];
+        if (!programDraftDirty || JSON.stringify(currentDraft) === JSON.stringify(selectedProgramCardIds)) {
+          selectedProgramCardIds = [...currentDraft];
+          programDraftDirty = false;
+        }
+        const effectDraft = nextState.effectDrafts.find(
+          ({ uid, turnId }) =>
+            uid === services?.user.uid &&
+            (turnId === nextState.programming?.turnId ||
+              turnId === `turn-${String(nextState.resolution?.turnNumber ?? 0).padStart(3, '0')}`)
+        );
+        if (effectDraft && (!effectDraftDirty ||
+          (effectDraft.draft.kind === 'option-plan' &&
+            JSON.stringify(effectDraft.draft.preventDamageWith) === JSON.stringify(selectedOptionPreventionIds)) ||
+          (effectDraft.draft.kind === 'reentry' &&
+            ((effectDraft.draft.x === null && selectedReentryChoice === '') ||
+              selectedReentryChoice === `${effectDraft.draft.x},${effectDraft.draft.y},${effectDraft.draft.facing}`) &&
+            effectDraft.draft.poweredDown === reentryPoweredDown))) {
+          if (effectDraft.draft.kind === 'option-plan') {
+            selectedOptionPreventionIds = [...effectDraft.draft.preventDamageWith];
+          } else if (effectDraft.draft.kind === 'reentry') {
+            selectedReentryChoice =
+              effectDraft.draft.x !== null &&
+              effectDraft.draft.y !== null &&
+              effectDraft.draft.facing
+                ? `${effectDraft.draft.x},${effectDraft.draft.y},${effectDraft.draft.facing}`
+                : '';
+            reentryPoweredDown = effectDraft.draft.poweredDown;
+          }
+          effectDraftDirty = false;
+        }
         if (mode === 'join' && !nextState.gameId) {
           formError = `Room ${roomCode} was not found.`;
         } else {
@@ -576,6 +623,8 @@
       selectedProgramCardIds = [...selectedProgramCardIds, cardId];
       editingRegisterIndex = selectedProgramCardIds.length - 1;
     }
+    programDraftDirty = true;
+    void persistProgramDraft();
   }
 
   function moveSelectedProgramCard(index: number, offset: -1 | 1) {
@@ -585,12 +634,16 @@
     [reordered[index], reordered[destination]] = [reordered[destination], reordered[index]];
     selectedProgramCardIds = reordered;
     editingRegisterIndex = destination;
+    programDraftDirty = true;
+    void persistProgramDraft();
   }
 
   function removeSelectedProgramCard(index: number) {
     if (index < 0 || index >= selectedProgramCardIds.length) return;
     selectedProgramCardIds = selectedProgramCardIds.filter((_, candidate) => candidate !== index);
     editingRegisterIndex = Math.max(0, Math.min(index, selectedProgramCardIds.length - 1));
+    programDraftDirty = true;
+    void persistProgramDraft();
   }
 
   function handleProgramCardKeydown(event: KeyboardEvent, cardId: ProgramCard['id']) {
@@ -614,6 +667,22 @@
     programHeadingElement?.focus();
   }
 
+  async function persistProgramDraft() {
+    if (!services || !roomService || !activeProgramming || programmingPlayer?.submitted) return;
+    try {
+      await roomService.updateProgramDraft(
+        services.db,
+        services.user,
+        roomCode,
+        selectedProgramCardIds,
+        activeProgramming.turnId
+      );
+    } catch (error) {
+      console.error(error);
+      formError = 'The Program draft could not be written.';
+    }
+  }
+
   async function submitProgramCards() {
     if (
       !services ||
@@ -631,6 +700,7 @@
         activeProgramming?.turnId
       );
       selectedProgramCardIds = [];
+      programDraftDirty = false;
       editingRegisterIndex = 0;
     } catch (error) {
       console.error(error);
@@ -654,6 +724,7 @@
         selectedProgramCardIds
       );
       selectedProgramCardIds = [];
+      programDraftDirty = false;
       editingRegisterIndex = 0;
     } catch (error) {
       console.error(error);
@@ -686,6 +757,7 @@
       );
       selectedReentryChoice = '';
       reentryPoweredDown = false;
+      effectDraftDirty = false;
     } catch (error) {
       console.error(error);
       formError = 'The re-entry choice could not be written.';
@@ -717,6 +789,51 @@
     selectedOptionPreventionIds = selectedOptionPreventionIds.includes(cardId)
       ? selectedOptionPreventionIds.filter((id) => id !== cardId)
       : [...selectedOptionPreventionIds, cardId];
+    effectDraftDirty = true;
+    void persistOptionDraft();
+  }
+
+  async function persistOptionDraft() {
+    if (!services || !roomService || !activeProgramming) return;
+    try {
+      await roomService.updateEffectDraft(
+        services.db,
+        services.user,
+        roomCode,
+        activeProgramming.turnId,
+        { kind: 'option-plan', preventDamageWith: selectedOptionPreventionIds, activations: [] }
+      );
+    } catch (error) {
+      console.error(error);
+      formError = 'The Option draft could not be written.';
+    }
+  }
+
+  async function persistReentryDraft() {
+    if (!services || !roomService || !roomState.resolution) return;
+    const [x, y, facing] = selectedReentryChoice.split(',');
+    const validFacing = ['north', 'east', 'south', 'west'].includes(facing)
+      ? (facing as 'north' | 'east' | 'south' | 'west')
+      : null;
+    effectDraftDirty = true;
+    try {
+      await roomService.updateEffectDraft(
+        services.db,
+        services.user,
+        roomCode,
+        `turn-${String(roomState.resolution.turnNumber).padStart(3, '0')}`,
+        {
+          kind: 'reentry',
+          x: x ? Number(x) : null,
+          y: y ? Number(y) : null,
+          facing: validFacing,
+          poweredDown: reentryPoweredDown
+        }
+      );
+    } catch (error) {
+      console.error(error);
+      formError = 'The re-entry draft could not be written.';
+    }
   }
 
   async function submitOptionPlan() {
@@ -735,6 +852,7 @@
         activeProgramming.turnId
       );
       selectedOptionPreventionIds = [];
+      effectDraftDirty = false;
     } catch (error) {
       console.error(error);
       formError = 'The ordered Option plan could not be written.';
@@ -757,6 +875,7 @@
       });
       requestedTurnNumber = 1;
       selectedProgramCardIds = [];
+      programDraftDirty = false;
       editingRegisterIndex = 0;
     } catch (error) {
       console.error(error);
@@ -1099,6 +1218,8 @@
                   onclick={() => {
                     selectedProgramCardIds = [];
                     editingRegisterIndex = 0;
+                    programDraftDirty = true;
+                    void persistProgramDraft();
                   }}
                 >Clear register choices</button>
               {/if}
@@ -1243,7 +1364,11 @@
                   <div class="reentry-choice">
                     <label>
                       Re-entry cell and facing
-                      <select bind:value={selectedReentryChoice} aria-label="Re-entry cell and facing">
+                      <select
+                        bind:value={selectedReentryChoice}
+                        aria-label="Re-entry cell and facing"
+                        onchange={persistReentryDraft}
+                      >
                         <option value="">Choose a legal placement</option>
                         {#each reentryChoices as choice}
                           <option value={`${choice.x},${choice.y},${choice.facing}`}>
@@ -1254,7 +1379,11 @@
                     </label>
                     {#if reentryRobot?.powerDownNextTurn}
                       <label class="reentry-power">
-                        <input type="checkbox" bind:checked={reentryPoweredDown} />
+                        <input
+                          type="checkbox"
+                          bind:checked={reentryPoweredDown}
+                          onchange={persistReentryDraft}
+                        />
                         Re-enter powered down
                       </label>
                     {/if}
@@ -1273,7 +1402,11 @@
                     type="button"
                     onclick={() => {
                       requestedTurnNumber = roomState.nextProgramming?.turnNumber ?? requestedTurnNumber;
-                      selectedProgramCardIds = [];
+                      const nextDraft = roomState.nextProgramming?.players.find(
+                        ({ uid }) => uid === currentPlayer.uid
+                      )?.draftCardIds ?? [];
+                      selectedProgramCardIds = [...nextDraft];
+                      programDraftDirty = false;
                       editingRegisterIndex = 0;
                     }}
                   >

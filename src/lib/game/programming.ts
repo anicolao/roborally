@@ -16,6 +16,8 @@ export interface ProgrammingPlayer {
   damage: number;
   hand: ProgramCard['id'][];
   registers: ProgramRegister[];
+  /** Cards selected in the private, editable draft before submission. */
+  draftCardIds: ProgramCard['id'][];
   submitted: boolean;
   timedOut: boolean;
 }
@@ -92,6 +94,7 @@ export function createProgrammingState(
         const cardId = locked[(index + 1) as 1 | 2 | 3 | 4 | 5] ?? null;
         return { cardId, locked: cardId !== null };
       }),
+      draftCardIds: [],
       submitted: false,
       timedOut: false
     };
@@ -141,12 +144,36 @@ function cloneState(state: ProgrammingState): ProgrammingState {
     players: state.players.map((player) => ({
       ...player,
       hand: [...player.hand],
-      registers: player.registers.map((register) => ({ ...register }))
+      registers: player.registers.map((register) => ({ ...register })),
+      draftCardIds: [...player.draftCardIds]
     })),
     drawPile: [...state.drawPile],
     currentTurnDiscard: [...state.currentTurnDiscard],
     diagnostics: [...state.diagnostics]
   };
+}
+
+export function updateProgramDraft(
+  current: ProgrammingState,
+  actorUid: string,
+  cardIds: readonly ProgramCard['id'][]
+): ProgrammingState {
+  const state = cloneState(current);
+  const player = state.players.find(({ uid }) => uid === actorUid);
+  const openRegisters = player?.registers.filter(({ locked }) => !locked) ?? [];
+  if (
+    state.phase !== 'programming' ||
+    !player ||
+    player.submitted ||
+    cardIds.length > openRegisters.length ||
+    new Set(cardIds).size !== cardIds.length ||
+    cardIds.some((cardId) => !player.hand.includes(cardId))
+  ) {
+    state.diagnostics.push(`invalid-program-draft:${actorUid}`);
+    return state;
+  }
+  player.draftCardIds = [...cardIds];
+  return state;
 }
 
 function closeProgrammingIfComplete(state: ProgrammingState) {
@@ -180,6 +207,7 @@ function placeProgram(
     ...player.hand.filter((cardId) => !cardIds.includes(cardId))
   );
   player.hand = [];
+  player.draftCardIds = [];
   player.submitted = true;
   player.timedOut = timedOut;
   return true;
@@ -233,11 +261,16 @@ export function timeOutProgram(
     return state;
   }
 
+  // Draft updates are persisted separately from the timeout claim. They are
+  // authoritative for both an owner- and opponent-claimed timeout; the payload
+  // remains accepted for replaying older rooms.
+  const effectivePreservedCardIds =
+    target.draftCardIds.length > 0 ? target.draftCardIds : preservedCardIds;
   const needed = target.registers.filter(({ locked }) => !locked).length;
   if (
-    preservedCardIds.length > needed ||
-    new Set(preservedCardIds).size !== preservedCardIds.length ||
-    preservedCardIds.some((cardId) => !target.hand.includes(cardId))
+    effectivePreservedCardIds.length > needed ||
+    new Set(effectivePreservedCardIds).size !== effectivePreservedCardIds.length ||
+    effectivePreservedCardIds.some((cardId) => !target.hand.includes(cardId))
   ) {
     state.diagnostics.push(`invalid-timeout-program:${targetUid}`);
     return state;
@@ -247,7 +280,7 @@ export function timeOutProgram(
   // Dock order, so it is the canonical stable identity for timeout randomization.
   const targetDealIndex = state.players.indexOf(target);
   const random = createPrng(`${seed}:${state.turnId}:timeout:dock-${targetDealIndex + 1}`);
-  const preserved = new Set(preservedCardIds);
+  const preserved = new Set(effectivePreservedCardIds);
   const available = target.hand.filter((cardId) => !preserved.has(cardId));
   for (let index = available.length - 1; index > 0; index -= 1) {
     const selected = Math.floor(random() * (index + 1));
@@ -256,7 +289,7 @@ export function timeOutProgram(
   placeProgram(
     state,
     target,
-    [...preservedCardIds, ...available.slice(0, needed - preservedCardIds.length)],
+    [...effectivePreservedCardIds, ...available.slice(0, needed - effectivePreservedCardIds.length)],
     true
   );
   closeProgrammingIfComplete(state);

@@ -27,6 +27,7 @@ import {
   createProgrammingState,
   submitProgram,
   timeOutProgram,
+  updateProgramDraft,
   type ProgrammingState,
   type TurnId
 } from './game/programming';
@@ -62,7 +63,9 @@ export type RoomEventType =
   | 'race/configured'
   | 'player/ready'
   | 'program/submitted'
+  | 'program/draft-updated'
   | 'program/timed-out'
+  | 'effect/draft-updated'
   | 'effect/chosen'
   | 'game/rematched'
   | 'power-down/responded';
@@ -94,6 +97,12 @@ export interface ProgramSubmittedPayload {
   cardIds: ProgramCard['id'][];
 }
 
+export interface ProgramDraftUpdatedPayload {
+  uid: string;
+  turnId: TurnId;
+  cardIds: ProgramCard['id'][];
+}
+
 export interface ProgramTimedOutPayload {
   targetUid: string;
   turnId: TurnId;
@@ -120,13 +129,35 @@ export interface PowerDownRespondedPayload {
   powerDownNextTurn: boolean;
 }
 
+export type EffectDraft =
+  | {
+      kind: 'reentry';
+      x: number | null;
+      y: number | null;
+      facing: ReentryChoice['facing'] | null;
+      poweredDown: boolean;
+    }
+  | {
+      kind: 'option-plan';
+      preventDamageWith: OptionCardId[];
+      activations: [];
+    };
+
+export interface EffectDraftUpdatedPayload {
+  uid: string;
+  turnId: TurnId;
+  draft: EffectDraft;
+}
+
 export type RoomEventPayload =
   | GameCreatedPayload
   | PlayerJoinedPayload
   | RaceConfiguredPayload
   | PlayerReadyPayload
   | ProgramSubmittedPayload
+  | ProgramDraftUpdatedPayload
   | ProgramTimedOutPayload
+  | EffectDraftUpdatedPayload
   | EffectChosenPayload
   | GameRematchedPayload
   | PowerDownRespondedPayload;
@@ -195,6 +226,7 @@ export interface RoomState {
   powerDownResponses: PowerDownRespondedPayload[];
   pendingPowerDownUid: string | null;
   optionPlans: (OptionTurnPlan & { uid: string; turnId: TurnId })[];
+  effectDrafts: (EffectDraftUpdatedPayload & { uid: string })[];
   pendingOptionUid: string | null;
   acceptedEventIds: string[];
   diagnostics: ReplayDiagnostic[];
@@ -218,6 +250,7 @@ export function emptyRoomState(): RoomState {
     powerDownResponses: [],
     pendingPowerDownUid: null,
     optionPlans: [],
+    effectDrafts: [],
     pendingOptionUid: null,
     acceptedEventIds: [],
     diagnostics: []
@@ -608,8 +641,33 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         state.raceEpoch = 1;
         state.powerDownResponses = [];
         state.optionPlans = [];
+        state.effectDrafts = [];
         refreshPowerDownPending(state);
       }
+    } else if (event.type === 'program/draft-updated') {
+      const payload = event.payload as ProgramDraftUpdatedPayload;
+      const eventProgramming =
+        payload?.turnId === state.programming?.turnId
+          ? state.programming
+          : payload?.turnId === state.nextProgramming?.turnId
+            ? state.nextProgramming
+            : null;
+      if (
+        !payload ||
+        payload.uid !== event.actorUid ||
+        !Array.isArray(payload.cardIds) ||
+        !eventProgramming
+      ) {
+        diagnostic(state, event, 'invalid-program', 'The Program draft is malformed.');
+        continue;
+      }
+      const next = updateProgramDraft(eventProgramming, event.actorUid, payload.cardIds);
+      if (next.diagnostics.length !== eventProgramming.diagnostics.length) {
+        diagnostic(state, event, 'invalid-program', 'The Program draft is not legal.');
+        continue;
+      }
+      if (eventProgramming === state.nextProgramming) state.nextProgramming = next;
+      else state.programming = next;
     } else if (event.type === 'program/submitted') {
       const payload = event.payload as ProgramSubmittedPayload;
       const eventProgramming =
@@ -640,6 +698,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       }
       if (activatesNextTurn) state.powerDownResponses = [];
       if (activatesNextTurn) state.optionPlans = [];
+      if (activatesNextTurn) state.effectDrafts = [];
       state.programming = next;
       state.nextProgramming = null;
       if (next.phase === 'programmed') {
@@ -680,6 +739,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       }
       if (activatesNextTurn) state.powerDownResponses = [];
       if (activatesNextTurn) state.optionPlans = [];
+      if (activatesNextTurn) state.effectDrafts = [];
       state.programming = next;
       state.nextProgramming = null;
       if (next.phase === 'programmed') {
@@ -687,6 +747,36 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       } else {
         refreshPowerDownPending(state);
       }
+    } else if (event.type === 'effect/draft-updated') {
+      const payload = event.payload as EffectDraftUpdatedPayload;
+      const validTurn =
+        payload?.draft?.kind === 'option-plan'
+          ? payload.turnId === state.programming?.turnId
+          : payload?.turnId ===
+            `turn-${String(state.resolution?.turnNumber ?? 0).padStart(3, '0')}`;
+      if (
+        !payload ||
+        payload.uid !== event.actorUid ||
+        !validTurn ||
+        !payload.draft ||
+        (payload.draft.kind === 'option-plan' &&
+          (!Array.isArray(payload.draft.preventDamageWith) ||
+            !Array.isArray(payload.draft.activations) ||
+            payload.draft.activations.length !== 0)) ||
+        (payload.draft.kind === 'reentry' &&
+          (typeof payload.draft.poweredDown !== 'boolean' ||
+            (payload.draft.facing !== null &&
+              !['north', 'east', 'south', 'west'].includes(payload.draft.facing)) ||
+            (payload.draft.x !== null && !Number.isInteger(payload.draft.x)) ||
+            (payload.draft.y !== null && !Number.isInteger(payload.draft.y))))
+      ) {
+        diagnostic(state, event, 'invalid-effect', 'The effect draft is malformed.');
+        continue;
+      }
+      state.effectDrafts = state.effectDrafts.filter(
+        ({ uid, turnId }) => uid !== payload.uid || turnId !== payload.turnId
+      );
+      state.effectDrafts.push(payload);
     } else if (event.type === 'power-down/responded') {
       const payload = event.payload as PowerDownRespondedPayload;
       const eventProgramming =
@@ -727,6 +817,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         state.nextProgramming = null;
         state.powerDownResponses = [];
         state.optionPlans = [];
+        state.effectDrafts = [];
         refreshPowerDownPending(state);
       }
       if (
@@ -823,6 +914,9 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         continue;
       }
       state.resolution = next;
+      state.effectDrafts = state.effectDrafts.filter(
+        ({ uid, turnId }) => uid !== event.actorUid || turnId !== payload.turnId
+      );
       projectNextProgramming(state);
     } else if (event.type === 'game/rematched') {
       const payload = event.payload as GameRematchedPayload;
@@ -857,6 +951,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       state.resolution = null;
       state.powerDownResponses = [];
       state.optionPlans = [];
+      state.effectDrafts = [];
       refreshPowerDownPending(state);
     } else {
       diagnostic(state, event, 'invalid-event', `Event ${event.id} has an unknown type.`);

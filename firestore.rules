@@ -31,7 +31,9 @@ service cloud.firestore {
           'race/configured',
           'player/ready',
           'program/submitted',
+          'program/draft-updated',
           'program/timed-out',
+          'effect/draft-updated',
           'effect/chosen',
           'game/rematched',
           'power-down/responded'
@@ -68,6 +70,13 @@ service cloud.firestore {
           ||
           (
             request.resource.data.type == 'program/submitted'
+            && request.resource.data.payload.uid == request.auth.uid
+            && request.resource.data.payload.turnId.matches('turn-[0-9]+')
+            && request.resource.data.payload.cardIds is list
+          )
+          ||
+          (
+            request.resource.data.type == 'program/draft-updated'
             && request.resource.data.payload.uid == request.auth.uid
             && request.resource.data.payload.turnId.matches('turn-[0-9]+')
             && request.resource.data.payload.cardIds is list
@@ -113,6 +122,14 @@ service cloud.firestore {
                 && request.resource.data.payload.choice.activations is list
               )
             )
+          )
+          ||
+          (
+            request.resource.data.type == 'effect/draft-updated'
+            && request.resource.data.payload.uid == request.auth.uid
+            && request.resource.data.payload.turnId.matches('turn-[0-9]+')
+            && request.resource.data.payload.draft is map
+            && request.resource.data.payload.draft.kind in ['reentry', 'option-plan']
           )
           ||
           (

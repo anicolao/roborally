@@ -22,9 +22,12 @@ import {
   type GameCreatedPayload,
   type GameRematchedPayload,
   type EffectChosenPayload,
+  type EffectDraft,
+  type EffectDraftUpdatedPayload,
   type PlayerJoinedPayload,
   type PowerDownRespondedPayload,
   type ProgramSubmittedPayload,
+  type ProgramDraftUpdatedPayload,
   type ProgramTimedOutPayload,
   type RaceConfiguredPayload,
   type RoomEvent,
@@ -328,6 +331,20 @@ export async function submitProgram(
   });
 }
 
+export async function updateProgramDraft(
+  db: Firestore,
+  user: User,
+  roomCode: string,
+  cardIds: ProgramDraftUpdatedPayload['cardIds'],
+  turnId: ProgramDraftUpdatedPayload['turnId'] = 'turn-001'
+) {
+  await appendRoomEvent(db, user, roomCode, 'program/draft-updated', {
+    uid: user.uid,
+    turnId,
+    cardIds
+  });
+}
+
 export async function claimProgramTimeout(
   db: Firestore,
   user: User,
@@ -354,6 +371,20 @@ export async function chooseEffect(
     uid: user.uid,
     turnId,
     choice
+  });
+}
+
+export async function updateEffectDraft(
+  db: Firestore,
+  user: User,
+  roomCode: string,
+  turnId: EffectDraftUpdatedPayload['turnId'],
+  draft: EffectDraft
+) {
+  await appendRoomEvent(db, user, roomCode, 'effect/draft-updated', {
+    uid: user.uid,
+    turnId,
+    draft
   });
 }
 
