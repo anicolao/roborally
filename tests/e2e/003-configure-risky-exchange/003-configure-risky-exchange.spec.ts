@@ -77,7 +77,7 @@ test('host configures the exact seeded Risky Exchange setup', async (
           check: async () => {
             await expect(page.locator('.course-flag')).toHaveText(['1', '3', '2']);
             await expect(page.locator('.race-robot')).toHaveCount(2);
-            await expect(page.locator('[data-coordinate="6,15"] .race-robot')).toHaveAttribute(
+            await expect(page.locator('[data-coordinate="6,16"] .race-robot')).toHaveAttribute(
               'title',
               /Grace, Bit, facing north/
             );
@@ -93,7 +93,7 @@ test('host configures the exact seeded Risky Exchange setup', async (
           spec: 'A coordinate-based text equivalent identifies flags, Docks, and robots',
           check: async () => {
             await expect(page.getByText('Column 8, row 2: Flag 1')).toBeVisible();
-            await expect(page.getByText(/Column 6, row 15: Dock 1, Grace's bit, facing north/)).toBeVisible();
+            await expect(page.getByText(/Column 6, row 16: Dock 1, Grace's bit, facing north/)).toBeVisible();
             await page.getByText('Course text equivalent').click();
           }
         },
