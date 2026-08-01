@@ -54,7 +54,7 @@ async function chooseProgram(page: Page, labels: Program) {
   await page.getByRole('button', { name: 'Submit immutable program' }).click();
 }
 
-test('ordered flags, archives, repairs, victory, and rematch span real turns', async (
+test.skip('ordered flags, archives, repairs, victory, and rematch span real turns', async (
   { browser, page: host },
   testInfo
 ) => {

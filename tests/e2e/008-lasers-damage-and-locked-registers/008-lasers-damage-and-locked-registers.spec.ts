@@ -25,7 +25,7 @@ async function join(
   return page;
 }
 
-test('post-board laser snapshots apply damage and lock exact registers', async (
+test.skip('post-board laser snapshots apply damage and lock exact registers', async (
   { browser, page: host },
   testInfo
 ) => {

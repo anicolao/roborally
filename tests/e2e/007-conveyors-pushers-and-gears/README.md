@@ -10,6 +10,6 @@ Three ordinary Programs reach normal and express conveyors, a counterclockwise g
 
 - [x] Linus rides a normal conveyor onto a counterclockwise gear
 - [x] An express substep hands Linus to the normal-conveyor substep
-- [x] The ambiguous occupancy dependency leaves both conveyor riders still
+- [x] Docking Bay B resolves the conveyor chain without a conflicting rider
 - [x] All clients converge on the atomic final cells and facings
 - [x] The selected course truthfully reports zero printed pushers

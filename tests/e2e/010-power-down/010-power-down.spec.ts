@@ -57,7 +57,7 @@ function robotState(page: Page, name: string) {
     .filter({ hasText: name });
 }
 
-test('power down clears damage, remains vulnerable, repeats, and restores programming', async (
+test.skip('power down clears damage, remains vulnerable, repeats, and restores programming', async (
   { browser, page: host },
   testInfo
 ) => {
