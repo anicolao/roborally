@@ -1170,6 +1170,28 @@ describe('priority Program movement', () => {
     expect(trace).toContainEqual(expect.objectContaining({ kind: 'option-drawn' }));
   });
 
+  it('applies generic Option World repair and flag awards during real resolution cleanup', () => {
+    const course = compilePlayableCourse('option-world');
+    const cells = [...course.cells.values()];
+    const robot = raceRobot({ uid: 'option-world', name: 'Optioner', x: 6, y: 6, damage: 4 });
+    const trace: ResolutionTraceEntry[] = [];
+    const optionDeck = createOptionDeck('OPTION-WORLD-RULES');
+    const firstOption = optionDeck.drawPile[0];
+    resolveRepairCleanup([robot], trace, cells, optionDeck, true, course);
+
+    expect(robot.damage).toBe(4);
+    expect(robot.options).toHaveLength(2);
+    expect(robot.options[0].cardId).toBe(firstOption);
+    expect(trace.filter(({ kind }) => kind === 'option-drawn')).toHaveLength(2);
+
+    robot.x = 4;
+    robot.y = 6;
+    robot.nextFlag = 1;
+    resolveFlagsAndArchives([robot], 1, trace, cells, course.course.flags, course, undefined, optionDeck);
+    expect(robot.touchedFlags).toEqual([1]);
+    expect(trace.filter(({ kind }) => kind === 'option-drawn')).toHaveLength(3);
+  });
+
   it('ends immediately on Flag 3 with frozen winner and optional runner-up standings', () => {
     const config = riskyExchangeConfig('FLAG-FINISH');
     const setup = deriveRaceSetup(

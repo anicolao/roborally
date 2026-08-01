@@ -16,6 +16,7 @@ import {
 import type { ProgrammingState } from './programming';
 import type { PlayableCourseId, RaceSetup } from './setup';
 import { applyOptionEffect } from './option-effects';
+import { scenarioResolutionRules, type ScenarioResolutionRules } from './course-rules';
 
 export type RobotBoardStatus = 'active' | 'destroyed' | 'eliminated';
 export type RegisterNumber = 1 | 2 | 3 | 4 | 5;
@@ -171,7 +172,9 @@ export function movementBlockedByWall(
   x: number,
   y: number,
   direction: Direction,
-  course: CompiledCourse = defaultCourse
+  course: CompiledCourse = defaultCourse,
+  rules: ScenarioResolutionRules = scenarioResolutionRules(course.course),
+  optionDeck?: OptionDeckState
 ): boolean {
   const [dx, dy] = steps[direction];
   return (
@@ -1061,6 +1064,19 @@ export function resolveFlagsAndArchives(
       }.`
     );
     if (robot.nextFlag === null) finishers.push(robot.uid);
+    for (let draw = 0; draw < rules.flag.awardOptions; draw += 1) {
+      const option = optionDeck ? drawOption(optionDeck) : null;
+      if (!option) continue;
+      robot.options.push(option);
+      addTrace(
+        trace,
+        register,
+        robot.uid,
+        null,
+        'option-drawn',
+        `${robot.name} drew ${option.cardId.replaceAll('-', ' ')} for touching Flag ${flag.number}.`
+      );
+    }
   }
   return finishers;
 }
@@ -1070,7 +1086,9 @@ export function resolveRepairCleanup(
   trace: ResolutionTraceEntry[],
   cells: readonly BoardCell[] = defaultCourseCells,
   optionDeck?: OptionDeckState,
-  powerDownAllowed = true
+  powerDownAllowed = true,
+  course: CompiledCourse = defaultCourse,
+  rules: ScenarioResolutionRules = scenarioResolutionRules(course.course)
 ) {
   for (const robot of robots) {
     if (robot.status !== 'active') continue;
@@ -1078,35 +1096,42 @@ export function resolveRepairCleanup(
       | Extract<BoardElement, { kind: 'repair' }>
       | undefined;
     if (!repair) continue;
-    const priorDamage = robot.damage;
-    robot.damage = Math.max(0, robot.damage - 1);
-    addTrace(
-      trace,
-      6,
-      robot.uid,
-      null,
-      'repair',
-      `${robot.name} repaired from ${priorDamage} to ${robot.damage} damage at ` +
-        `(${robot.x},${robot.y}).`
-    );
-    const retainedRegisters = new Set(lockedRegisterNumbersForDamage(robot.damage));
-    const unlocked = robot.lockedRegisters.filter(
-      ({ register }) => !retainedRegisters.has(register)
-    );
-    robot.lockedRegisters = robot.lockedRegisters.filter(({ register }) =>
-      retainedRegisters.has(register)
-    );
-    for (const { register, cardId } of unlocked) {
+    if (!rules.repair.awardOptions) {
+      const priorDamage = robot.damage;
+      robot.damage = Math.max(0, robot.damage - 1);
       addTrace(
         trace,
         6,
         robot.uid,
         null,
-        'register-unlocked',
-        `${robot.name} unlocked register ${register} and discarded ${cardId}.`
+        'repair',
+        `${robot.name} repaired from ${priorDamage} to ${robot.damage} damage at ` +
+          `(${robot.x},${robot.y}).`
       );
+      const retainedRegisters = new Set(lockedRegisterNumbersForDamage(robot.damage));
+      const unlocked = robot.lockedRegisters.filter(
+        ({ register }) => !retainedRegisters.has(register)
+      );
+      robot.lockedRegisters = robot.lockedRegisters.filter(({ register }) =>
+        retainedRegisters.has(register)
+      );
+      for (const { register, cardId } of unlocked) {
+        addTrace(
+          trace,
+          6,
+          robot.uid,
+          null,
+          'register-unlocked',
+          `${robot.name} unlocked register ${register} and discarded ${cardId}.`
+        );
+      }
     }
-    if (repair.option) {
+    const optionDraws = rules.repair.awardOptions
+      ? (repair.option ? rules.repair.crossedOptions : rules.repair.singleOptions)
+      : repair.option
+        ? 1
+        : 0;
+    for (let draw = 0; draw < optionDraws; draw += 1) {
       robot.pendingOptionDraws += 1;
       const option = optionDeck ? drawOption(optionDeck) : null;
       if (option) {
@@ -1412,6 +1437,7 @@ export function resolveProgrammedTurn(
 ): ProgramResolution | null {
   if (programming.phase !== 'programmed') return null;
   const course = compilePlayableCourse(setup.courseId);
+  const scenarioRules = scenarioResolutionRules(course.course);
   const courseCells: BoardCell[] = [...course.cells.values()];
   const flags = course.course.flags;
   const robots = initialRobots.map((robot) => ({
@@ -1528,7 +1554,9 @@ export function resolveProgrammedTurn(
       trace,
       courseCells,
       flags,
-      course
+      course,
+      scenarioRules,
+      optionDeck
     );
     if (finishers.length > 0) {
       const winnerUid = finishers[0];
@@ -1575,7 +1603,15 @@ export function resolveProgrammedTurn(
     });
   }
 
-  resolveRepairCleanup(robots, trace, courseCells, optionDeck, setup.powerDownAllowed);
+  resolveRepairCleanup(
+    robots,
+    trace,
+    courseCells,
+    optionDeck,
+    setup.powerDownAllowed,
+    course,
+    scenarioRules
+  );
 
   const resolution: ProgramResolution = {
     courseId: setup.courseId,
