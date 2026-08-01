@@ -1,5 +1,5 @@
 # Option World playable scenario
 
-Option World is available as a reviewed 2005 scenario. Its repair sites and
-flags award Options instead of ordinary repairs, and both clients converge on
-the same complete-manifest board and rule summary after configuration.
+Option World is available as a reviewed 2005 scenario. Its four flags, four
+crossed repair/Option sites, and generic repair-site rule summary are visible
+to both clients after configuration on the complete-manifest board.

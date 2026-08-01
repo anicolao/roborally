@@ -27,9 +27,15 @@ test('players can configure the Option World scenario', async ({ browser, page: 
 
     await expect(host.getByRole('heading', { name: 'Option World' })).toBeVisible();
     await expect(host.getByRole('gridcell', { name: /repair and Option site/ })).toHaveCount(4);
+    await expect(host.getByRole('gridcell', { name: /Flag 1/ })).toHaveCount(1);
+    await expect(host.getByRole('gridcell', { name: /Flag 2/ })).toHaveCount(1);
+    await expect(host.getByRole('gridcell', { name: /Flag 3/ })).toHaveCount(1);
+    await expect(host.getByRole('gridcell', { name: /Flag 4/ })).toHaveCount(1);
+    await expect(host.getByText(/repair sites draw options/)).toBeVisible();
     await expect(host.locator('.race-robot')).toHaveCount(2);
     await expect(guest.getByRole('heading', { name: 'Option World' })).toBeVisible();
     await expect(guest.getByRole('gridcell', { name: /repair and Option site/ })).toHaveCount(4);
+    await expect(guest.getByRole('gridcell', { name: /Flag 4/ })).toHaveCount(1);
   } finally {
     await guestContext.close();
   }
