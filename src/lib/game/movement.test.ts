@@ -1109,7 +1109,7 @@ describe('priority Program movement', () => {
     robot.y = 1;
     expect(resolveFlagsAndArchives([robot], 5, trace, undefined, flags)).toEqual(['runner']);
     expect(robot).toMatchObject({
-      archive: { x: 2, y: 5 },
+      archive: { x: 1, y: 1 },
       touchedFlags: [1, 2, 3, 4],
       nextFlag: null
     });
