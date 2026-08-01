@@ -11,6 +11,7 @@ export interface StepOptions {
   description: string;
   verifications: Verification[];
   status?: 'connecting' | 'synced' | 'offline' | 'error' | 'skip';
+  resetScroll?: boolean;
 }
 
 interface DocStep {
@@ -183,6 +184,22 @@ export class TestStepHelper {
         timerText.textContent = text.replace(/\d+ seconds$/, '30 seconds');
       }
     });
+    if (options.resetScroll) {
+      await this.page.evaluate(() => {
+        // Keep this snapshot deterministic when a preceding click or reload
+        // leaves a scrollable panel focused at a different offset on CI.
+        window.scrollTo(0, 0);
+        for (const element of document.querySelectorAll<HTMLElement>('*')) {
+          const style = getComputedStyle(element);
+          if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+            element.scrollTop = 0;
+          }
+          if (style.overflowX === 'auto' || style.overflowX === 'scroll') {
+            element.scrollLeft = 0;
+          }
+        }
+      });
+    }
     try {
       await expect(this.page).toHaveScreenshot(filename);
     } finally {

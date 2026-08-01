@@ -185,6 +185,7 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
 
     await steps.step('timeout-filled-and-revealed', {
       description: 'An explicit canonical timestamp enables deterministic timeout fill',
+      resetScroll: true,
       verifications: [
         {
           spec: 'The timeout claim preserves chosen registers and fills only empty slots',
