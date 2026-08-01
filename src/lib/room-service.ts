@@ -284,6 +284,20 @@ export async function createRoom(
   });
 }
 
+/** Reserve a room for a shared tabletop without consuming a racer seat. */
+export async function createTabletopRoom(
+  db: Firestore,
+  user: User,
+  roomCode: string
+) {
+  const normalizedCode = normalizeRoomCode(roomCode);
+  await appendRoomEvent(db, user, normalizedCode, 'game/created', {
+    gameId: gameIdForCode(normalizedCode),
+    roomCode: normalizedCode,
+    hostUid: user.uid
+  });
+}
+
 export async function joinRoom(
   db: Firestore,
   user: User,
