@@ -57,6 +57,7 @@ service cloud.firestore {
             && request.resource.data.payload.config.editionId == 'avalon-hill-2005'
             && request.resource.data.payload.config.courseId in [
               'risky-exchange',
+              'risky-exchange-a',
               'factory-rejects',
               'option-world'
             ]

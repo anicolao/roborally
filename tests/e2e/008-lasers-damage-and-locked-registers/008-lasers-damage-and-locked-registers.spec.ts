@@ -25,7 +25,7 @@ async function join(
   return page;
 }
 
-test.skip('post-board laser snapshots apply damage and lock exact registers', async (
+test('post-board laser snapshots apply damage and lock exact registers', async (
   { browser, page: host },
   testInfo
 ) => {
@@ -33,7 +33,7 @@ test.skip('post-board laser snapshots apply damage and lock exact registers', as
   const contexts: BrowserContext[] = [];
 
   try {
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}`);
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a`);
     await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');

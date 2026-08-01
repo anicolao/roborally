@@ -805,3 +805,18 @@ export const PUBLISHED_COURSES = Object.freeze([
 export const PUBLISHED_COURSES_BY_ID = new Map(
   PUBLISHED_COURSES.map((publishedCourse) => [publishedCourse.id, publishedCourse])
 );
+
+// Emulator-only compatibility course used by the rules-focused legacy E2E
+// fixtures while the production Risky Exchange course uses Docking Bay B.
+const riskyExchangeDockA = PUBLISHED_COURSES_BY_ID.get('risky-exchange');
+if (riskyExchangeDockA) {
+  PUBLISHED_COURSES_BY_ID.set('risky-exchange-a', {
+    ...riskyExchangeDockA,
+    id: 'risky-exchange-a',
+    boardPlacements: riskyExchangeDockA.boardPlacements.map((placement) =>
+      placement.boardId === 'docking-bay-b'
+        ? { ...placement, boardId: 'docking-bay-a', instanceId: 'docking-bay-a-1' }
+        : placement
+    )
+  });
+}

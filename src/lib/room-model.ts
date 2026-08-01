@@ -290,12 +290,14 @@ function isSupportedConfiguration(value: unknown, playerCount: number): value is
   if (!value || typeof value !== 'object') return false;
   const config = value as Partial<RaceConfig>;
   const courseId = config.courseId as PlayableCourseId | undefined;
-  const course = courseId ? PUBLISHED_COURSES_BY_ID.get(courseId) : undefined;
+  const course = courseId
+    ? PUBLISHED_COURSES_BY_ID.get(courseId === 'risky-exchange-a' ? 'risky-exchange' : courseId)
+    : undefined;
   const completeManifests =
     config.boardManifestVersion === COMPLETE_BOARD_MANIFEST_VERSION &&
     config.courseManifestVersion === COMPLETE_COURSE_MANIFEST_VERSION;
   const legacyRiskyExchangeManifests =
-    courseId === 'risky-exchange' &&
+    (courseId === 'risky-exchange' || courseId === 'risky-exchange-a') &&
     config.boardManifestVersion === BOARD_MANIFEST_VERSION &&
     config.courseManifestVersion === COURSE_MANIFEST_VERSION;
   return (
@@ -306,7 +308,8 @@ function isSupportedConfiguration(value: unknown, playerCount: number): value is
     config.optionManifestVersion === OPTION_MANIFEST_VERSION &&
     (completeManifests || legacyRiskyExchangeManifests) &&
     !!courseId &&
-    PLAYABLE_COURSE_IDS.includes(courseId) &&
+    (courseId === 'risky-exchange-a' ||
+      PLAYABLE_COURSE_IDS.includes(courseId as (typeof PLAYABLE_COURSE_IDS)[number])) &&
     !!course?.players.includes(playerCount) &&
     typeof config.seed === 'string' &&
     config.seed.length >= 1 &&

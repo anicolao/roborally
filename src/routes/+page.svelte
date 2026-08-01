@@ -67,6 +67,7 @@
   let pending = false;
   let copied = false;
   let selectedCourseId: PlayableCourseId = 'risky-exchange';
+  let e2eCourseOverride = '';
   let setupSeed = 'RALLY-2005';
   let setupLives: 3 | 4 = 3;
   let selectedProgramCardIds: ProgramCard['id'][] = [];
@@ -470,6 +471,7 @@
 
   onMount(async () => {
     try {
+      e2eCourseOverride = new URLSearchParams(window.location.search).get('e2eCourse') ?? '';
       if (
         import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' &&
         new URLSearchParams(window.location.search).get('e2ePlayback') === 'slow'
@@ -582,8 +584,14 @@
     pending = true;
     formError = '';
     try {
+      const courseId =
+        import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' &&
+        selectedCourseId === 'risky-exchange' &&
+        e2eCourseOverride === 'risky-exchange-a'
+          ? 'risky-exchange-a'
+          : selectedCourseId;
       await roomService.configureRace(services.db, services.user, roomCode, {
-        config: raceConfig(selectedCourseId, setupSeed.trim() || 'RALLY-2005', setupLives)
+        config: raceConfig(courseId, setupSeed.trim() || 'RALLY-2005', setupLives)
       });
     } catch (error) {
       console.error(error);
