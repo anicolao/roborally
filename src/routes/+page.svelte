@@ -93,7 +93,9 @@
   let playbackFrameCount = 0;
   let playbackProductionDurationMs = 2_000;
   let playbackKey = '';
-  let playbackTimeScale = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' ? 0.01 : 1;
+  // Keep emulator playback quick, but long enough for Playwright and the browser
+  // to observe each independently rendered movement stage.
+  let playbackTimeScale = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' ? 0.1 : 1;
   let playbackTimers: ReturnType<typeof setTimeout>[] = [];
   const PRODUCTION_PROGRAM_CARD_MS = 2_000;
   const PRODUCTION_FACTORY_STAGE_MS = 1_000;

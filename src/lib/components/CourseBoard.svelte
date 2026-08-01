@@ -27,7 +27,9 @@
   let activeY = $state(1);
   const displayedRobots = $derived(
     robots
-      ?.filter(({ status }) => status === 'active')
+      // During playback keep destroyed/shutdown robots in the animated frame so
+      // the tabletop can show the complete register effect before cleanup.
+      ?.filter(({ status }) => animateRobots || status === 'active')
       .map((robot) => ({
         ...robot,
         name: setup.players.find(({ uid }) => uid === robot.uid)?.name ?? robot.uid,
