@@ -18,7 +18,7 @@ export const EDITION_ID = 'avalon-hill-2005';
 export const PRNG_VERSION = 'xorshift32-v1';
 export const RACE_REDUCER_VERSION = 'race-v1';
 
-export const PLAYABLE_COURSE_IDS = ['risky-exchange', 'factory-rejects'] as const;
+export const PLAYABLE_COURSE_IDS = ['risky-exchange', 'factory-rejects', 'option-world'] as const;
 export type { PlayableCourseId } from './playable-courses';
 
 export interface RaceConfig {
@@ -87,6 +87,10 @@ export function riskyExchangeConfig(seed: string, lives: 3 | 4 = 3): RaceConfig 
 
 export function factoryRejectsConfig(seed: string, lives: 3 | 4 = 3): RaceConfig {
   return raceConfig('factory-rejects', seed, lives);
+}
+
+export function optionWorldConfig(seed: string, lives: 3 | 4 = 3): RaceConfig {
+  return raceConfig('option-world', seed, lives);
 }
 
 export function seedToUint32(seed: string): number {

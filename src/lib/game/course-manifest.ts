@@ -247,8 +247,8 @@ export const RISKY_EXCHANGE: CourseManifest = Object.freeze({
   boardPlacements: [
     { instanceId: 'exchange-1', boardId: 'exchange', origin: [1, 1] as const, rotation: 0 as const },
     {
-      instanceId: 'docking-bay-1',
-      boardId: 'docking-bay-a',
+      instanceId: 'docking-bay-b-1',
+      boardId: 'docking-bay-b',
       origin: [1, 13] as const,
       rotation: 0 as const
     }

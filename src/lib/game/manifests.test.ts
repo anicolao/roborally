@@ -10,6 +10,7 @@ import {
   createPrng,
   deriveRaceSetup,
   factoryRejectsConfig,
+  optionWorldConfig,
   riskyExchangeConfig,
   seedToUint32
 } from './setup';
@@ -46,7 +47,7 @@ describe('reviewed 2005 manifests', () => {
     expect(RISKY_EXCHANGE.reviewStatus).toBe('reviewed-two-pass');
     expect(RISKY_EXCHANGE.boardPlacements).toEqual([
       { instanceId: 'exchange-1', boardId: 'exchange', origin: [1, 1], rotation: 0 },
-      { instanceId: 'docking-bay-1', boardId: 'docking-bay-a', origin: [1, 13], rotation: 0 }
+      { instanceId: 'docking-bay-b-1', boardId: 'docking-bay-b', origin: [1, 13], rotation: 0 }
     ]);
     expect(RISKY_EXCHANGE.flags).toEqual([
       { number: 1, x: 8, y: 2 },
@@ -126,8 +127,8 @@ describe('versioned deterministic setup', () => {
           dock: 1,
           originalDockOrder: 1,
           lives: 3,
-          position: { x: 6, y: 15 },
-          archive: { x: 6, y: 15 },
+          position: { x: 6, y: 16 },
+          archive: { x: 6, y: 16 },
           facing: 'north'
         },
         {
@@ -137,8 +138,8 @@ describe('versioned deterministic setup', () => {
           dock: 2,
           originalDockOrder: 2,
           lives: 3,
-          position: { x: 7, y: 15 },
-          archive: { x: 7, y: 15 },
+          position: { x: 7, y: 16 },
+          archive: { x: 7, y: 16 },
           facing: 'north'
         }
       ]
@@ -168,6 +169,19 @@ describe('versioned deterministic setup', () => {
     expect(() =>
       deriveRaceSetup(rejectsPlayers.slice(0, 4), factoryRejectsConfig('TOO-FEW'))
     ).toThrow('does not support 4 players');
+  });
+
+  it('derives Option World with the complete manifest and option-awarding rules', () => {
+    const setup = deriveRaceSetup(players, optionWorldConfig('OPTION-WORLD'));
+    expect(setup).toMatchObject({
+      courseId: 'option-world',
+      startingDamage: 0,
+      powerDownAllowed: true
+    });
+    expect(setup.players.map(({ dock, position }) => ({ dock, position }))).toEqual([
+      { dock: 1, position: { x: 6, y: 16 } },
+      { dock: 2, position: { x: 7, y: 16 } }
+    ]);
   });
 
   it('permits the published four-Life option only with at least five players', () => {
