@@ -49,6 +49,39 @@ function requireCourse(courseId: string): PublishedCourseManifest {
   return course;
 }
 
+export interface ScenarioResolutionRules {
+  repair: {
+    awardOptions: boolean;
+    singleOptions: number;
+    crossedOptions: number;
+  };
+  flag: {
+    awardOptions: number;
+  };
+}
+
+/**
+ * Generic resolution hooks derived from the published scenario rules. New
+ * scenarios extend this projection instead of adding course-id branches to
+ * movement resolution.
+ */
+export function scenarioResolutionRules(course: PublishedCourseManifest): ScenarioResolutionRules {
+  const repairRule = course.specialRules.find(
+    (rule): rule is Extract<CourseSpecialRule, { kind: 'repair-sites-draw-options' }> =>
+      rule.kind === 'repair-sites-draw-options'
+  );
+  return {
+    repair: {
+      awardOptions: repairRule !== undefined,
+      singleOptions: repairRule?.single ?? 0,
+      crossedOptions: repairRule?.crossed ?? 0
+    },
+    flag: {
+      awardOptions: repairRule ? 1 : 0
+    }
+  };
+}
+
 export function createCourseRuleState(
   courseId: string,
   players: readonly { uid: string; teamId?: string }[]
