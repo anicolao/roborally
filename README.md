@@ -88,7 +88,8 @@ non-authoritative preview and submits once. The projection conserves all 84
 stable card IDs across draw pile, hands, locked/unlocked registers, and turn
 discard; opponents see five face-down registers until the barrier closes. The
 next-to-last submission creates a canonical 30-second deadline, and a valid
-timeout event fills the last program from a versioned random stream.
+timeout event preserves any server-persisted draft registers before filling the
+remaining open slots from a versioned random stream.
 
 Once the programming barrier closes, all five registers now resolve from the
 highest unique priority to the lowest. Move 2 and Move 3 advance one cell at a

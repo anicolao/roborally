@@ -214,6 +214,41 @@ describe('append-only game stream rules', () => {
     );
   });
 
+  it('persists editable Program and effect drafts under the acting UID', async () => {
+    const db = environment.authenticatedContext('robot-a').firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'games/room/events/robot-a-000001'), {
+        ...eventData('robot-a'),
+        type: 'program/draft-updated',
+        payload: { uid: 'robot-a', turnId: 'turn-001', cardIds: ['program-010'] }
+      })
+    );
+    await assertSucceeds(
+      setDoc(doc(db, 'games/room/events/robot-a-000002'), {
+        ...eventData('robot-a'),
+        type: 'effect/draft-updated',
+        clientSeq: 2,
+        payload: {
+          uid: 'robot-a',
+          turnId: 'turn-001',
+          draft: {
+            kind: 'option-plan',
+            preventDamageWith: ['ablative-coat'],
+            activations: []
+          }
+        }
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, 'games/room/events/robot-a-000003'), {
+        ...eventData('robot-a'),
+        type: 'program/draft-updated',
+        clientSeq: 3,
+        payload: { uid: 'robot-b', turnId: 'turn-001', cardIds: [] }
+      })
+    );
+  });
+
   it('allows shaped immutable rematch epochs', async () => {
     const db = environment.authenticatedContext('robot-a').firestore();
     await assertSucceeds(

@@ -358,7 +358,12 @@ describe('immutable room replay', () => {
       turnId: 'turn-001',
       cardIds: hostHand.slice(0, 5)
     }, 1_000);
-    const guestProgram = event('guest', 3, 'program/submitted', {
+    const guestDraft = event('guest', 3, 'program/draft-updated', {
+      uid: 'guest',
+      turnId: 'turn-001',
+      cardIds: guestHand.slice(0, 2)
+    }, 1_500);
+    const guestProgram = event('guest', 4, 'program/submitted', {
       uid: 'guest',
       turnId: 'turn-001',
       cardIds: guestHand.slice(0, 5)
@@ -372,6 +377,7 @@ describe('immutable room replay', () => {
       hostReady,
       guestReady,
       hostProgram,
+      guestDraft,
       guestProgram
     ]);
 
