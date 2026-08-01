@@ -19,10 +19,14 @@
   let unsubscribe: Unsubscribe | undefined;
 
   onMount(async () => {
-    roomCode = (new URLSearchParams(location.search).get('room') ?? '').trim().toUpperCase();
-    if (!roomCode) return;
     try {
       services = await initializeFirebase();
+      roomCode = (new URLSearchParams(location.search).get('room') ?? '').trim().toUpperCase() ||
+        RoomService.createRoomCode();
+      if (!new URLSearchParams(location.search).get('room')) {
+        status = 'Reserving a fresh tabletop room…';
+        await RoomService.createTabletopRoom(services.db, services.user, roomCode);
+      }
       unsubscribe = RoomService.subscribeRoom(services.db, roomCode, (next) => {
         state = next;
         status = next.resolution ? `Turn ${next.resolution.turnNumber} · ${next.resolution.phase.replaceAll('-', ' ')}` :
