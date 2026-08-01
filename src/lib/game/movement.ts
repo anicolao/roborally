@@ -997,7 +997,9 @@ export function resolveFlagsAndArchives(
   trace: ResolutionTraceEntry[],
   cells: readonly BoardCell[] = defaultCourseCells,
   flags: readonly { number: number; x: number; y: number }[] = defaultCourse.course.flags,
-  course: CompiledCourse = defaultCourse
+  course: CompiledCourse = defaultCourse,
+  rules: ScenarioResolutionRules = scenarioResolutionRules(course.course),
+  optionDeck?: OptionDeckState
 ): string[] {
   const finishers: string[] = [];
   for (const robot of robots) {
