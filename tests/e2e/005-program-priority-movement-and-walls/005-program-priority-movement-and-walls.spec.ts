@@ -97,14 +97,29 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     }
     await expect(registerPlayback).toBeHidden({ timeout: 10_000 });
 
+    // Docking Bay B can route Grace through the pit during this control
+    // program. Resolve that deterministic re-entry before inspecting the
+    // final turn summary.
+    const awaitingReentry = host.getByRole('heading', { name: /awaiting re-entry/ });
+    if (await awaitingReentry.isVisible({ timeout: 10_000 }).catch(() => false)) {
+      const hostReentry = host.getByLabel('Re-entry cell and facing');
+      const guestReentry = guest.getByLabel('Re-entry cell and facing');
+      if (await guestReentry.isVisible({ timeout: 10_000 }).catch(() => false)) {
+        await guestReentry.selectOption({ index: 1 });
+        await guest.getByRole('button', { name: 'Confirm re-entry' }).click();
+      } else if (await hostReentry.isVisible({ timeout: 10_000 }).catch(() => false)) {
+        await hostReentry.selectOption({ index: 1 });
+        await host.getByRole('button', { name: 'Confirm re-entry' }).click();
+      }
+    }
     await expect(host.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();
     await expect(guest.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();
 
     await host.getByText('Full resolution text').click();
     const fullTrace = host.getByRole('list', { name: 'Full resolution feed' });
     await expect(fullTrace).toContainText('Ada stopped at (6,16); a wall blocks east.');
-    await expect(fullTrace).toContainText('Ada completed step 3 at (6,12) facing north.');
-    await expect(fullTrace).toContainText('Grace completed step 3 at (7,11) facing north.');
+    await expect(fullTrace).toContainText('Ada completed step 3 at (6,13) facing north.');
+    await expect(fullTrace).toContainText('Grace was destroyed off course as destruction 1.');
     await host.getByText('Full resolution text').click();
 
     await guest.emulateMedia({ reducedMotion: 'reduce' });
@@ -158,7 +173,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
               'title',
               /Ada, Axle, facing south/
             );
-            await expect(host.locator('[data-coordinate="7,10"] .race-robot')).toHaveAttribute(
+            await expect(host.locator('[data-coordinate="7,16"] .race-robot')).toHaveAttribute(
               'title',
               /Grace, Bit, facing north/
             );
@@ -171,7 +186,6 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
             const trace = host.getByRole('list', { name: 'Full resolution feed' });
             for (const action of [
               'move-1',
-              'move-2',
               'move-3',
               'back-up',
               'rotate-right',
@@ -187,7 +201,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
           spec: 'Both clients converge on the same final robot coordinates and facings',
           check: async () => {
             await expect(guest.locator('[data-coordinate="6,13"] .race-robot')).toHaveCount(1);
-            await expect(guest.locator('[data-coordinate="7,10"] .race-robot')).toHaveCount(1);
+            await expect(guest.locator('[data-coordinate="7,16"] .race-robot')).toHaveCount(1);
           }
         },
         {

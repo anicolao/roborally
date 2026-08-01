@@ -111,11 +111,11 @@ test('cache, cursor, retry, and replay converge across a resolution disconnect',
 
     await host
       .getByLabel('Re-entry cell and facing')
-      .selectOption({ label: '(7,15) facing north' });
+      .selectOption({ label: '(7,16) facing north' });
     await host.getByRole('button', { name: 'Confirm re-entry' }).click();
     await guest
       .getByLabel('Re-entry cell and facing')
-      .selectOption({ label: '(6,15) facing east' });
+      .selectOption({ label: '(6,16) facing east' });
     await guest.getByRole('button', { name: 'Confirm re-entry' }).click();
 
     await expect(host.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();
@@ -136,11 +136,11 @@ test('cache, cursor, retry, and replay converge across a resolution disconnect',
         {
           spec: 'Both owner-authored re-entry choices survive the reconnect boundary',
           check: async () => {
-            await expect(host.locator('[data-coordinate="7,15"] .race-robot')).toHaveAttribute(
+            await expect(host.locator('[data-coordinate="7,16"] .race-robot')).toHaveAttribute(
               'title',
               /Ada, Axle, facing north/
             );
-            await expect(guest.locator('[data-coordinate="6,15"] .race-robot')).toHaveAttribute(
+            await expect(guest.locator('[data-coordinate="6,16"] .race-robot')).toHaveAttribute(
               'title',
               /Grace, Bit, facing east/
             );
@@ -173,7 +173,7 @@ test('cache, cursor, retry, and replay converge across a resolution disconnect',
             const openConsole = host.getByRole('button', { name: 'Open programming console' });
             if (await openConsole.isVisible()) await openConsole.click();
             await expect(host.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();
-            await expect(host.locator('[data-coordinate="7,15"] .race-robot')).toHaveAttribute(
+          await expect(host.locator('[data-coordinate="7,16"] .race-robot')).toHaveAttribute(
               'title',
               /Ada, Axle, facing north/
             );

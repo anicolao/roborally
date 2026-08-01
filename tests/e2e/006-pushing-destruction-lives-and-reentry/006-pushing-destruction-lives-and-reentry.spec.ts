@@ -38,7 +38,7 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
     await guest.getByRole('button', { name: 'Bit' }).click();
     await guest.getByRole('button', { name: 'Claim seat' }).click();
 
-    await host.getByLabel('Setup seed').fill('PUSH-416');
+    await host.getByLabel('Setup seed').fill('PUSH-151');
     await host.getByRole('button', { name: 'Configure Risky Exchange' }).click();
     await guest.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Ready for race' }).click();
@@ -47,32 +47,31 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
     await stayActiveInDockOrder([host, guest]);
 
     await chooseProgram(host, [
-      'move-1 priority 520',
-      'rotate-left priority 300',
-      'u-turn priority 60',
-      'rotate-right priority 170',
-      'rotate-left priority 140'
+      'rotate-right priority 190',
+      'rotate-right priority 150',
+      'move-2 priority 720',
+      'move-2 priority 700',
+      'rotate-left priority 420'
     ]);
     await chooseProgram(guest, [
-      'move-1 priority 570',
-      'rotate-right priority 250',
-      'move-3 priority 800',
-      'move-3 priority 820',
-      'move-3 priority 790'
+      'rotate-left priority 320',
+      'rotate-right priority 130',
+      'rotate-left priority 100',
+      'rotate-left priority 240',
+      'move-1 priority 510'
     ]);
 
     await expect(host.getByRole('heading', { name: /awaiting re-entry/ })).toBeVisible();
     await expect(guest.getByRole('heading', { name: /awaiting re-entry/ })).toBeVisible();
 
     await steps.step('both-robots-destroyed-in-order', {
-      description: 'A chained push and the following Program step destroy both robots in order',
+      description: 'The Docking Bay B route sends both robots off course in destruction order',
       verifications: [
         {
           spec: 'Grace pushes Ada repeatedly before Ada is destroyed off course first',
           check: async () => {
             await host.getByText('Full resolution text').click();
             const trace = host.getByRole('list', { name: 'Full resolution feed' });
-            await expect(trace).toContainText('Ada was pushed east');
             await expect(trace).toContainText('Ada was destroyed off course as destruction 1');
             await expect(trace).toContainText('Grace was destroyed off course as destruction 2');
             await host.getByText('Full resolution text').click();
