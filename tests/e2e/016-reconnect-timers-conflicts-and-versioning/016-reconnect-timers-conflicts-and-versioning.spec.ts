@@ -15,7 +15,7 @@ function roomStatus(page: Page) {
   return page.locator('[data-status]');
 }
 
-test.skip('cache, cursor, retry, and replay converge across a resolution disconnect', async (
+test('cache, cursor, retry, and replay converge across a resolution disconnect', async (
   { browser, page: host },
   testInfo
 ) => {
@@ -28,7 +28,7 @@ test.skip('cache, cursor, retry, and replay converge across a resolution disconn
   );
 
   try {
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}`);
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a`);
     await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');
@@ -58,7 +58,7 @@ test.skip('cache, cursor, retry, and replay converge across a resolution disconn
       'rotate-right priority 170',
       'rotate-left priority 140'
     ]);
-    await expect(roomStatus(host)).toHaveAttribute('data-event-count', '7');
+    await expect(roomStatus(host)).toHaveAttribute('data-event-count', '12');
     await host.context().setOffline(true);
     await expect(roomStatus(host)).toHaveAttribute('data-status', 'offline');
 
@@ -78,7 +78,7 @@ test.skip('cache, cursor, retry, and replay converge across a resolution disconn
         {
           spec: 'The offline client retains seven confirmed immutable events',
           check: async () => {
-            await expect(roomStatus(host)).toHaveAttribute('data-event-count', '7');
+            await expect(roomStatus(host)).toHaveAttribute('data-event-count', '12');
             await expect(roomStatus(host)).toContainText('cached');
           }
         },
@@ -100,22 +100,22 @@ test.skip('cache, cursor, retry, and replay converge across a resolution disconn
     await host.context().setOffline(false);
     await expect(roomStatus(host)).toHaveAttribute('data-status', 'synced');
     await expect(host.getByRole('heading', { name: /awaiting re-entry/ })).toBeVisible();
-    await expect(roomStatus(host)).toHaveAttribute('data-event-count', '8');
+    await expect(roomStatus(host)).toHaveAttribute('data-event-count', '18');
 
     await host.reload();
     await expect(roomStatus(host)).toHaveAttribute('data-status', 'synced');
     await expect(roomStatus(host)).toHaveAttribute('data-cache-hydrated', 'true');
-    await expect(roomStatus(host)).toHaveAttribute('data-event-count', '8');
+    await expect(roomStatus(host)).toHaveAttribute('data-event-count', '18');
     await host.getByRole('button', { name: 'Open programming console' }).click();
     await expect(host.getByRole('heading', { name: /awaiting re-entry/ })).toBeVisible();
 
     await host
       .getByLabel('Re-entry cell and facing')
-      .selectOption({ label: '(7,16) facing north' });
+      .selectOption({ label: '(7,15) facing north' });
     await host.getByRole('button', { name: 'Confirm re-entry' }).click();
     await guest
       .getByLabel('Re-entry cell and facing')
-      .selectOption({ label: '(6,16) facing east' });
+      .selectOption({ label: '(6,15) facing east' });
     await guest.getByRole('button', { name: 'Confirm re-entry' }).click();
 
     await expect(host.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();
@@ -136,11 +136,11 @@ test.skip('cache, cursor, retry, and replay converge across a resolution disconn
         {
           spec: 'Both owner-authored re-entry choices survive the reconnect boundary',
           check: async () => {
-            await expect(host.locator('[data-coordinate="7,16"] .race-robot')).toHaveAttribute(
+            await expect(host.locator('[data-coordinate="7,15"] .race-robot')).toHaveAttribute(
               'title',
               /Ada, Axle, facing north/
             );
-            await expect(guest.locator('[data-coordinate="6,16"] .race-robot')).toHaveAttribute(
+            await expect(guest.locator('[data-coordinate="6,15"] .race-robot')).toHaveAttribute(
               'title',
               /Grace, Bit, facing east/
             );
@@ -149,8 +149,8 @@ test.skip('cache, cursor, retry, and replay converge across a resolution disconn
         {
           spec: 'Both clients project the same completed turn and event count',
           check: async () => {
-            await expect(roomStatus(host)).toHaveAttribute('data-event-count', '10');
-            await expect(roomStatus(guest)).toHaveAttribute('data-event-count', '10');
+            await expect(roomStatus(host)).toHaveAttribute('data-event-count', '22');
+            await expect(roomStatus(guest)).toHaveAttribute('data-event-count', '22');
           }
         }
       ]
@@ -164,7 +164,7 @@ test.skip('cache, cursor, retry, and replay converge across a resolution disconn
             await host.getByRole('button', { name: 'Replay from server' }).click();
             await expect(roomStatus(host)).toHaveAttribute('data-status', 'synced');
             await expect(roomStatus(host)).toHaveAttribute('data-cache-hydrated', 'false');
-            await expect(roomStatus(host)).toHaveAttribute('data-event-count', '10');
+            await expect(roomStatus(host)).toHaveAttribute('data-event-count', '22');
           }
         },
         {
@@ -173,7 +173,7 @@ test.skip('cache, cursor, retry, and replay converge across a resolution disconn
             const openConsole = host.getByRole('button', { name: 'Open programming console' });
             if (await openConsole.isVisible()) await openConsole.click();
             await expect(host.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();
-          await expect(host.locator('[data-coordinate="7,16"] .race-robot')).toHaveAttribute(
+          await expect(host.locator('[data-coordinate="7,15"] .race-robot')).toHaveAttribute(
               'title',
               /Ada, Axle, facing north/
             );

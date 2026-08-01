@@ -57,7 +57,7 @@ function robotState(page: Page, name: string) {
     .filter({ hasText: name });
 }
 
-test.skip('power down clears damage, remains vulnerable, repeats, and restores programming', async (
+test('power down clears damage, remains vulnerable, repeats, and restores programming', async (
   { browser, page: host },
   testInfo
 ) => {
@@ -67,7 +67,7 @@ test.skip('power down clears damage, remains vulnerable, repeats, and restores p
   const guest = await guestContext.newPage();
 
   try {
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}`);
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a`);
     await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');

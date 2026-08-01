@@ -70,9 +70,13 @@ export function raceConfig(
     programManifestVersion: PROGRAM_MANIFEST_VERSION,
     optionManifestVersion: OPTION_MANIFEST_VERSION,
     boardManifestVersion:
-      courseId === 'risky-exchange' ? BOARD_MANIFEST_VERSION : COMPLETE_BOARD_MANIFEST_VERSION,
+      courseId === 'risky-exchange' || courseId === 'risky-exchange-a'
+        ? BOARD_MANIFEST_VERSION
+        : COMPLETE_BOARD_MANIFEST_VERSION,
     courseManifestVersion:
-      courseId === 'risky-exchange' ? COURSE_MANIFEST_VERSION : COMPLETE_COURSE_MANIFEST_VERSION,
+      courseId === 'risky-exchange' || courseId === 'risky-exchange-a'
+        ? COURSE_MANIFEST_VERSION
+        : COMPLETE_COURSE_MANIFEST_VERSION,
     courseId,
     seed,
     lives,

@@ -125,7 +125,7 @@ async function closeResolutionInterrupts(host: Page, guest: Page, turn: number) 
   await expect(completed).toBeVisible({ timeout: 10_000 });
 }
 
-test.skip('a production Risky Exchange race uses the complete rules loop', async (
+test('a production Risky Exchange race uses the complete rules loop', async (
   { browser, page: host },
   testInfo
 ) => {
@@ -135,7 +135,7 @@ test.skip('a production Risky Exchange race uses the complete rules loop', async
   const guest = await guestContext.newPage();
 
   try {
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}`);
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a`);
     await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');

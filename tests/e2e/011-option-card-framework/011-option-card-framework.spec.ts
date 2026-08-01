@@ -55,7 +55,7 @@ async function commitEmptyOptionPlan(page: Page) {
   await page.getByRole('button', { name: 'Commit finite Option plan' }).click();
 }
 
-test.skip('face-up Options use immutable Dock-order decisions', async (
+test('face-up Options use immutable Dock-order decisions', async (
   { browser, page: host },
   testInfo
 ) => {
@@ -65,7 +65,7 @@ test.skip('face-up Options use immutable Dock-order decisions', async (
   const guest = await guestContext.newPage();
 
   try {
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}`);
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a`);
     await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');
