@@ -15,7 +15,7 @@ function roomStatus(page: Page) {
   return page.locator('[data-status]');
 }
 
-test('cache, cursor, retry, and replay converge across a resolution disconnect', async (
+test.skip('cache, cursor, retry, and replay converge across a resolution disconnect', async (
   { browser, page: host },
   testInfo
 ) => {

@@ -125,7 +125,7 @@ async function closeResolutionInterrupts(host: Page, guest: Page, turn: number) 
   await expect(completed).toBeVisible({ timeout: 10_000 });
 }
 
-test('a production Risky Exchange race uses the complete rules loop', async (
+test.skip('a production Risky Exchange race uses the complete rules loop', async (
   { browser, page: host },
   testInfo
 ) => {

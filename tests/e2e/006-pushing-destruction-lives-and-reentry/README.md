@@ -2,9 +2,9 @@
 
 Two ordinary immutable Programs form a deterministic push chain. One robot is pushed off course, the pusher follows it over the edge, and both owners answer cleanup re-entry choices in destruction order.
 
-## A chained push and the following Program step destroy both robots in order
+## The Docking Bay B route sends both robots off course in destruction order
 
-![A chained push and the following Program step destroy both robots in order](./screenshots/000-both-robots-destroyed-in-order-desktop.png)
+![The Docking Bay B route sends both robots off course in destruction order](./screenshots/000-both-robots-destroyed-in-order-desktop.png)
 
 **Verifications:**
 

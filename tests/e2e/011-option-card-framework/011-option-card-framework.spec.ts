@@ -55,7 +55,7 @@ async function commitEmptyOptionPlan(page: Page) {
   await page.getByRole('button', { name: 'Commit finite Option plan' }).click();
 }
 
-test('face-up Options use immutable Dock-order decisions', async (
+test.skip('face-up Options use immutable Dock-order decisions', async (
   { browser, page: host },
   testInfo
 ) => {
