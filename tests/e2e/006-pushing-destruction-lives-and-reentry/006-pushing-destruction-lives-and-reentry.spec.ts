@@ -104,12 +104,12 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
 
     await host
       .getByLabel('Re-entry cell and facing')
-      .selectOption({ label: '(7,15) facing north' });
+      .selectOption({ label: '(7,16) facing north' });
     await host.getByRole('button', { name: 'Confirm re-entry' }).click();
     await expect(guest.getByLabel('Re-entry cell and facing')).toBeVisible();
     await guest
       .getByLabel('Re-entry cell and facing')
-      .selectOption({ label: '(6,15) facing east' });
+      .selectOption({ label: '(6,16) facing east' });
     await guest.getByRole('button', { name: 'Confirm re-entry' }).click();
 
     await expect(host.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();
@@ -122,8 +122,8 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
           check: async () => {
             await host.getByText('Full resolution text').click();
             const trace = host.getByRole('list', { name: 'Full resolution feed' });
-            await expect(trace).toContainText('Ada re-entered at (7,15) facing north');
-            await expect(trace).toContainText('Grace re-entered at (6,15) facing east');
+            await expect(trace).toContainText('Ada re-entered at (7,16) facing north');
+            await expect(trace).toContainText('Grace re-entered at (6,16) facing east');
             await host.getByText('Full resolution text').click();
           }
         },
@@ -138,11 +138,11 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
         {
           spec: 'Both clients converge on the chosen cells and facings',
           check: async () => {
-            await expect(host.locator('[data-coordinate="7,15"] .race-robot')).toHaveAttribute(
+            await expect(host.locator('[data-coordinate="7,16"] .race-robot')).toHaveAttribute(
               'title',
               /Ada, Axle, facing north/
             );
-            await expect(guest.locator('[data-coordinate="6,15"] .race-robot')).toHaveAttribute(
+            await expect(guest.locator('[data-coordinate="6,16"] .race-robot')).toHaveAttribute(
               'title',
               /Grace, Bit, facing east/
             );

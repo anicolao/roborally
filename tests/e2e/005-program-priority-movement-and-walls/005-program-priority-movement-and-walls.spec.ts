@@ -102,7 +102,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
 
     await host.getByText('Full resolution text').click();
     const fullTrace = host.getByRole('list', { name: 'Full resolution feed' });
-    await expect(fullTrace).toContainText('Ada stopped at (6,15); a wall blocks east.');
+    await expect(fullTrace).toContainText('Ada stopped at (6,16); a wall blocks east.');
     await expect(fullTrace).toContainText('Ada completed step 3 at (6,12) facing north.');
     await expect(fullTrace).toContainText('Grace completed step 3 at (7,11) facing north.');
     await host.getByText('Full resolution text').click();
@@ -142,7 +142,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
           }
         },
         {
-          spec: 'The wall between Dock 1 and Dock 2 stops eastward movement at (6,15)',
+          spec: 'The wall between Dock 1 and Dock 2 stops eastward movement at (6,16)',
           check: async () => {
             await host.getByText('Full resolution text').click();
             await expect(host.getByRole('list', { name: 'Full resolution feed' })).toContainText(
