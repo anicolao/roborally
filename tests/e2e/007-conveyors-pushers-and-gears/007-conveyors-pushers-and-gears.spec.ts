@@ -131,7 +131,7 @@ test('board phases resolve conveyors, dependency conflicts, and gears atomically
               'title',
               /Grace, Bit, facing west/
             );
-            await expect(linus.locator('[data-coordinate="6,11"] .race-robot')).toHaveAttribute(
+            await expect(linus.locator('[data-coordinate="6,13"] .race-robot')).toHaveAttribute(
               'title',
               /Linus, Cog, facing west/
             );
