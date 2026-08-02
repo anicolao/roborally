@@ -1,5 +1,32 @@
 import { expect, test } from '@playwright/test';
 
+async function expectFixedViewport(page: import('@playwright/test').Page) {
+  const geometry = await page.evaluate(() => {
+    const root = document.scrollingElement!;
+    const tabletop = document.querySelector('[data-e2e-tabletop]')!.getBoundingClientRect();
+    return {
+      clientWidth: root.clientWidth,
+      clientHeight: root.clientHeight,
+      scrollWidth: root.scrollWidth,
+      scrollHeight: root.scrollHeight,
+      tabletop: {
+        x: tabletop.x,
+        y: tabletop.y,
+        width: tabletop.width,
+        height: tabletop.height
+      }
+    };
+  });
+  expect(geometry.scrollWidth).toBe(geometry.clientWidth);
+  expect(geometry.scrollHeight).toBe(geometry.clientHeight);
+  expect(geometry.tabletop).toEqual({
+    x: 0,
+    y: 0,
+    width: geometry.clientWidth,
+    height: geometry.clientHeight
+  });
+}
+
 async function submitVisibleProgram(page: import('@playwright/test').Page) {
   const cards = page.locator('.hand button');
   const lockProgram = page.getByRole('button', { name: 'Lock program' });
@@ -47,7 +74,9 @@ test('the tabletop owns configuration and seat QR codes open private controllers
 
   try {
     await table.goto(`/tt/?e2eIdentity=TABLE&e2eRoomCode=${roomCode}`);
-    await expect(table.locator('header').getByText(roomCode, { exact: true })).toBeVisible();
+    await expect(table.locator('[data-e2e-tabletop]')).toHaveAttribute('data-room-code', roomCode);
+    await expect(table.locator('header, footer')).toHaveCount(0);
+    await expectFixedViewport(table);
     await expect(table.getByRole('img', { name: /QR code to join position/ })).toHaveCount(8);
     await expect(table.getByLabel('Tabletop race configuration')).toBeVisible();
     await expect(table.getByRole('button', { name: 'CONFIGURE RACE' })).toBeDisabled();
@@ -87,17 +116,17 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await firstPhone.getByRole('button', { name: 'READY FOR RACE' }).click();
     await secondPhone.getByRole('button', { name: 'READY FOR RACE' }).click();
 
-    const courseBoard = table.getByRole('grid', {
-      name: 'Risky Exchange course board, rotated 90 degrees'
-    });
+    const sharedTable = table.getByRole('region', { name: 'Shared tabletop' });
+    await expect(sharedTable).toHaveAttribute('data-course-layout', 'side-seats');
+    const courseBoard = table.getByRole('grid', { name: 'Risky Exchange course board' });
     await expect(courseBoard).toBeVisible();
-    await expect(courseBoard).toHaveAttribute('data-tabletop-orientation', 'rotated');
+    await expect(courseBoard).toHaveAttribute('data-tabletop-orientation', 'natural');
     const courseBounds = await courseBoard.boundingBox();
     const courseViewport = table.locator('.board-viewport');
     const viewportBounds = await courseViewport.boundingBox();
     expect(courseBounds).not.toBeNull();
     expect(viewportBounds).not.toBeNull();
-    expect(courseBounds!.width).toBeGreaterThan(courseBounds!.height);
+    expect(courseBounds!.height).toBeGreaterThan(courseBounds!.width);
     expect(courseBounds!.x).toBeGreaterThanOrEqual(viewportBounds!.x - 1);
     expect(courseBounds!.y).toBeGreaterThanOrEqual(viewportBounds!.y - 1);
     expect(courseBounds!.x + courseBounds!.width).toBeLessThanOrEqual(
@@ -115,6 +144,17 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     const cellBounds = await courseBoard.getByRole('gridcell').first().boundingBox();
     expect(cellBounds).not.toBeNull();
     expect(Math.abs(cellBounds!.width - cellBounds!.height)).toBeLessThanOrEqual(1);
+    const courseWrapBounds = await table.locator('.course-wrap').boundingBox();
+    const seatOneBounds = await table.locator('[data-seat="1"]').boundingBox();
+    const seatEightBounds = await table.locator('[data-seat="8"]').boundingBox();
+    expect(courseWrapBounds).not.toBeNull();
+    expect(seatOneBounds).not.toBeNull();
+    expect(seatEightBounds).not.toBeNull();
+    expect(seatOneBounds!.x + seatOneBounds!.width).toBeLessThanOrEqual(courseWrapBounds!.x);
+    expect(seatEightBounds!.x).toBeGreaterThanOrEqual(
+      courseWrapBounds!.x + courseWrapBounds!.width
+    );
+    await expectFixedViewport(table);
     await expect(table.getByRole('heading', { name: 'Risky Exchange' })).toHaveCount(0);
     await expect(table.getByLabel('Board view controls')).toHaveCount(0);
     await expect(table.getByText('Course text equivalent')).toHaveCount(0);

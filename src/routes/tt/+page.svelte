@@ -11,6 +11,7 @@
   import { MAX_ROOM_PLAYERS, ROBOTS, emptyRoomState, type RoomState } from '$lib/room-model';
   import * as RoomService from '$lib/room-service';
   import { PUBLISHED_COURSES_BY_ID } from '$lib/game/course-catalog';
+  import { compilePlayableCourse } from '$lib/game/playable-courses';
   import {
     PLAYABLE_COURSE_IDS,
     raceConfig,
@@ -19,6 +20,7 @@
   import { PROGRAM_CARDS, type ProgramCard } from '$lib/game/program-manifest';
   import type { ProgramPlayback, RaceRobotPosition } from '$lib/game/movement';
   import type { Unsubscribe } from 'firebase/firestore';
+  import { tabletopLayoutForCourse } from '$lib/tabletop-layout';
 
   type SeatQr = { seat: number; url: string; image: string };
   type PlaybackPhase = 'idle' | 'countdown' | 'register' | 'complete';
@@ -54,6 +56,10 @@
 
   $: selectedCourse = PUBLISHED_COURSES_BY_ID.get(selectedCourseId)!;
   $: selectedCourseSupportsRoom = selectedCourse.players.includes(state.players.length);
+  $: layoutCourse = compilePlayableCourse(
+    state.setup?.courseId ?? state.configuration?.courseId ?? selectedCourseId
+  );
+  $: tabletopLayout = tabletopLayoutForCourse(layoutCourse.width, layoutCourse.height);
   $: playbackIsActive = playbackPhase === 'countdown' || playbackPhase === 'register';
   $: playbackTransitionMs = Math.round(playbackProductionDurationMs * playbackTimeScale);
   $: countdownStepMs = Math.round(PRODUCTION_COUNTDOWN_STEP_MS * playbackTimeScale);
@@ -229,13 +235,8 @@
 
 <svelte:head><title>Robo Rally · Tabletop</title></svelte:head>
 
-<main class="tabletop" data-e2e-tabletop>
-  <header>
-    <a href={`${base}/`} class="brand"><strong>ROBO</strong> RALLY <small>TABLETOP</small></a>
-    <div><strong>{roomCode || 'NO ROOM'}</strong><span>{status}</span></div>
-    <span class="table-control">COURSE CONTROL</span>
-  </header>
-
+<main class="tabletop" data-e2e-tabletop data-room-code={roomCode}>
+  <p class="sr-only" aria-live="polite">{roomCode ? `${roomCode}. ${status}` : status}</p>
   {#if error}<p class="table-error" role="alert">{error}</p>{/if}
 
   {#if playbackPhase === 'countdown'}
@@ -261,7 +262,13 @@
     </div>
   {/if}
 
-  <section class="table" aria-label="Shared tabletop">
+  <section
+    class:side-seats={tabletopLayout === 'side-seats'}
+    class:top-bottom-seats={tabletopLayout === 'top-bottom-seats'}
+    class="table"
+    aria-label="Shared tabletop"
+    data-course-layout={tabletopLayout}
+  >
     {#each Array(MAX_ROOM_PLAYERS) as _, index}
       {@const seat = index + 1}
       {@const player = state.players.find((candidate) => candidate.seat === seat)}
@@ -333,7 +340,6 @@
           animateRobots={playbackIsActive}
           transitionDurationMs={playbackTransitionMs}
           presentationOnly
-          rotatePortrait
         />
       {:else}
         <div class="course-control" aria-label="Tabletop race configuration">
@@ -386,20 +392,14 @@
     </div>
   </section>
 
-  <footer>Shared information belongs on the tabletop · programming, Options, and private choices stay on each phone.</footer>
 </main>
 
 <style>
   :global(*) { box-sizing: border-box; }
-  :global(html), :global(body) { margin: 0; min-width: 320px; min-height: 100%; background: #111718; color: #eef4ee; font-family: 'Atkinson Hyperlegible', sans-serif; }
-  .tabletop { min-height: 100vh; padding: 22px; background: radial-gradient(circle at center, #263637, #0c1112 72%); }
-  header, footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; max-width: 1800px; margin: 0 auto; }
-  header { border-bottom: 1px solid #506064; padding-bottom: 14px; font-family: 'Space Mono', monospace; }
-  .brand { color: #eef4ee; text-decoration: none; font-size: clamp(20px, 2vw, 34px); letter-spacing: .08em; white-space: nowrap; }
-  .brand strong { color: #d2ff37; } .brand small { color: #aebbb9; font-size: .5em; }
-  header div { display: grid; gap: 3px; text-align: center; } header div strong { color: #d2ff37; font-size: 24px; } header div span { color: #aebbb9; font-size: 15px; }
-  .table-control { color: #ffcf4b; font: 700 16px 'Space Mono', monospace; }
-  .table-error { max-width: 1800px; margin: 10px auto 0; color: #ffbf69; font-size: 18px; text-align: center; }
+  :global(html), :global(body) { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #111718; color: #eef4ee; font-family: 'Atkinson Hyperlegible', sans-serif; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .tabletop { position: fixed; inset: 0; width: 100vw; height: 100dvh; overflow: hidden; padding: clamp(4px, 1vw, 12px); background: radial-gradient(circle at center, #263637, #0c1112 72%); }
+  .table-error { position: fixed; z-index: 60; top: 8px; left: 50%; width: min(90vw, 900px); margin: 0; padding: 10px; border: 1px solid #ffbf69; border-radius: 6px; color: #ffbf69; background: #16100fee; font-size: 18px; text-align: center; transform: translateX(-50%); }
   .program-countdown { position: fixed; z-index: 50; inset: 0; display: grid; place-content: center; place-items: center; background: #050909dd; font-family: 'Space Mono', monospace; text-transform: uppercase; }
   .program-countdown small { color: #d2ff37; font-size: clamp(18px, 3vw, 38px); letter-spacing: .12em; }
   .program-countdown strong { color: #eef4ee; font-size: clamp(150px, 35vw, 420px); line-height: .9; text-shadow: 0 0 45px #d2ff3788; }
@@ -408,13 +408,19 @@
   .register-playback strong { color: #d2ff37; font-size: clamp(16px, 2vw, 28px); text-transform: uppercase; }
   .register-playback span { overflow: hidden; font-size: clamp(14px, 1.5vw, 20px); text-overflow: ellipsis; white-space: nowrap; }
   .register-playback i { display: block; height: 5px; background: linear-gradient(90deg, #d2ff37 0 calc(var(--playback-progress) * 100%), #344043 calc(var(--playback-progress) * 100%) 100%); }
-  .table { position: relative; display: grid; grid-template-columns: repeat(4, minmax(145px, 1fr)); grid-template-rows: minmax(175px, auto) minmax(480px, 1fr) minmax(175px, auto); gap: 14px; max-width: 1800px; min-height: calc(100vh - 120px); margin: 14px auto; }
-  .course-wrap { grid-column: 1 / -1; grid-row: 2; z-index: 1; min-width: 0; min-height: 0; overflow: hidden; padding: 4px; border: 2px solid #6f7e7f; border-radius: 16px; background: #090d0e; box-shadow: 0 16px 50px #050707aa; }
+  .table { position: relative; display: grid; width: 100%; height: 100%; min-width: 0; min-height: 0; gap: clamp(4px, 1vw, 12px); margin: 0; }
+  .table.top-bottom-seats { grid-template-columns: repeat(4, minmax(78px, 1fr)); grid-template-rows: clamp(120px, 20vh, 190px) minmax(0, 1fr) clamp(120px, 20vh, 190px); }
+  .table.side-seats { grid-template-columns: clamp(78px, 18vw, 260px) minmax(0, 1fr) clamp(78px, 18vw, 260px); grid-template-rows: repeat(4, minmax(0, 1fr)); }
+  .course-wrap { z-index: 1; min-width: 0; min-height: 0; overflow: hidden; padding: 4px; border: 2px solid #6f7e7f; border-radius: 16px; background: #090d0e; box-shadow: 0 16px 50px #050707aa; }
+  .top-bottom-seats .course-wrap { grid-column: 1 / -1; grid-row: 2; }
+  .side-seats .course-wrap { grid-column: 2; grid-row: 1 / -1; }
   .course-wrap :global(.course-panel), .course-wrap :global(.board-viewport) { height: 100%; }
-  .seat { z-index: 2; display: grid; gap: 4px; align-content: start; min-width: 0; padding: 12px; border: 2px solid #4b5a5c; border-radius: 10px; background: #11191aee; box-shadow: 0 7px 18px #05070799; }
+  .seat { z-index: 2; display: grid; gap: 4px; align-content: start; min-width: 0; min-height: 0; overflow: hidden; padding: clamp(4px, 1vw, 12px); border: 2px solid #4b5a5c; border-radius: 10px; background: #11191aee; box-shadow: 0 7px 18px #05070799; }
   .seat.open { border-color: #7e9130; }
-  .seat-1 { grid-column: 1; grid-row: 1; } .seat-2 { grid-column: 2; grid-row: 1; } .seat-3 { grid-column: 3; grid-row: 1; } .seat-4 { grid-column: 4; grid-row: 1; }
-  .seat-5 { grid-column: 4; grid-row: 3; } .seat-6 { grid-column: 3; grid-row: 3; } .seat-7 { grid-column: 2; grid-row: 3; } .seat-8 { grid-column: 1; grid-row: 3; }
+  .top-bottom-seats .seat-1 { grid-column: 1; grid-row: 1; } .top-bottom-seats .seat-2 { grid-column: 2; grid-row: 1; } .top-bottom-seats .seat-3 { grid-column: 3; grid-row: 1; } .top-bottom-seats .seat-4 { grid-column: 4; grid-row: 1; }
+  .top-bottom-seats .seat-5 { grid-column: 4; grid-row: 3; } .top-bottom-seats .seat-6 { grid-column: 3; grid-row: 3; } .top-bottom-seats .seat-7 { grid-column: 2; grid-row: 3; } .top-bottom-seats .seat-8 { grid-column: 1; grid-row: 3; }
+  .side-seats .seat-1 { grid-column: 1; grid-row: 1; } .side-seats .seat-2 { grid-column: 1; grid-row: 2; } .side-seats .seat-3 { grid-column: 1; grid-row: 3; } .side-seats .seat-4 { grid-column: 1; grid-row: 4; }
+  .side-seats .seat-5 { grid-column: 3; grid-row: 4; } .side-seats .seat-6 { grid-column: 3; grid-row: 3; } .side-seats .seat-7 { grid-column: 3; grid-row: 2; } .side-seats .seat-8 { grid-column: 3; grid-row: 1; }
   .seat-head { display: flex; justify-content: space-between; color: #d2ff37; font-family: 'Space Mono', monospace; } .seat-head span { color: #ffcf4b; }
   .seat > strong { overflow: hidden; font-size: 22px; text-overflow: ellipsis; white-space: nowrap; } .seat > small { color: #9caaac; }
   .robot-vitals { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 8px; margin-top: 4px; font-family: 'Space Mono', monospace; }
@@ -449,7 +455,20 @@
   .course-control button { border-color: #d2ff37; color: #101718; background: #d2ff37; font-family: 'Space Mono', monospace; }
   .course-control button:disabled { opacity: .45; }
   .configured { margin: 0; color: #ffcf4b; font: 700 15px 'Space Mono', monospace; text-align: center; text-transform: uppercase; }
-  footer { color: #9caaac; font-size: 16px; }
   @media (max-width: 1100px) { .course-control form { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 900px) { .table { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(4, auto) minmax(480px, 1fr); } .course-wrap { grid-column: 1 / -1; grid-row: 3 / 6; } .seat-1,.seat-2,.seat-3,.seat-4,.seat-5,.seat-6,.seat-7,.seat-8 { grid-column: auto; grid-row: auto; } .seat-5 { grid-column: 1; } .seat-6 { grid-column: 2; } .seat-7 { grid-column: 1; } .seat-8 { grid-column: 2; } }
+  @media (max-width: 700px) {
+    .course-control { gap: 10px; padding: 6px; }
+    .course-control > div strong { font-size: 24px; }
+    .course-control > div small { font-size: 14px; }
+    .course-control form { grid-template-columns: 1fr; gap: 4px; }
+    .course-control :is(select, input, button) { min-height: 38px; padding: 4px; font-size: 12px; }
+    .seat-join { display: block; }
+    .seat-join img { width: min(100%, 72px); margin: auto; }
+    .seat-join span { display: none; }
+    .seat > strong { font-size: 14px; }
+    .seat > small, .power-state span, .robot-vitals b { display: none; }
+    .robot-vitals { display: block; }
+    .life-track, .damage-track { margin-top: 3px; }
+    .program-card { min-height: 22px; font-size: 7px; }
+  }
 </style>
