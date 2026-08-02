@@ -80,6 +80,8 @@ export interface PlayerJoinedPayload {
   uid: string;
   name: string;
   robotId: RobotId;
+  /** A tabletop QR code may reserve a specific physical position. */
+  seat?: number;
 }
 
 export interface RaceConfiguredPayload {
@@ -192,6 +194,7 @@ export interface ReplayDiagnostic {
     | 'room-mismatch'
     | 'player-already-joined'
     | 'room-full'
+    | 'seat-unavailable'
     | 'name-unavailable'
     | 'robot-unavailable'
     | 'host-only'
@@ -542,6 +545,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
     } else if (event.type === 'player/joined') {
       const payload = event.payload as PlayerJoinedPayload;
       const name = normalizePlayerName(payload.name);
+      const requestedSeat = payload?.seat;
       if (!payload || payload.uid !== event.actorUid || !name || !isRobotId(payload.robotId)) {
         diagnostic(state, event, 'invalid-event', `Event ${event.id} has invalid player data.`);
         continue;
@@ -562,6 +566,21 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         diagnostic(state, event, 'room-full', `Room ${state.roomCode} already has eight racers.`);
         continue;
       }
+      if (
+        requestedSeat !== undefined &&
+        (!Number.isInteger(requestedSeat) || requestedSeat < 1 || requestedSeat > MAX_ROOM_PLAYERS)
+      ) {
+        diagnostic(state, event, 'invalid-event', `Event ${event.id} has an invalid seat.`);
+        continue;
+      }
+      const seat = requestedSeat ??
+        Array.from({ length: MAX_ROOM_PLAYERS }, (_, index) => index + 1).find(
+          (candidate) => !state.players.some((player) => player.seat === candidate)
+        );
+      if (!seat || state.players.some((player) => player.seat === seat)) {
+        diagnostic(state, event, 'seat-unavailable', `Position ${seat ?? requestedSeat} is unavailable.`);
+        continue;
+      }
       if (state.players.some((player) => player.name.toLowerCase() === name.toLowerCase())) {
         diagnostic(state, event, 'name-unavailable', `The racer name ${name} is unavailable.`);
         continue;
@@ -575,8 +594,9 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         uid: payload.uid,
         name,
         robotId: payload.robotId,
-        seat: state.players.length + 1
+        seat
       });
+      state.players.sort((left, right) => left.seat - right.seat);
       state.readyPlayerUids = [];
     } else if (event.type === 'race/configured') {
       const payload = event.payload as RaceConfiguredPayload;

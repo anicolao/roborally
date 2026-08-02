@@ -61,6 +61,47 @@ describe('immutable room replay', () => {
     expect(state.diagnostics).toEqual([]);
   });
 
+  it('claims explicit tabletop positions and rejects a second claim for the same QR seat', () => {
+    const positionEight = event('ada', 1, 'player/joined', {
+      uid: 'ada',
+      name: 'Ada',
+      robotId: 'axle',
+      seat: 8
+    }, 2);
+    const positionTwo = event('grace', 1, 'player/joined', {
+      uid: 'grace',
+      name: 'Grace',
+      robotId: 'bit',
+      seat: 2
+    }, 3);
+    const duplicatePosition = event('lin', 1, 'player/joined', {
+      uid: 'lin',
+      name: 'Lin',
+      robotId: 'cog',
+      seat: 2
+    }, 4);
+    const nextOpenPosition = event('margaret', 1, 'player/joined', {
+      uid: 'margaret',
+      name: 'Margaret',
+      robotId: 'dash'
+    }, 5);
+
+    const state = replayRoom([
+      created,
+      positionEight,
+      positionTwo,
+      duplicatePosition,
+      nextOpenPosition
+    ]);
+
+    expect(state.players.map(({ uid, seat }) => ({ uid, seat }))).toEqual([
+      { uid: 'margaret', seat: 1 },
+      { uid: 'grace', seat: 2 },
+      { uid: 'ada', seat: 8 }
+    ]);
+    expect(state.diagnostics.map(({ code }) => code)).toEqual(['seat-unavailable']);
+  });
+
   it('rejects stale, duplicate, incompatible, and conflicting events without partial mutation', () => {
     const joinedHost = event('host', 2, 'player/joined', {
       uid: 'host',
