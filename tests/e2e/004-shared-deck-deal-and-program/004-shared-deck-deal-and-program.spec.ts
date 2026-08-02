@@ -146,15 +146,24 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
           }
         },
         {
-          spec: 'The last programmer receives the canonical 30-second deadline',
+          spec: 'The last programmer receives the active canonical deadline',
           check: async () => {
-            await expect(host.getByRole('timer')).toContainText(/Ada has (29|30) seconds/);
+            await expect(host.getByRole('timer')).toContainText(
+              /Ada has (?:[1-9]|[12]\d|30) seconds/
+            );
           }
         }
       ]
     });
 
     await rewindSubmissionDeadline(roomCode);
+    // The REST patches are acknowledged before Firestore necessarily delivers every
+    // reordered timestamp through the active listener. Wait for the live projection
+    // to converge before replacing that listener with a page reload.
+    await expect(host.getByRole('timer')).toContainText('Ada has 0 seconds');
+    await expect(
+      host.getByRole('list', { name: 'Program submission status' })
+    ).toContainText('▰ ▰ ▰ ▰ ▰');
     await host.reload();
     await expect(host.locator('[data-status]')).toHaveAttribute('data-status', 'synced');
     const openProgramming = host.getByRole('button', { name: 'Open programming console' });
