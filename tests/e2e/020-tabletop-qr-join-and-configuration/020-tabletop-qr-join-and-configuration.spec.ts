@@ -1,5 +1,40 @@
 import { expect, test } from '@playwright/test';
 
+async function submitVisibleProgram(page: import('@playwright/test').Page) {
+  const cards = page.locator('.hand button');
+  const lockProgram = page.getByRole('button', { name: 'Lock program' });
+  for (let index = 0; index < await cards.count(); index += 1) {
+    await cards.nth(index).click();
+    if (await lockProgram.isEnabled()) break;
+  }
+  await lockProgram.click();
+}
+
+async function completePrivateResolutionChoices(
+  pages: import('@playwright/test').Page[]
+) {
+  await expect.poll(async () => {
+    for (const page of pages) {
+      const optionLoss = page.getByLabel('Destroyed robot Option loss').getByRole('button');
+      if (await optionLoss.first().isVisible()) {
+        await optionLoss.first().click();
+        return false;
+      }
+
+      const reentry = page.getByLabel('Re-entry cell and facing');
+      if (await reentry.isVisible()) {
+        await reentry.selectOption({ index: 1 });
+        await page.getByRole('button', { name: 'CONFIRM RE-ENTRY' }).click();
+        return false;
+      }
+    }
+    const nextTurnVisible = await Promise.all(
+      pages.map((page) => page.getByRole('button', { name: 'BEGIN TURN 2' }).isVisible())
+    );
+    return nextTurnVisible.every(Boolean);
+  }, { timeout: 30_000 }).toBe(true);
+}
+
 test('the tabletop owns configuration and seat QR codes open private controllers', async ({
   browser,
   page: table
@@ -57,6 +92,27 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expect(secondPhone.getByRole('heading', { name: 'Program deck' })).toBeVisible();
     await expect(firstPhone.getByLabel('Course')).toHaveCount(0);
     await expect(secondPhone.getByLabel('Course')).toHaveCount(0);
+
+    await submitVisibleProgram(firstPhone);
+    await submitVisibleProgram(secondPhone);
+
+    await expect(table.getByTestId('tabletop-program-countdown')).toBeVisible();
+    await expect(table.getByTestId('tabletop-register-playback')).toBeVisible();
+    await expect(table.getByTestId('tabletop-register-playback')).toHaveAttribute(
+      'data-stage',
+      'program-card'
+    );
+    await expect(table.locator('.program-card.revealed')).toHaveCount(10);
+    await completePrivateResolutionChoices([firstPhone, secondPhone]);
+    await expect(firstPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toBeVisible();
+    await expect(secondPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toBeVisible();
+
+    await firstPhone.getByRole('button', { name: 'BEGIN TURN 2' }).click();
+    await secondPhone.getByRole('button', { name: 'BEGIN TURN 2' }).click();
+    await expect(firstPhone.getByText('Choose five registers privately for turn 2.')).toBeVisible();
+    await expect(secondPhone.getByText('Choose five registers privately for turn 2.')).toBeVisible();
+    await expect(firstPhone.locator('.hand button').first()).toBeEnabled();
+    await expect(secondPhone.locator('.hand button').first()).toBeEnabled();
   } finally {
     await firstContext.close();
     await secondContext.close();
