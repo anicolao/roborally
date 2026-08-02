@@ -93,8 +93,28 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expect(courseBoard).toBeVisible();
     await expect(courseBoard).toHaveAttribute('data-tabletop-orientation', 'rotated');
     const courseBounds = await courseBoard.boundingBox();
+    const courseViewport = table.locator('.board-viewport');
+    const viewportBounds = await courseViewport.boundingBox();
     expect(courseBounds).not.toBeNull();
+    expect(viewportBounds).not.toBeNull();
     expect(courseBounds!.width).toBeGreaterThan(courseBounds!.height);
+    expect(courseBounds!.x).toBeGreaterThanOrEqual(viewportBounds!.x - 1);
+    expect(courseBounds!.y).toBeGreaterThanOrEqual(viewportBounds!.y - 1);
+    expect(courseBounds!.x + courseBounds!.width).toBeLessThanOrEqual(
+      viewportBounds!.x + viewportBounds!.width + 1
+    );
+    expect(courseBounds!.y + courseBounds!.height).toBeLessThanOrEqual(
+      viewportBounds!.y + viewportBounds!.height + 1
+    );
+    expect(
+      Math.min(
+        Math.abs(courseBounds!.width - viewportBounds!.width),
+        Math.abs(courseBounds!.height - viewportBounds!.height)
+      )
+    ).toBeLessThanOrEqual(1);
+    const cellBounds = await courseBoard.getByRole('gridcell').first().boundingBox();
+    expect(cellBounds).not.toBeNull();
+    expect(Math.abs(cellBounds!.width - cellBounds!.height)).toBeLessThanOrEqual(1);
     await expect(table.getByRole('heading', { name: 'Risky Exchange' })).toHaveCount(0);
     await expect(table.getByLabel('Board view controls')).toHaveCount(0);
     await expect(table.getByText('Course text equivalent')).toHaveCount(0);
