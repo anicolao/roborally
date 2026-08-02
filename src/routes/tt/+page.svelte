@@ -16,10 +16,12 @@
     raceConfig,
     type PlayableCourseId
   } from '$lib/game/setup';
-  import { PROGRAM_CARDS } from '$lib/game/program-manifest';
+  import { PROGRAM_CARDS, type ProgramCard } from '$lib/game/program-manifest';
+  import type { ProgramPlayback, RaceRobotPosition } from '$lib/game/movement';
   import type { Unsubscribe } from 'firebase/firestore';
 
   type SeatQr = { seat: number; url: string; image: string };
+  type PlaybackPhase = 'idle' | 'countdown' | 'register' | 'complete';
 
   let services: FirebaseServices | undefined;
   let state: RoomState = emptyRoomState();
@@ -32,9 +34,43 @@
   let setupSeed = 'RALLY-2005';
   let setupLives: 3 | 4 = 3;
   let unsubscribe: Unsubscribe | undefined;
+  let playbackPhase: PlaybackPhase = 'idle';
+  let playbackCountdown = 3;
+  let playbackRegister: number | null = null;
+  let playbackStage: ProgramPlayback['frames'][number]['stage'] | null = null;
+  let playbackActorUid: string | null = null;
+  let playbackCardId: ProgramCard['id'] | null = null;
+  let playbackRobots: RaceRobotPosition[] | undefined;
+  let playbackTrace: ProgramPlayback['frames'][number]['trace'] = [];
+  let playbackFrameIndex = 0;
+  let playbackFrameCount = 0;
+  let playbackProductionDurationMs = 2_000;
+  let playbackKey = '';
+  let playbackTimers: ReturnType<typeof setTimeout>[] = [];
+  const PRODUCTION_PROGRAM_CARD_MS = 2_000;
+  const PRODUCTION_FACTORY_STAGE_MS = 1_000;
+  const PRODUCTION_COUNTDOWN_STEP_MS = 1_000;
+  const playbackTimeScale = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' ? 0.1 : 1;
 
   $: selectedCourse = PUBLISHED_COURSES_BY_ID.get(selectedCourseId)!;
   $: selectedCourseSupportsRoom = selectedCourse.players.includes(state.players.length);
+  $: playbackIsActive = playbackPhase === 'countdown' || playbackPhase === 'register';
+  $: playbackTransitionMs = Math.round(playbackProductionDurationMs * playbackTimeScale);
+  $: countdownStepMs = Math.round(PRODUCTION_COUNTDOWN_STEP_MS * playbackTimeScale);
+  $: playbackCard = PROGRAM_CARDS.find(({ id }) => id === playbackCardId);
+  $: playbackStageLabel = playbackStage === 'program-card'
+    ? `${state.players.find(({ uid }) => uid === playbackActorUid)?.name ?? 'Robot'} · ${playbackCard?.action.replaceAll('-', ' ') ?? 'Program card'} · priority ${playbackCard?.priority ?? '—'}`
+    : playbackStage === 'express-conveyors'
+      ? 'Express conveyors'
+      : playbackStage === 'conveyors'
+        ? 'All conveyors'
+        : playbackStage === 'pushers'
+          ? 'Pushers'
+          : playbackStage === 'gears'
+            ? 'Gears · lasers · flags'
+            : '';
+  $: presentedRobots = playbackRobots ?? state.resolution?.robots;
+  $: latestPlaybackEntry = playbackTrace.at(-1);
 
   onMount(async () => {
     try {
@@ -78,11 +114,97 @@
       status = error;
     }
   });
-  onDestroy(() => unsubscribe?.());
+  onDestroy(() => {
+    unsubscribe?.();
+    clearPlaybackTimers();
+  });
 
   function cardLabel(cardId: string | null | undefined) {
     return PROGRAM_CARDS.find((card) => card.id === cardId)?.action.replaceAll('-', ' ') ?? '—';
   }
+
+  function clearPlaybackTimers() {
+    for (const timer of playbackTimers) clearTimeout(timer);
+    playbackTimers = [];
+  }
+
+  function resetProgramPlayback() {
+    clearPlaybackTimers();
+    playbackPhase = 'idle';
+    playbackCountdown = 3;
+    playbackRegister = null;
+    playbackStage = null;
+    playbackActorUid = null;
+    playbackCardId = null;
+    playbackRobots = undefined;
+    playbackTrace = [];
+    playbackFrameIndex = 0;
+    playbackFrameCount = 0;
+    playbackProductionDurationMs = PRODUCTION_PROGRAM_CARD_MS;
+  }
+
+  function schedulePlayback(callback: () => void, delay: number) {
+    playbackTimers.push(setTimeout(callback, delay));
+  }
+
+  function productionDurationForFrame(frame: ProgramPlayback['frames'][number]) {
+    return frame.stage === 'program-card'
+      ? PRODUCTION_PROGRAM_CARD_MS
+      : PRODUCTION_FACTORY_STAGE_MS;
+  }
+
+  function startProgramPlayback(key: string, playback: ProgramPlayback) {
+    resetProgramPlayback();
+    playbackKey = key;
+    playbackPhase = 'countdown';
+    playbackCountdown = 3;
+    playbackRobots = playback.initialRobots;
+    playbackFrameCount = playback.frames.length;
+
+    schedulePlayback(() => (playbackCountdown = 2), countdownStepMs);
+    schedulePlayback(() => (playbackCountdown = 1), countdownStepMs * 2);
+
+    let frameStart = countdownStepMs * 3;
+    for (const [index, frame] of playback.frames.entries()) {
+      const productionDuration = productionDurationForFrame(frame);
+      schedulePlayback(() => {
+        playbackPhase = 'register';
+        playbackRegister = frame.register;
+        playbackStage = frame.stage;
+        playbackActorUid = frame.actorUid;
+        playbackCardId = frame.cardId;
+        playbackRobots = frame.robots;
+        playbackTrace = frame.trace;
+        playbackFrameIndex = index + 1;
+        playbackProductionDurationMs = productionDuration;
+      }, frameStart);
+      frameStart += Math.round(productionDuration * playbackTimeScale);
+    }
+    schedulePlayback(() => {
+      playbackPhase = 'complete';
+      playbackRegister = null;
+      playbackStage = null;
+      playbackActorUid = null;
+      playbackCardId = null;
+      playbackRobots = undefined;
+      playbackTrace = [];
+    }, frameStart);
+  }
+
+  $: {
+    const resolution = state.resolution;
+    const nextPlaybackKey = resolution
+      ? `${state.raceEpoch}:${resolution.turnNumber}`
+      : '';
+    if (
+      resolution?.playback.frames.length &&
+      nextPlaybackKey &&
+      nextPlaybackKey !== playbackKey
+    ) {
+      startProgramPlayback(nextPlaybackKey, resolution.playback);
+    }
+  }
+
   async function configureCourse() {
     if (
       !services ||
@@ -116,6 +238,29 @@
 
   {#if error}<p class="table-error" role="alert">{error}</p>{/if}
 
+  {#if playbackPhase === 'countdown'}
+    <div class="program-countdown" role="timer" aria-live="assertive" data-testid="tabletop-program-countdown">
+      <small>ALL PROGRAMS LOCKED</small>
+      {#key playbackCountdown}<strong>{playbackCountdown}</strong>{/key}
+      <span>Movement incoming</span>
+    </div>
+  {:else if playbackPhase === 'register' && playbackRegister}
+    <div
+      class="register-playback"
+      role="status"
+      aria-live="polite"
+      data-testid="tabletop-register-playback"
+      data-register={playbackRegister}
+      data-stage={playbackStage}
+      data-frame={playbackFrameIndex}
+      data-production-duration-ms={playbackProductionDurationMs}
+    >
+      <strong>REGISTER {playbackRegister} / {playbackStageLabel}</strong>
+      <span>{latestPlaybackEntry?.text ?? `${playbackStageLabel} resolved with no movement`}</span>
+      <i style={`--playback-progress:${playbackFrameIndex / playbackFrameCount}`}></i>
+    </div>
+  {/if}
+
   <section class="table" aria-label="Shared tabletop">
     {#each Array(MAX_ROOM_PLAYERS) as _, index}
       {@const seat = index + 1}
@@ -130,7 +275,10 @@
           <div class="program-cards" aria-label={`${player.name} program cards`}>
             {#each Array(5) as _, cardIndex}
               {@const programPlayer = state.programming?.players.find((entry) => entry.uid === player.uid)}
-              {@const revealed = state.programming?.phase === 'programmed' || !!state.resolution}
+              {@const resolutionIsCurrent = state.resolution?.turnNumber === state.programming?.turnNumber}
+              {@const revealed = resolutionIsCurrent &&
+                (playbackPhase === 'complete' ||
+                  (playbackPhase === 'register' && cardIndex + 1 <= (playbackRegister ?? 0)))}
               {@const cardId = programPlayer?.registers[cardIndex]?.cardId}
               <span class:revealed class="program-card">{revealed ? cardLabel(cardId) : '●'}</span>
             {/each}
@@ -148,7 +296,12 @@
 
     <div class="course-wrap">
       {#if state.setup}
-        <CourseBoard setup={state.setup} robots={state.resolution?.robots} />
+        <CourseBoard
+          setup={state.setup}
+          robots={presentedRobots}
+          animateRobots={playbackIsActive}
+          transitionDurationMs={playbackTransitionMs}
+        />
       {:else}
         <div class="course-control" aria-label="Tabletop race configuration">
           <div>
@@ -214,6 +367,14 @@
   header div { display: grid; gap: 3px; text-align: center; } header div strong { color: #d2ff37; font-size: 24px; } header div span { color: #aebbb9; font-size: 15px; }
   .table-control { color: #ffcf4b; font: 700 16px 'Space Mono', monospace; }
   .table-error { max-width: 1800px; margin: 10px auto 0; color: #ffbf69; font-size: 18px; text-align: center; }
+  .program-countdown { position: fixed; z-index: 50; inset: 0; display: grid; place-content: center; place-items: center; background: #050909dd; font-family: 'Space Mono', monospace; text-transform: uppercase; }
+  .program-countdown small { color: #d2ff37; font-size: clamp(18px, 3vw, 38px); letter-spacing: .12em; }
+  .program-countdown strong { color: #eef4ee; font-size: clamp(150px, 35vw, 420px); line-height: .9; text-shadow: 0 0 45px #d2ff3788; }
+  .program-countdown span { color: #ffcf4b; font-size: clamp(22px, 4vw, 50px); }
+  .register-playback { position: fixed; z-index: 40; top: 20px; left: 50%; display: grid; width: min(90vw, 1100px); gap: 7px; padding: 14px 20px; border: 2px solid #d2ff37; border-radius: 10px; color: #eef4ee; background: #0b1212ee; box-shadow: 0 10px 35px #000b; font-family: 'Space Mono', monospace; transform: translateX(-50%); }
+  .register-playback strong { color: #d2ff37; font-size: clamp(16px, 2vw, 28px); text-transform: uppercase; }
+  .register-playback span { overflow: hidden; font-size: clamp(14px, 1.5vw, 20px); text-overflow: ellipsis; white-space: nowrap; }
+  .register-playback i { display: block; height: 5px; background: linear-gradient(90deg, #d2ff37 0 calc(var(--playback-progress) * 100%), #344043 calc(var(--playback-progress) * 100%) 100%); }
   .table { position: relative; display: grid; grid-template-columns: repeat(4, minmax(145px, 1fr)); grid-template-rows: minmax(135px, auto) minmax(480px, 1fr) minmax(135px, auto); gap: 14px; max-width: 1800px; min-height: calc(100vh - 120px); margin: 14px auto; }
   .course-wrap { grid-column: 1 / -1; grid-row: 2; z-index: 1; min-width: 0; min-height: 0; padding: 12px; border: 2px solid #6f7e7f; border-radius: 16px; background: #182123; box-shadow: 0 16px 50px #050707aa; }
   .course-wrap :global(.course-panel) { height: 100%; } .course-wrap :global(.board-viewport) { height: calc(100% - 115px); }

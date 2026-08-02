@@ -8,6 +8,8 @@
   import { initializeFirebase, type FirebaseServices } from '$lib/firebase';
   import * as RoomService from '$lib/room-service';
   import { PROGRAM_CARDS, type ProgramCard } from '$lib/game/program-manifest';
+  import { OPTION_CARDS_BY_ID, type OptionCardId } from '$lib/game/option-manifest';
+  import { legalReentryChoices } from '$lib/game/movement';
   import {
     MAX_ROOM_PLAYERS,
     ROBOTS,
@@ -26,6 +28,10 @@
   let playerName = '';
   let selectedRobot: RobotId = 'axle';
   let selected: `${'program'}-${string}`[] = [];
+  let selectedReentryChoice = '';
+  let reentryPoweredDown = false;
+  let selectedOptionPreventionIds: OptionCardId[] = [];
+  let requestedTurnNumber = 1;
   let status = 'Connecting to the tabletop…';
   let error = '';
   let pending = false;
@@ -37,10 +43,28 @@
   $: normalizedName = normalizePlayerName(playerName);
   $: canJoin = requestedSeat >= 1 && requestedSeat <= MAX_ROOM_PLAYERS &&
     !seatPlayer && !!normalizedName && !unavailableRobots.has(selectedRobot) && !pending;
-  $: programming = state.programming?.players.find((candidate) => candidate.uid === uid);
+  $: activeProgramming =
+    state.nextProgramming?.turnNumber === requestedTurnNumber
+      ? state.nextProgramming
+      : state.programming;
+  $: programming = activeProgramming?.players.find((candidate) => candidate.uid === uid);
   $: openSlots = programming?.registers.filter((register) => !register.locked).length ?? 5;
-  $: turnId = state.programming?.turnId ?? 'turn-001';
+  $: turnId = activeProgramming?.turnId ?? 'turn-001';
   $: currentPlayerReady = !!player && state.readyPlayerUids.includes(player.uid);
+  $: canRespondPowerDown = !!player && state.pendingPowerDownUid === player.uid;
+  $: reentryChoices = player && state.resolution
+    ? legalReentryChoices(state.resolution, player.uid)
+    : [];
+  $: reentryRobot = state.resolution?.robots.find(
+    (candidate) => candidate.uid === state.resolution?.nextReentryUid
+  );
+  $: optionLossRobot = state.resolution?.robots.find(
+    (candidate) => candidate.uid === state.resolution?.nextOptionChoiceUid
+  );
+  $: optionPlanRobot = player
+    ? state.resolution?.robots.find((candidate) => candidate.uid === player.uid)
+    : undefined;
+  $: canChooseOptionPlan = !!player && state.pendingOptionUid === player.uid && !!activeProgramming;
 
   onMount(async () => {
     const params = new URLSearchParams(location.search);
@@ -52,12 +76,40 @@
       unsubscribe = RoomService.subscribeRoom(services.db, roomCode, (next) => {
         state = next;
         const nextPlayer = next.players.find((candidate) => candidate.uid === uid);
-        const draft = next.programming?.players.find((candidate) => candidate.uid === uid)?.draftCardIds ?? [];
-        if (!next.programming?.players.find((candidate) => candidate.uid === uid)?.submitted) selected = draft;
-        status = next.resolution
-          ? 'Watch the shared tabletop for execution.'
-          : next.programming
-            ? 'Choose five registers privately.'
+        const nextActiveProgramming =
+          next.nextProgramming?.turnNumber === requestedTurnNumber
+            ? next.nextProgramming
+            : next.programming;
+        const nextProgrammingPlayer = nextActiveProgramming?.players.find(
+          (candidate) => candidate.uid === uid
+        );
+        if (!nextProgrammingPlayer?.submitted) selected = nextProgrammingPlayer?.draftCardIds ?? [];
+        const effectDraft = next.effectDrafts.find(
+          ({ uid: draftUid, turnId: draftTurnId }) =>
+            draftUid === uid &&
+            (draftTurnId === next.programming?.turnId ||
+              draftTurnId === `turn-${String(next.resolution?.turnNumber ?? 0).padStart(3, '0')}`)
+        );
+        if (effectDraft?.draft.kind === 'reentry') {
+          selectedReentryChoice =
+            effectDraft.draft.x !== null &&
+            effectDraft.draft.y !== null &&
+            effectDraft.draft.facing
+              ? `${effectDraft.draft.x},${effectDraft.draft.y},${effectDraft.draft.facing}`
+              : '';
+          reentryPoweredDown = effectDraft.draft.poweredDown;
+        } else if (effectDraft?.draft.kind === 'option-plan') {
+          selectedOptionPreventionIds = [...effectDraft.draft.preventDamageWith];
+        }
+        const programmingIsAhead =
+          !!nextActiveProgramming &&
+          (!next.resolution || nextActiveProgramming.turnNumber > next.resolution.turnNumber);
+        status = programmingIsAhead
+          ? `Choose five registers privately for turn ${nextActiveProgramming.turnNumber}.`
+          : next.resolution
+            ? 'Watch the shared tabletop for execution.'
+            : next.programming
+              ? 'Choose five registers privately.'
             : next.configuration
               ? 'Confirm that you are ready to race.'
               : nextPlayer
@@ -67,6 +119,130 @@
     } catch (nextError) { error = nextError instanceof Error ? nextError.message : 'Could not connect'; }
   });
   onDestroy(() => unsubscribe?.());
+
+  function beginNextTurn() {
+    if (!state.nextProgramming) return;
+    requestedTurnNumber = state.nextProgramming.turnNumber;
+    selected = [
+      ...(state.nextProgramming.players.find((candidate) => candidate.uid === uid)?.draftCardIds ?? [])
+    ];
+    status = `Choose five registers privately for turn ${requestedTurnNumber}.`;
+  }
+
+  async function persistReentryDraft() {
+    if (!services || !state.resolution) return;
+    const [x, y, facing] = selectedReentryChoice.split(',');
+    const validFacing = ['north', 'east', 'south', 'west'].includes(facing)
+      ? (facing as 'north' | 'east' | 'south' | 'west')
+      : null;
+    try {
+      await RoomService.updateEffectDraft(
+        services.db,
+        services.user,
+        roomCode,
+        `turn-${String(state.resolution.turnNumber).padStart(3, '0')}`,
+        {
+          kind: 'reentry',
+          x: x ? Number(x) : null,
+          y: y ? Number(y) : null,
+          facing: validFacing,
+          poweredDown: reentryPoweredDown
+        }
+      );
+    } catch (nextError) {
+      console.error(nextError);
+      error = 'Your re-entry draft could not be written.';
+    }
+  }
+
+  async function submitReentryChoice() {
+    if (!services || !state.resolution || !selectedReentryChoice || pending) return;
+    const [x, y, facing] = selectedReentryChoice.split(',');
+    if (!x || !y || !['north', 'east', 'south', 'west'].includes(facing)) return;
+    pending = true;
+    error = '';
+    try {
+      await RoomService.chooseEffect(
+        services.db,
+        services.user,
+        roomCode,
+        {
+          kind: 'reentry',
+          x: Number(x),
+          y: Number(y),
+          facing: facing as 'north' | 'east' | 'south' | 'west',
+          ...(reentryRobot?.powerDownNextTurn ? { poweredDown: reentryPoweredDown } : {})
+        },
+        `turn-${String(state.resolution.turnNumber).padStart(3, '0')}`
+      );
+      selectedReentryChoice = '';
+      reentryPoweredDown = false;
+    } catch (nextError) {
+      console.error(nextError);
+      error = 'Your re-entry choice could not be written.';
+    } finally {
+      pending = false;
+    }
+  }
+
+  async function discardDestroyedOption(cardId: OptionCardId) {
+    if (!services || !activeProgramming || pending) return;
+    pending = true;
+    error = '';
+    try {
+      await RoomService.chooseEffect(
+        services.db,
+        services.user,
+        roomCode,
+        { kind: 'option-loss', cardId },
+        activeProgramming.turnId
+      );
+    } catch (nextError) {
+      console.error(nextError);
+      error = 'Your Option loss choice could not be written.';
+    } finally {
+      pending = false;
+    }
+  }
+
+  function toggleOptionPrevention(cardId: OptionCardId) {
+    selectedOptionPreventionIds = selectedOptionPreventionIds.includes(cardId)
+      ? selectedOptionPreventionIds.filter((id) => id !== cardId)
+      : [...selectedOptionPreventionIds, cardId];
+    if (services && activeProgramming) {
+      void RoomService.updateEffectDraft(
+        services.db,
+        services.user,
+        roomCode,
+        activeProgramming.turnId,
+        { kind: 'option-plan', preventDamageWith: selectedOptionPreventionIds, activations: [] }
+      ).catch((nextError) => {
+        console.error(nextError);
+        error = 'Your Option draft could not be written.';
+      });
+    }
+  }
+
+  async function submitOptionPlan() {
+    if (!services || !activeProgramming || !canChooseOptionPlan || pending) return;
+    pending = true;
+    error = '';
+    try {
+      await RoomService.chooseEffect(
+        services.db,
+        services.user,
+        roomCode,
+        { kind: 'option-plan', preventDamageWith: selectedOptionPreventionIds, activations: [] },
+        activeProgramming.turnId
+      );
+      selectedOptionPreventionIds = [];
+    } catch (nextError) {
+      console.error(nextError);
+      error = 'Your Option plan could not be written.';
+    } finally {
+      pending = false;
+    }
+  }
 
   async function claimSeat() {
     if (!services || !canJoin) return;
@@ -95,6 +271,23 @@
     } catch (nextError) {
       console.error(nextError);
       error = 'Your ready signal could not be written.';
+    } finally {
+      pending = false;
+    }
+  }
+
+  async function respondPowerDown(powerDownNextTurn: boolean) {
+    if (!services || !activeProgramming || !canRespondPowerDown || pending) return;
+    pending = true;
+    error = '';
+    try {
+      await RoomService.respondPowerDown(services.db, services.user, roomCode, {
+        turnId: activeProgramming.turnId,
+        powerDownNextTurn
+      });
+    } catch (nextError) {
+      console.error(nextError);
+      error = 'Your power-down choice could not be written.';
     } finally {
       pending = false;
     }
@@ -152,7 +345,74 @@
     </section>
   {:else}
     <section class="identity"><span>PRIVATE CONTROLLER</span><h1>{player.name}</h1><strong>{ROBOTS.find((robot) => robot.id === player.robotId)?.name}</strong><p>{status}</p></section>
-    {#if programming}
+    {#if state.nextProgramming && requestedTurnNumber < state.nextProgramming.turnNumber}
+      <section class="next-turn-control" aria-label="Next turn ready">
+        <h2>Turn {state.resolution?.turnNumber} complete</h2>
+        <p>Watch the tabletop finish its playback, then open your next private Program hand.</p>
+        <button onclick={beginNextTurn}>BEGIN TURN {state.nextProgramming.turnNumber}</button>
+      </section>
+    {:else if programming}
+      {#if optionLossRobot?.uid === player.uid}
+        <section class="effect-control" aria-label="Destroyed robot Option loss">
+          <h2>Discard one Option</h2>
+          <p>Your destroyed robot must discard one Option before it can re-enter.</p>
+          <div>
+            {#each optionLossRobot.options as option}
+              <button onclick={() => discardDestroyedOption(option.cardId)} disabled={pending}>
+                DISCARD {OPTION_CARDS_BY_ID.get(option.cardId)?.name ?? option.cardId}
+              </button>
+            {/each}
+          </div>
+        </section>
+      {:else if reentryChoices.length > 0}
+        <section class="effect-control" aria-label="Robot re-entry choice">
+          <h2>Re-enter your robot</h2>
+          <p>Choose a legal cell and facing. The race continues after every destroyed robot returns.</p>
+          <label>
+            Re-entry cell and facing
+            <select bind:value={selectedReentryChoice} onchange={persistReentryDraft}>
+              <option value="">Choose a legal placement</option>
+              {#each reentryChoices as choice}
+                <option value={`${choice.x},${choice.y},${choice.facing}`}>
+                  ({choice.x},{choice.y}) facing {choice.facing}
+                </option>
+              {/each}
+            </select>
+          </label>
+          {#if reentryRobot?.powerDownNextTurn}
+            <label class="check-control">
+              <input type="checkbox" bind:checked={reentryPoweredDown} onchange={persistReentryDraft} />
+              Re-enter powered down
+            </label>
+          {/if}
+          <button onclick={submitReentryChoice} disabled={pending || !selectedReentryChoice}>CONFIRM RE-ENTRY</button>
+        </section>
+      {:else if canChooseOptionPlan && optionPlanRobot}
+        <section class="effect-control" aria-label="Turn Option plan">
+          <h2>Commit Option choices</h2>
+          <p>Select Options to discard in order to prevent one damage each. Unselected cards are retained.</p>
+          <div>
+            {#each optionPlanRobot.options as option}
+              <button
+                class:selected={selectedOptionPreventionIds.includes(option.cardId)}
+                aria-pressed={selectedOptionPreventionIds.includes(option.cardId)}
+                onclick={() => toggleOptionPrevention(option.cardId)}
+              >{OPTION_CARDS_BY_ID.get(option.cardId)?.name ?? option.cardId}</button>
+            {/each}
+          </div>
+          <button onclick={submitOptionPlan} disabled={pending}>COMMIT OPTION PLAN</button>
+        </section>
+      {/if}
+      {#if canRespondPowerDown}
+        <section class="power-control" aria-label="Power-down choice">
+          <h2>Next-turn power</h2>
+          <p>Choose whether your robot will shut down for the next turn.</p>
+          <div>
+            <button onclick={() => respondPowerDown(true)} disabled={pending}>POWER DOWN</button>
+            <button onclick={() => respondPowerDown(false)} disabled={pending}>STAY ACTIVE</button>
+          </div>
+        </section>
+      {/if}
       <section class="registers"><h2>Registers · {selected.length}/{openSlots}</h2><ol>{#each Array(5) as _, index}<li><span>R{index + 1}</span>{programming.registers[index]?.locked ? 'LOCKED' : (PROGRAM_CARDS.find((card) => card.id === selected[index])?.action.replaceAll('-', ' ') ?? 'EMPTY')}</li>{/each}</ol><button onclick={submit} disabled={programming.submitted || selected.length !== openSlots}>{programming.submitted ? 'PROGRAM LOCKED' : 'Lock program'}</button></section>
       <section class="hand"><h2>Program deck</h2><p>These choices remain private. The tabletop reveals cards only when execution begins.</p><div>{#each programming.hand as cardId}{@const card = PROGRAM_CARDS.find((entry) => entry.id === cardId)}<button class:selected={selected.includes(cardId)} onclick={() => toggle(cardId)} disabled={programming.submitted}><small>{card?.priority}</small><strong>{card?.action.replaceAll('-', ' ')}</strong></button>{/each}</div></section>
     {:else if state.configuration}
@@ -168,7 +428,7 @@
   <footer><a href={`${base}/tt/?room=${roomCode}`}>View shared tabletop ↗</a><span>Keep this screen private.</span></footer>
 </main>
 <style>
-  :global(*) { box-sizing: border-box; } :global(html), :global(body) { margin: 0; min-width: 320px; background: #0c1112; color: #eef4ee; font-family: 'Atkinson Hyperlegible', sans-serif; } .phone { width: min(100%, 720px); min-height: 100vh; margin: auto; padding: 20px; } header, footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 15px; border-bottom: 1px solid #465356; font-family: 'Space Mono', monospace; } header a, footer a { color: #eef4ee; text-decoration: none; } header strong { color: #d2ff37; } header span { color: #d2ff37; } .identity { margin: 28px 0; } .identity span, .join-position > span, h2 { color: #d2ff37; font: 700 18px 'Space Mono', monospace; letter-spacing: .08em; text-transform: uppercase; } h1 { margin: 6px 0; font: 700 clamp(44px, 13vw, 88px) 'Space Mono', monospace; text-transform: uppercase; } .identity strong { color: #ffcf4b; font-family: 'Space Mono', monospace; } p { color: #aebbb9; font-size: 20px; } .registers, .hand, .ready-control { margin-top: 20px; padding: 16px; border: 1px solid #465356; background: #141c1d; } h2 { margin: 0 0 12px; font-size: 16px; } ol { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 0 0 14px; padding: 0; list-style: none; } ol li { display: grid; min-height: 70px; place-content: center; gap: 5px; border: 1px solid #526265; background: #202b2d; color: #eef4ee; font: 700 13px 'Space Mono', monospace; text-align: center; text-transform: uppercase; } ol span { color: #d2ff37; font-size: 12px; } button { min-height: 48px; padding: 8px 12px; border: 1px solid #d2ff37; color: #111; background: #d2ff37; font: 700 16px 'Space Mono', monospace; text-transform: uppercase; } button:disabled { opacity: .5; } .hand > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .hand button { display: grid; min-height: 82px; gap: 4px; align-content: center; color: #d2ff37; background: #202b2d; text-align: left; } .hand button.selected { color: #111; background: #d2ff37; } .hand small { color: #ffcf4b; } .hand button.selected small { color: #111; } .hand p { margin-top: 0; font-size: 17px; } .empty, .error { margin-top: 35vh; text-align: center; } .error { color: #ffbf69; } footer { margin-top: 26px; border-top: 1px solid #465356; border-bottom: 0; padding-top: 15px; color: #aebbb9; font-size: 14px; }
+  :global(*) { box-sizing: border-box; } :global(html), :global(body) { margin: 0; min-width: 320px; background: #0c1112; color: #eef4ee; font-family: 'Atkinson Hyperlegible', sans-serif; } .phone { width: min(100%, 720px); min-height: 100vh; margin: auto; padding: 20px; } header, footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 15px; border-bottom: 1px solid #465356; font-family: 'Space Mono', monospace; } header a, footer a { color: #eef4ee; text-decoration: none; } header strong { color: #d2ff37; } header span { color: #d2ff37; } .identity { margin: 28px 0; } .identity span, .join-position > span, h2 { color: #d2ff37; font: 700 18px 'Space Mono', monospace; letter-spacing: .08em; text-transform: uppercase; } h1 { margin: 6px 0; font: 700 clamp(44px, 13vw, 88px) 'Space Mono', monospace; text-transform: uppercase; } .identity strong { color: #ffcf4b; font-family: 'Space Mono', monospace; } p { color: #aebbb9; font-size: 20px; } .registers, .hand, .ready-control, .next-turn-control, .power-control { margin-top: 20px; padding: 16px; border: 1px solid #465356; background: #141c1d; } h2 { margin: 0 0 12px; font-size: 16px; } ol { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 0 0 14px; padding: 0; list-style: none; } ol li { display: grid; min-height: 70px; place-content: center; gap: 5px; border: 1px solid #526265; background: #202b2d; color: #eef4ee; font: 700 13px 'Space Mono', monospace; text-align: center; text-transform: uppercase; } ol span { color: #d2ff37; font-size: 12px; } button { min-height: 48px; padding: 8px 12px; border: 1px solid #d2ff37; color: #111; background: #d2ff37; font: 700 16px 'Space Mono', monospace; text-transform: uppercase; } button:disabled { opacity: .5; } .hand > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .hand button { display: grid; min-height: 82px; gap: 4px; align-content: center; color: #d2ff37; background: #202b2d; text-align: left; } .hand button.selected { color: #111; background: #d2ff37; } .hand small { color: #ffcf4b; } .hand button.selected small { color: #111; } .hand p { margin-top: 0; font-size: 17px; } .empty, .error { margin-top: 35vh; text-align: center; } .error { color: #ffbf69; } footer { margin-top: 26px; border-top: 1px solid #465356; border-bottom: 0; padding-top: 15px; color: #aebbb9; font-size: 14px; }
   .join-position { margin: 30px 0; }
   .join-position > p { margin: 8px 0 24px; }
   .join-position form { display: grid; gap: 18px; }
@@ -182,5 +442,17 @@
   .robot-options button.selected { color: #111; background: #d2ff37; }
   .robot-options button.selected span { color: #111; }
   .ready-control p { margin: 0 0 16px; }
-  .ready-control button { width: 100%; }
+  .ready-control button, .next-turn-control button { width: 100%; }
+  .next-turn-control p { margin: 0 0 16px; }
+  .power-control p { margin: 0 0 12px; }
+  .power-control > div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .effect-control { margin-top: 20px; padding: 16px; border: 2px solid #ffcf4b; background: #211d12; }
+  .effect-control p { margin: 0 0 14px; }
+  .effect-control label { display: grid; gap: 7px; margin-bottom: 12px; color: #ffcf4b; font: 700 15px 'Space Mono', monospace; text-transform: uppercase; }
+  .effect-control select { min-height: 52px; padding: 8px 10px; border: 1px solid #657577; color: #eef4ee; background: #141c1d; font-size: 18px; }
+  .effect-control > div { display: grid; gap: 8px; margin-bottom: 10px; }
+  .effect-control > button { width: 100%; }
+  .effect-control button.selected { color: #111; background: #ffcf4b; border-color: #ffcf4b; }
+  .effect-control .check-control { display: flex; align-items: center; text-transform: none; }
+  .effect-control .check-control input { width: 24px; height: 24px; }
 </style>
