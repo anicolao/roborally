@@ -144,21 +144,25 @@
 
   <div class="board-viewport">
     <div
-      class:animating-robots={animateRobots}
       class:rotated={boardIsRotated}
-      class="course-board"
-      data-tabletop-orientation={presentationOnly ? (boardIsRotated ? 'rotated' : 'natural') : undefined}
-      style={`--zoom:${zoom};--pan-x:${panX};--pan-y:${panY};--course-columns:${compiledCourse.width};--course-rows:${compiledCourse.height};--course-aspect:${compiledCourse.width / compiledCourse.height}`}
-      role="grid"
-      tabindex="0"
-      aria-label={presentationOnly
-        ? `${course.name} course board${boardIsRotated ? ', rotated 90 degrees' : ''}`
-        : `${course.name} board explorer. Use arrow keys to inspect cells.`}
-      aria-rowcount={compiledCourse.height}
-      aria-colcount={compiledCourse.width}
-      aria-activedescendant={`board-cell-${activeX}-${activeY}`}
-      onkeydown={moveBoardCursor}
+      class="board-fit"
+      style={`--course-aspect:${compiledCourse.width / compiledCourse.height}`}
     >
+      <div
+        class:animating-robots={animateRobots}
+        class="course-board"
+        data-tabletop-orientation={presentationOnly ? (boardIsRotated ? 'rotated' : 'natural') : undefined}
+        style={`--zoom:${zoom};--pan-x:${panX};--pan-y:${panY};--course-columns:${compiledCourse.width};--course-rows:${compiledCourse.height}`}
+        role="grid"
+        tabindex="0"
+        aria-label={presentationOnly
+          ? `${course.name} course board${boardIsRotated ? ', rotated 90 degrees' : ''}`
+          : `${course.name} board explorer. Use arrow keys to inspect cells.`}
+        aria-rowcount={compiledCourse.height}
+        aria-colcount={compiledCourse.width}
+        aria-activedescendant={`board-cell-${activeX}-${activeY}`}
+        onkeydown={moveBoardCursor}
+      >
       {#each cells as position}
         {@const manifestCell = boardCells.get(`${position.x},${position.y}`)}
         {@const flag = flags.get(`${position.x},${position.y}`)}
@@ -219,6 +223,7 @@
           </span>
         {/each}
       {/if}
+      </div>
     </div>
   </div>
   {#if !presentationOnly}
@@ -304,6 +309,18 @@
     container-type: size;
     border: 0;
   }
+  .board-fit { display: contents; }
+  .presentation-only .board-fit {
+    position: relative;
+    display: block;
+    width: min(100cqw, calc(100cqh * var(--course-aspect)));
+    height: min(100cqh, calc(100cqw / var(--course-aspect)));
+    container-type: size;
+  }
+  .presentation-only .board-fit.rotated {
+    width: min(100cqw, calc(100cqh / var(--course-aspect)));
+    height: min(100cqh, calc(100cqw * var(--course-aspect)));
+  }
   .course-board {
     position: relative;
     display: grid;
@@ -318,15 +335,19 @@
     transition: transform 120ms ease;
   }
   .presentation-only .course-board {
-    width: min(100cqw, calc(100cqh * var(--course-aspect)));
-    height: min(100cqh, calc(100cqw / var(--course-aspect)));
+    width: 100%;
+    height: 100%;
     margin: 0;
     transform: none;
   }
-  .presentation-only .course-board.rotated {
-    width: min(calc(100cqw * var(--course-aspect)), 100cqh);
-    height: min(100cqw, calc(100cqh / var(--course-aspect)));
+  .presentation-only .board-fit.rotated .course-board {
+    position: absolute;
+    top: 0;
+    left: 100%;
+    width: 100cqh;
+    height: 100cqw;
     transform: rotate(90deg);
+    transform-origin: top left;
   }
   .course-board:focus-visible {
     outline: 3px solid #d2ff37;
