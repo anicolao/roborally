@@ -11,13 +11,17 @@
     robots,
     currentPlayerUid,
     animateRobots = false,
-    transitionDurationMs = 2_000
+    transitionDurationMs = 2_000,
+    presentationOnly = false,
+    rotatePortrait = false
   }: {
     setup: RaceSetup;
     robots?: RaceRobotPosition[];
     currentPlayerUid?: string;
     animateRobots?: boolean;
     transitionDurationMs?: number;
+    presentationOnly?: boolean;
+    rotatePortrait?: boolean;
   } = $props();
 
   let zoom = $state(1);
@@ -39,6 +43,9 @@
 
   const course = $derived(PUBLISHED_COURSES_BY_ID.get(setup.courseId)!);
   const compiledCourse = $derived(compilePlayableCourse(setup.courseId));
+  const boardIsRotated = $derived(
+    presentationOnly && rotatePortrait && compiledCourse.height > compiledCourse.width
+  );
   const cells = $derived(
     Array.from({ length: compiledCourse.height * compiledCourse.width }, (_, index) => ({
       x: compiledCourse.minX + (index % compiledCourse.width),
@@ -108,34 +115,45 @@
   }
 </script>
 
-<section class="course-panel" aria-labelledby="course-heading">
-  <header>
-    <div>
-      <p>
-        {setup.courseId === 'risky-exchange'
-          ? 'COURSE 01 / MEDIUM / 2–8'
-          : `${course.category} / ${course.length} / ${course.players[0]}–${course.players.at(-1)}`}
-      </p>
-      <h2 class:long-title={course.name.length > 14} id="course-heading">{course.name}</h2>
-    </div>
-    <div class="board-controls" aria-label="Board view controls">
-      <button type="button" onclick={() => (zoom = Math.max(0.75, zoom - 0.25))} aria-label="Zoom out">−</button>
-      <output aria-label="Board zoom">{Math.round(zoom * 100)}%</output>
-      <button type="button" onclick={() => (zoom = Math.min(1.75, zoom + 0.25))} aria-label="Zoom in">+</button>
-      <button type="button" onclick={() => (panX -= 1)} aria-label="Pan left">←</button>
-      <button type="button" onclick={() => (panX += 1)} aria-label="Pan right">→</button>
-      <button type="button" onclick={fitCourse}>Fit course</button>
-    </div>
-  </header>
+<section
+  class:presentation-only={presentationOnly}
+  class="course-panel"
+  aria-label={presentationOnly ? `${course.name} course` : undefined}
+  aria-labelledby={presentationOnly ? undefined : 'course-heading'}
+>
+  {#if !presentationOnly}
+    <header>
+      <div>
+        <p>
+          {setup.courseId === 'risky-exchange'
+            ? 'COURSE 01 / MEDIUM / 2–8'
+            : `${course.category} / ${course.length} / ${course.players[0]}–${course.players.at(-1)}`}
+        </p>
+        <h2 class:long-title={course.name.length > 14} id="course-heading">{course.name}</h2>
+      </div>
+      <div class="board-controls" aria-label="Board view controls">
+        <button type="button" onclick={() => (zoom = Math.max(0.75, zoom - 0.25))} aria-label="Zoom out">−</button>
+        <output aria-label="Board zoom">{Math.round(zoom * 100)}%</output>
+        <button type="button" onclick={() => (zoom = Math.min(1.75, zoom + 0.25))} aria-label="Zoom in">+</button>
+        <button type="button" onclick={() => (panX -= 1)} aria-label="Pan left">←</button>
+        <button type="button" onclick={() => (panX += 1)} aria-label="Pan right">→</button>
+        <button type="button" onclick={fitCourse}>Fit course</button>
+      </div>
+    </header>
+  {/if}
 
   <div class="board-viewport">
     <div
       class:animating-robots={animateRobots}
+      class:rotated={boardIsRotated}
       class="course-board"
-      style={`--zoom:${zoom};--pan-x:${panX};--pan-y:${panY};--course-columns:${compiledCourse.width};--course-rows:${compiledCourse.height}`}
+      data-tabletop-orientation={presentationOnly ? (boardIsRotated ? 'rotated' : 'natural') : undefined}
+      style={`--zoom:${zoom};--pan-x:${panX};--pan-y:${panY};--course-columns:${compiledCourse.width};--course-rows:${compiledCourse.height};--course-aspect:${compiledCourse.width / compiledCourse.height}`}
       role="grid"
       tabindex="0"
-      aria-label={`${course.name} board explorer. Use arrow keys to inspect cells.`}
+      aria-label={presentationOnly
+        ? `${course.name} course board${boardIsRotated ? ', rotated 90 degrees' : ''}`
+        : `${course.name} board explorer. Use arrow keys to inspect cells.`}
       aria-rowcount={compiledCourse.height}
       aria-colcount={compiledCourse.width}
       aria-activedescendant={`board-cell-${activeX}-${activeY}`}
@@ -203,30 +221,32 @@
       {/if}
     </div>
   </div>
-  <p class="board-position" aria-live="polite" aria-atomic="true">
-    {describeCell(activeX, activeY)}
-  </p>
+  {#if !presentationOnly}
+    <p class="board-position" aria-live="polite" aria-atomic="true">
+      {describeCell(activeX, activeY)}
+    </p>
 
-  <details class="text-equivalent">
-    <summary>Course text equivalent</summary>
-    {#if setup.courseId === 'risky-exchange'}
-      <p>
-        Coordinates begin at the Exchange board’s upper-left. Docking Bay A occupies rows 13–16.
-        Robots face north, toward the factory. A cell omitted from the list is ordinary floor.
-      </p>
-    {:else}
-      <p>
-        Coordinates begin at the {factoryPlacement?.boardId.replaceAll('-', ' ')} board’s upper-left.
-        {dockingPlacement?.boardId.replaceAll('-', ' ')} supplies the starting docks.
-        Robots face north, toward the factory. A cell omitted from the list is ordinary floor.
-      </p>
-    {/if}
-    <ul>
-      {#each cells.filter(({ x, y }) => describeCell(x, y) !== `Column ${x}, row ${y}: floor`) as position}
-        <li>{describeCell(position.x, position.y)}</li>
-      {/each}
-    </ul>
-  </details>
+    <details class="text-equivalent">
+      <summary>Course text equivalent</summary>
+      {#if setup.courseId === 'risky-exchange'}
+        <p>
+          Coordinates begin at the Exchange board’s upper-left. Docking Bay B occupies rows 13–16.
+          Robots face north, toward the factory. A cell omitted from the list is ordinary floor.
+        </p>
+      {:else}
+        <p>
+          Coordinates begin at the {factoryPlacement?.boardId.replaceAll('-', ' ')} board’s upper-left.
+          {dockingPlacement?.boardId.replaceAll('-', ' ')} supplies the starting docks.
+          Robots face north, toward the factory. A cell omitted from the list is ordinary floor.
+        </p>
+      {/if}
+      <ul>
+        {#each cells.filter(({ x, y }) => describeCell(x, y) !== `Column ${x}, row ${y}: floor`) as position}
+          <li>{describeCell(position.x, position.y)}</li>
+        {/each}
+      </ul>
+    </details>
+  {/if}
 </section>
 
 <style>
@@ -240,6 +260,13 @@
     padding: 12px;
     border: 1px solid #435052;
     background: rgba(16, 23, 25, 0.96);
+  }
+  .course-panel.presentation-only {
+    display: block;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: #090d0e;
   }
   header { display: flex; min-width: 0; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
   header > div:first-child { min-width: 0; }
@@ -269,6 +296,14 @@
     border: 1px solid #344144;
     background: #090d0e;
   }
+  .presentation-only .board-viewport {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    place-items: center;
+    container-type: size;
+    border: 0;
+  }
   .course-board {
     position: relative;
     display: grid;
@@ -281,6 +316,17 @@
     transform: translate(calc(var(--pan-x) * 16px), calc(var(--pan-y) * 16px)) scale(var(--zoom));
     transform-origin: center;
     transition: transform 120ms ease;
+  }
+  .presentation-only .course-board {
+    width: min(100cqw, calc(100cqh * var(--course-aspect)));
+    height: min(100cqh, calc(100cqw / var(--course-aspect)));
+    margin: 0;
+    transform: none;
+  }
+  .presentation-only .course-board.rotated {
+    width: min(calc(100cqw * var(--course-aspect)), 100cqh);
+    height: min(100cqw, calc(100cqh / var(--course-aspect)));
+    transform: rotate(90deg);
   }
   .course-board:focus-visible {
     outline: 3px solid #d2ff37;

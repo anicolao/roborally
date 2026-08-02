@@ -87,7 +87,25 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await firstPhone.getByRole('button', { name: 'READY FOR RACE' }).click();
     await secondPhone.getByRole('button', { name: 'READY FOR RACE' }).click();
 
-    await expect(table.getByRole('heading', { name: 'Risky Exchange' })).toBeVisible();
+    const courseBoard = table.getByRole('grid', {
+      name: 'Risky Exchange course board, rotated 90 degrees'
+    });
+    await expect(courseBoard).toBeVisible();
+    await expect(courseBoard).toHaveAttribute('data-tabletop-orientation', 'rotated');
+    const courseBounds = await courseBoard.boundingBox();
+    expect(courseBounds).not.toBeNull();
+    expect(courseBounds!.width).toBeGreaterThan(courseBounds!.height);
+    await expect(table.getByRole('heading', { name: 'Risky Exchange' })).toHaveCount(0);
+    await expect(table.getByLabel('Board view controls')).toHaveCount(0);
+    await expect(table.getByText('Course text equivalent')).toHaveCount(0);
+    const adaSeat = table.locator('[data-seat="7"]');
+    await expect(adaSeat.locator('[data-player-vitals]')).toHaveAttribute(
+      'aria-label',
+      /3 of 3 lives remaining, 0 damage taken and 10 damage not yet taken, active power/
+    );
+    await expect(adaSeat.locator('.life-track i.remaining')).toHaveCount(3);
+    await expect(adaSeat.locator('.damage-track i.available')).toHaveCount(10);
+    await expect(adaSeat.locator('.power-state')).toContainText('ACTIVE');
     await expect(firstPhone.getByRole('heading', { name: 'Program deck' })).toBeVisible();
     await expect(secondPhone.getByRole('heading', { name: 'Program deck' })).toBeVisible();
     await expect(firstPhone.getByLabel('Course')).toHaveCount(0);
@@ -104,6 +122,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     );
     await expect(table.locator('.program-card.revealed')).toHaveCount(10);
     await completePrivateResolutionChoices([firstPhone, secondPhone]);
+    await expect.poll(() => table.locator('.damage-track i.taken').count()).toBeGreaterThan(0);
     await expect(firstPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toBeVisible();
     await expect(secondPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toBeVisible();
 
