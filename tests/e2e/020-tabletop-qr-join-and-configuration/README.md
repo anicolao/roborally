@@ -16,3 +16,4 @@ closes the setup barrier.
   seating through the same dimension-driven layout policy
 - [x] Every claimed position shows visual Life, damage, and power-state tracks
 - [x] Program execution animates on the table before private controllers advance to the next turn
+- [x] A powered-down private controller can choose whether to remain shut down without a Program hand

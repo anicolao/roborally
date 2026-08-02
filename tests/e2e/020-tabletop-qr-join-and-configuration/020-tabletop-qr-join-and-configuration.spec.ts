@@ -38,7 +38,8 @@ async function submitVisibleProgram(page: import('@playwright/test').Page) {
 }
 
 async function completePrivateResolutionChoices(
-  pages: import('@playwright/test').Page[]
+  pages: import('@playwright/test').Page[],
+  nextTurnNumber = 2
 ) {
   await expect.poll(async () => {
     for (const page of pages) {
@@ -56,10 +57,32 @@ async function completePrivateResolutionChoices(
       }
     }
     const nextTurnVisible = await Promise.all(
-      pages.map((page) => page.getByRole('button', { name: 'BEGIN TURN 2' }).isVisible())
+      pages.map((page) =>
+        page.getByRole('button', { name: `BEGIN TURN ${nextTurnNumber}` }).isVisible()
+      )
     );
     return nextTurnVisible.every(Boolean);
   }, { timeout: 30_000 }).toBe(true);
+}
+
+async function phoneWithPowerChoice(
+  pages: import('@playwright/test').Page[]
+) {
+  let selected = -1;
+  await expect.poll(async () => {
+    for (const [index, page] of pages.entries()) {
+      const choice = page.getByLabel('Power-down choice');
+      if (
+        (await choice.isVisible()) &&
+        (await choice.getByRole('button', { name: 'STAY ACTIVE' }).isEnabled())
+      ) {
+        selected = index;
+        return selected;
+      }
+    }
+    return -1;
+  }).not.toBe(-1);
+  return selected;
 }
 
 test('the tabletop owns configuration and seat QR codes open private controllers', async ({
@@ -192,6 +215,56 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expect(secondPhone.getByText('Choose five registers privately for turn 2.')).toBeVisible();
     await expect(firstPhone.locator('.hand button').first()).toBeEnabled();
     await expect(secondPhone.locator('.hand button').first()).toBeEnabled();
+
+    const phones = [firstPhone, secondPhone];
+    const damagedPhones = [];
+    if (await adaSeat.locator('.damage-track i.taken').count()) damagedPhones.push(firstPhone);
+    if (await table.locator('[data-seat="2"] .damage-track i.taken').count()) {
+      damagedPhones.push(secondPhone);
+    }
+    expect(damagedPhones.length).toBeGreaterThan(0);
+
+    await submitVisibleProgram(firstPhone);
+    const shutdownIndex = await phoneWithPowerChoice(phones);
+    const shutdownPhone = phones[shutdownIndex];
+    const activePhone = phones[1 - shutdownIndex];
+    await shutdownPhone.getByRole('button', { name: 'POWER DOWN' }).click();
+
+    for (let response = 1; response < damagedPhones.length; response += 1) {
+      const nextIndex = await phoneWithPowerChoice(phones);
+      await phones[nextIndex].getByRole('button', { name: 'STAY ACTIVE' }).click();
+    }
+    await submitVisibleProgram(secondPhone);
+    await completePrivateResolutionChoices(phones, 3);
+
+    await firstPhone.getByRole('button', { name: 'BEGIN TURN 3' }).click();
+    await secondPhone.getByRole('button', { name: 'BEGIN TURN 3' }).click();
+    const activePhoneNeedsPowerChoice = (await activePhone.locator('.hand button').count()) < 9;
+    await submitVisibleProgram(activePhone);
+
+    let activePhoneResponded = false;
+    while (!(await shutdownPhone.getByLabel('Power-down choice').isVisible())) {
+      const nextIndex = await phoneWithPowerChoice(phones);
+      if (phones[nextIndex] === shutdownPhone) break;
+      await phones[nextIndex].getByRole('button', { name: 'STAY ACTIVE' }).click();
+      activePhoneResponded = true;
+    }
+
+    await expect(shutdownPhone.getByRole('heading', { name: 'Next-turn power' })).toBeVisible();
+    await expect(shutdownPhone.getByRole('button', { name: 'POWER DOWN' })).toBeEnabled();
+    await expect(shutdownPhone.getByRole('button', { name: 'STAY ACTIVE' })).toBeEnabled();
+    await expect(shutdownPhone.getByRole('heading', { name: 'Program deck' })).toHaveCount(0);
+    await expect(
+      shutdownPhone.getByRole('button', { name: 'READY · WATCH THE TABLE' })
+    ).toHaveCount(0);
+
+    await shutdownPhone.getByRole('button', { name: 'STAY ACTIVE' }).click();
+    if (activePhoneNeedsPowerChoice && !activePhoneResponded) {
+      const nextIndex = await phoneWithPowerChoice(phones);
+      expect(phones[nextIndex]).toBe(activePhone);
+      await activePhone.getByRole('button', { name: 'STAY ACTIVE' }).click();
+    }
+    await expect(table.locator('p.sr-only')).toContainText('Turn 3 ·');
   } finally {
     await firstContext.close();
     await secondContext.close();
