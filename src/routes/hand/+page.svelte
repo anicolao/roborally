@@ -345,6 +345,16 @@
     </section>
   {:else}
     <section class="identity"><span>PRIVATE CONTROLLER</span><h1>{player.name}</h1><strong>{ROBOTS.find((robot) => robot.id === player.robotId)?.name}</strong><p>{status}</p></section>
+    {#if canRespondPowerDown}
+      <section class="power-control" aria-label="Power-down choice">
+        <h2>Next-turn power</h2>
+        <p>Choose whether your robot will shut down for the next turn.</p>
+        <div>
+          <button onclick={() => respondPowerDown(true)} disabled={pending}>POWER DOWN</button>
+          <button onclick={() => respondPowerDown(false)} disabled={pending}>STAY ACTIVE</button>
+        </div>
+      </section>
+    {/if}
     {#if state.nextProgramming && requestedTurnNumber < state.nextProgramming.turnNumber}
       <section class="next-turn-control" aria-label="Next turn ready">
         <h2>Turn {state.resolution?.turnNumber} complete</h2>
@@ -403,19 +413,9 @@
           <button onclick={submitOptionPlan} disabled={pending}>COMMIT OPTION PLAN</button>
         </section>
       {/if}
-      {#if canRespondPowerDown}
-        <section class="power-control" aria-label="Power-down choice">
-          <h2>Next-turn power</h2>
-          <p>Choose whether your robot will shut down for the next turn.</p>
-          <div>
-            <button onclick={() => respondPowerDown(true)} disabled={pending}>POWER DOWN</button>
-            <button onclick={() => respondPowerDown(false)} disabled={pending}>STAY ACTIVE</button>
-          </div>
-        </section>
-      {/if}
       <section class="registers"><h2>Registers · {selected.length}/{openSlots}</h2><ol>{#each Array(5) as _, index}<li><span>R{index + 1}</span>{programming.registers[index]?.locked ? 'LOCKED' : (PROGRAM_CARDS.find((card) => card.id === selected[index])?.action.replaceAll('-', ' ') ?? 'EMPTY')}</li>{/each}</ol><button onclick={submit} disabled={programming.submitted || selected.length !== openSlots}>{programming.submitted ? 'PROGRAM LOCKED' : 'Lock program'}</button></section>
       <section class="hand"><h2>Program deck</h2><p>These choices remain private. The tabletop reveals cards only when execution begins.</p><div>{#each programming.hand as cardId}{@const card = PROGRAM_CARDS.find((entry) => entry.id === cardId)}<button class:selected={selected.includes(cardId)} onclick={() => toggle(cardId)} disabled={programming.submitted}><small>{card?.priority}</small><strong>{card?.action.replaceAll('-', ' ')}</strong></button>{/each}</div></section>
-    {:else if state.configuration}
+    {:else if state.configuration && !state.setup}
       <section class="ready-control">
         <h2>Race configured</h2>
         <p>The shared table has chosen the course and settings.</p>
@@ -423,7 +423,7 @@
           {currentPlayerReady ? 'READY · WATCH THE TABLE' : 'READY FOR RACE'}
         </button>
       </section>
-    {:else}<p class="empty">{status}</p>{/if}
+    {:else if !canRespondPowerDown}<p class="empty">{status}</p>{/if}
   {/if}
   <footer><a href={`${base}/tt/?room=${roomCode}`}>View shared tabletop ↗</a><span>Keep this screen private.</span></footer>
 </main>
