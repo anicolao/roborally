@@ -20,6 +20,21 @@
     south: 180,
     west: 270
   };
+  const oppositeDirection: Record<Direction, Direction> = {
+    north: 'south',
+    east: 'west',
+    south: 'north',
+    west: 'east'
+  };
+  const cornerWalls: readonly {
+    edges: readonly [Direction, Direction];
+    rotation: number;
+  }[] = [
+    { edges: ['north', 'west'], rotation: 0 },
+    { edges: ['north', 'east'], rotation: 90 },
+    { edges: ['south', 'east'], rotation: 180 },
+    { edges: ['south', 'west'], rotation: 270 }
+  ];
 
   const elementPriority: Record<BoardElement['kind'], number> = {
     pit: 70,
@@ -32,16 +47,29 @@
   };
 
   const primaryElement = $derived(
-    [...elements].sort((left, right) => elementPriority[right.kind] - elementPriority[left.kind])[0]
+    [...elements]
+      .filter((element) => element.kind !== 'laser')
+      .sort((left, right) => elementPriority[right.kind] - elementPriority[left.kind])[0]
   );
   const laser = $derived(elements.find((element) => element.kind === 'laser'));
+  const laserIsSource = $derived(
+    !!laser && walls.some((wall) => wall.edge === oppositeDirection[laser.direction])
+  );
   const pusher = $derived(elements.find((element) => element.kind === 'pusher'));
   const dock = $derived(elements.find((element) => element.kind === 'dock'));
+  const joinedWallCorners = $derived(
+    cornerWalls.filter(({ edges }) =>
+      edges.every((edge) => walls.some((wall) => wall.edge === edge))
+    )
+  );
 
-  function assetFor(element: BoardElement | undefined): string {
-    if (!element) return 'floor.webp';
+  function assetFor(element: BoardElement): string {
     if (element.kind === 'repair') return element.option ? 'repair-option.webp' : 'repair.webp';
-    if (element.kind === 'gear') return 'gear-clockwise.webp';
+    if (element.kind === 'gear') {
+      return element.rotation === 'clockwise'
+        ? 'gear-clockwise.webp'
+        : 'gear-counterclockwise.webp';
+    }
     if (element.kind === 'conveyor') {
       if (element.turn) {
         return element.express ? 'conveyor-express-turn.webp' : 'conveyor-turn.webp';
@@ -51,7 +79,7 @@
     return `${element.kind}.webp`;
   }
 
-  function rotationFor(element: BoardElement | undefined): number {
+  function rotationFor(element: BoardElement): number {
     if (
       element?.kind === 'conveyor' ||
       element?.kind === 'pusher' ||
@@ -85,31 +113,31 @@
 
 <div class="board-tile" role="gridcell" aria-label={label} data-coordinate={`${x},${y}`}>
   <img
-    class:counterclockwise={
-      primaryElement?.kind === 'gear' && primaryElement.rotation === 'counterclockwise'
-    }
-    class:turn-left={
-      primaryElement?.kind === 'conveyor' && primaryElement.turn === 'left'
-    }
-    class="tile-art"
-    src={`${base}/assets/board-tiles/${assetFor(primaryElement)}`}
-    style={`--tile-rotation:${rotationFor(primaryElement)}deg`}
+    class="base-art"
+    src={`${base}/assets/board-tiles/floor.webp`}
     alt=""
     draggable="false"
   />
 
-  {#if laser && primaryElement?.kind !== 'laser'}
-    <span
-      class="laser-overlay"
-      class:double={laser.beamCount === 2}
-      class:triple={laser.beamCount === 3}
-      style={`--feature-rotation:${directionDegrees[laser.direction]}deg`}
-      aria-hidden="true"
-    ></span>
+  {#if primaryElement}
+    <img
+      class:turn-left={primaryElement.kind === 'conveyor' && primaryElement.turn === 'left'}
+      class="feature-art"
+      src={`${base}/assets/board-tiles/${assetFor(primaryElement)}`}
+      style={`--tile-rotation:${rotationFor(primaryElement)}deg`}
+      alt=""
+      draggable="false"
+    />
   {/if}
 
-  {#if laser && laser.beamCount > 1}
-    <strong class="beam-count" aria-hidden="true">{laser.beamCount}</strong>
+  {#if laser}
+    <img
+      class="laser-art"
+      src={`${base}/assets/board-tiles/${laserIsSource ? 'laser-source' : 'laser-beam'}-${laser.beamCount}.png`}
+      style={`--feature-rotation:${directionDegrees[laser.direction]}deg`}
+      alt=""
+      draggable="false"
+    />
   {/if}
 
   {#if pusher}
@@ -129,6 +157,16 @@
       draggable="false"
     />
   {/each}
+
+  {#each joinedWallCorners as corner}
+    <img
+      class="wall-corner-art"
+      src={`${base}/assets/board-tiles/wall-corner.png`}
+      style={`--wall-corner-rotation:${corner.rotation}deg`}
+      alt=""
+      draggable="false"
+    />
+  {/each}
 </div>
 
 <style>
@@ -139,11 +177,13 @@
     aspect-ratio: 1;
     overflow: hidden;
     background: #182124;
-    box-shadow: inset 0 0 0 0.5px rgb(134 161 164 / 35%);
   }
 
-  .tile-art,
-  .wall-art {
+  .base-art,
+  .feature-art,
+  .laser-art,
+  .wall-art,
+  .wall-corner-art {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -152,14 +192,24 @@
     user-select: none;
   }
 
-  .tile-art {
+  .base-art,
+  .feature-art,
+  .laser-art {
     object-fit: cover;
+  }
+
+  .feature-art {
+    z-index: 2;
     transform: rotate(var(--tile-rotation));
   }
 
-  .tile-art.counterclockwise,
-  .tile-art.turn-left {
+  .feature-art.turn-left {
     transform: rotate(var(--tile-rotation)) scaleX(-1);
+  }
+
+  .laser-art {
+    z-index: 3;
+    transform: rotate(var(--feature-rotation));
   }
 
   .wall-art {
@@ -168,30 +218,12 @@
     transform: rotate(var(--wall-rotation));
   }
 
-  .laser-overlay {
-    position: absolute;
-    z-index: 3;
-    inset: 8% 45%;
-    transform: rotate(var(--feature-rotation));
-    background: #ff392f;
-    box-shadow: 0 0 0.24rem #ff392f, 0 0 0.52rem rgb(255 31 24 / 90%);
+  .wall-corner-art {
+    z-index: 6;
+    object-fit: contain;
+    transform: rotate(var(--wall-corner-rotation));
   }
 
-  .laser-overlay.double {
-    box-shadow:
-      -0.16rem 0 #ff392f,
-      0.16rem 0 #ff392f,
-      0 0 0.42rem #ff392f;
-  }
-
-  .laser-overlay.triple {
-    box-shadow:
-      -0.22rem 0 #ff392f,
-      0.22rem 0 #ff392f,
-      0 0 0.48rem #ff392f;
-  }
-
-  .beam-count,
   .register-badge,
   .dock-number {
     position: absolute;
@@ -202,17 +234,6 @@
     font-family: 'Space Mono', monospace;
     line-height: 1;
     text-shadow: 0 1px 2px #000, 0 0 4px #000;
-  }
-
-  .beam-count {
-    top: 6%;
-    right: 6%;
-    width: 27%;
-    aspect-ratio: 1;
-    border: 1px solid #ff726b;
-    border-radius: 50%;
-    background: #650a08;
-    font-size: clamp(0.34rem, 0.8vw, 0.7rem);
   }
 
   .register-badge {
