@@ -270,8 +270,39 @@
       <article class:open={!player} class={`seat seat-${seat}`} data-seat={seat} data-player-uid={player?.uid ?? ''}>
         <div class="seat-head"><b>D{String(seat).padStart(2, '0')}</b><span>{robot?.mark ?? 'OPEN'}</span></div>
         {#if player}
+          {@const raceRobot = presentedRobots?.find((candidate) => candidate.uid === player.uid)}
+          {@const startingLives = state.setup?.players.find((candidate) => candidate.uid === player.uid)?.lives ?? state.configuration?.lives ?? 3}
+          {@const lives = raceRobot?.lives ?? startingLives}
+          {@const damage = Math.max(0, Math.min(10, raceRobot?.damage ?? state.setup?.startingDamage ?? 0))}
+          {@const powerMode = raceRobot?.poweredDown
+            ? 'down'
+            : raceRobot?.powerDownNextTurn
+              ? 'announced'
+              : 'active'}
           <strong>{player.name}</strong>
           <small>{robot?.name}</small>
+          <div
+            class="robot-vitals"
+            data-player-vitals={player.uid}
+            aria-label={`${player.name}: ${lives} of ${startingLives} lives remaining, ${damage} damage taken and ${10 - damage} damage not yet taken, ${powerMode === 'down' ? 'powered down' : powerMode === 'announced' ? 'power down announced' : 'active power'}`}
+          >
+            <div class="life-track" aria-hidden="true">
+              <b>LIFE</b>
+              {#each Array(startingLives) as _, lifeIndex}
+                <i class:remaining={lifeIndex < lives}>◆</i>
+              {/each}
+            </div>
+            <div class="damage-track" aria-hidden="true">
+              <b>DMG</b>
+              {#each Array(10) as _, damageIndex}
+                <i class:taken={damageIndex < damage} class:available={damageIndex >= damage}></i>
+              {/each}
+            </div>
+            <div class:down={powerMode === 'down'} class:announced={powerMode === 'announced'} class="power-state">
+              <i></i>
+              <span>{powerMode === 'down' ? 'POWERED DOWN' : powerMode === 'announced' ? 'SHUTDOWN NEXT' : 'ACTIVE'}</span>
+            </div>
+          </div>
           <div class="program-cards" aria-label={`${player.name} program cards`}>
             {#each Array(5) as _, cardIndex}
               {@const programPlayer = state.programming?.players.find((entry) => entry.uid === player.uid)}
@@ -301,6 +332,8 @@
           robots={presentedRobots}
           animateRobots={playbackIsActive}
           transitionDurationMs={playbackTransitionMs}
+          presentationOnly
+          rotatePortrait
         />
       {:else}
         <div class="course-control" aria-label="Tabletop race configuration">
@@ -375,15 +408,30 @@
   .register-playback strong { color: #d2ff37; font-size: clamp(16px, 2vw, 28px); text-transform: uppercase; }
   .register-playback span { overflow: hidden; font-size: clamp(14px, 1.5vw, 20px); text-overflow: ellipsis; white-space: nowrap; }
   .register-playback i { display: block; height: 5px; background: linear-gradient(90deg, #d2ff37 0 calc(var(--playback-progress) * 100%), #344043 calc(var(--playback-progress) * 100%) 100%); }
-  .table { position: relative; display: grid; grid-template-columns: repeat(4, minmax(145px, 1fr)); grid-template-rows: minmax(135px, auto) minmax(480px, 1fr) minmax(135px, auto); gap: 14px; max-width: 1800px; min-height: calc(100vh - 120px); margin: 14px auto; }
-  .course-wrap { grid-column: 1 / -1; grid-row: 2; z-index: 1; min-width: 0; min-height: 0; padding: 12px; border: 2px solid #6f7e7f; border-radius: 16px; background: #182123; box-shadow: 0 16px 50px #050707aa; }
-  .course-wrap :global(.course-panel) { height: 100%; } .course-wrap :global(.board-viewport) { height: calc(100% - 115px); }
+  .table { position: relative; display: grid; grid-template-columns: repeat(4, minmax(145px, 1fr)); grid-template-rows: minmax(175px, auto) minmax(480px, 1fr) minmax(175px, auto); gap: 14px; max-width: 1800px; min-height: calc(100vh - 120px); margin: 14px auto; }
+  .course-wrap { grid-column: 1 / -1; grid-row: 2; z-index: 1; min-width: 0; min-height: 0; overflow: hidden; padding: 4px; border: 2px solid #6f7e7f; border-radius: 16px; background: #090d0e; box-shadow: 0 16px 50px #050707aa; }
+  .course-wrap :global(.course-panel), .course-wrap :global(.board-viewport) { height: 100%; }
   .seat { z-index: 2; display: grid; gap: 4px; align-content: start; min-width: 0; padding: 12px; border: 2px solid #4b5a5c; border-radius: 10px; background: #11191aee; box-shadow: 0 7px 18px #05070799; }
   .seat.open { border-color: #7e9130; }
   .seat-1 { grid-column: 1; grid-row: 1; } .seat-2 { grid-column: 2; grid-row: 1; } .seat-3 { grid-column: 3; grid-row: 1; } .seat-4 { grid-column: 4; grid-row: 1; }
   .seat-5 { grid-column: 4; grid-row: 3; } .seat-6 { grid-column: 3; grid-row: 3; } .seat-7 { grid-column: 2; grid-row: 3; } .seat-8 { grid-column: 1; grid-row: 3; }
   .seat-head { display: flex; justify-content: space-between; color: #d2ff37; font-family: 'Space Mono', monospace; } .seat-head span { color: #ffcf4b; }
   .seat > strong { overflow: hidden; font-size: 22px; text-overflow: ellipsis; white-space: nowrap; } .seat > small { color: #9caaac; }
+  .robot-vitals { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 8px; margin-top: 4px; font-family: 'Space Mono', monospace; }
+  .life-track, .damage-track { display: flex; min-width: 0; align-items: center; gap: 3px; }
+  .life-track { grid-column: 1; }
+  .damage-track { grid-column: 1 / -1; }
+  .robot-vitals b { width: 32px; flex: 0 0 32px; color: #849294; font-size: 9px; letter-spacing: .08em; }
+  .life-track i { color: #394648; font-size: 14px; font-style: normal; line-height: 1; }
+  .life-track i.remaining { color: #d2ff37; filter: drop-shadow(0 0 3px #d2ff3788); }
+  .damage-track i { height: 9px; min-width: 8px; flex: 1; border: 1px solid #4c5a5d; border-radius: 1px; background: #202b2d; }
+  .damage-track i.taken { border-color: #ff684f; background: #ff684f; box-shadow: 0 0 3px #ff684f99; }
+  .power-state { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: 5px; color: #9ff07f; font-size: 9px; white-space: nowrap; }
+  .power-state i { width: 10px; height: 10px; border: 2px solid #263126; border-radius: 50%; background: #8dff69; box-shadow: 0 0 6px #8dff69; }
+  .power-state.announced { color: #ffcf4b; }
+  .power-state.announced i { border-color: #3a3218; background: #ffcf4b; box-shadow: 0 0 6px #ffcf4b; }
+  .power-state.down { color: #ff887d; }
+  .power-state.down i { border-color: #482522; background: #ff684f; box-shadow: 0 0 6px #ff684f; }
   .seat-join { display: grid; grid-template-columns: minmax(66px, 86px) 1fr; align-items: center; gap: 10px; color: #eef4ee; text-decoration: none; }
   .seat-join img { display: block; width: 100%; border: 3px solid #eef4ee; border-radius: 5px; background: #eef4ee; image-rendering: pixelated; }
   .seat-join span { display: grid; gap: 5px; min-width: 0; }
