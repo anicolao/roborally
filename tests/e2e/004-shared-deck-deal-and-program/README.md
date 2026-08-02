@@ -11,7 +11,7 @@ Two clients receive one seeded round-robin deal. Programs cross the immutable ev
 - [x] Both hands came from one 84-card deal with 66 cards left undealt
 - [x] The submitter can no longer inspect, rearrange, or resubmit the program
 - [x] The observer sees five face-down registers and no card priorities
-- [x] The last programmer receives the canonical 30-second deadline
+- [x] The last programmer receives the active canonical deadline
 
 ## An explicit canonical timestamp enables deterministic timeout fill
 
