@@ -68,3 +68,21 @@ test('the generated static HTML board URL survives client hydration', async ({ p
   await expect(page.getByRole('grid', { name: 'island board face' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '404' })).toHaveCount(0);
 });
+
+test('Maelstrom renders both directions where its lasers cross over the pit', async ({ page }) => {
+  await page.goto('/boards/maelstrom');
+
+  const crossingCell = page.locator('[data-coordinate="6,6"]');
+  await expect(crossingCell.locator('.laser-art')).toHaveCount(2);
+  await expect
+    .poll(() =>
+      crossingCell.locator('.laser-art').evaluateAll((lasers) =>
+        lasers
+          .map((laser) =>
+            (laser as HTMLElement).style.getPropertyValue('--feature-rotation')
+          )
+          .sort()
+      )
+    )
+    .toEqual(['180deg', '90deg']);
+});

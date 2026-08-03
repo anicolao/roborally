@@ -66,10 +66,7 @@
       turn: conveyorTurn(incomingDirection, primaryElement.direction)
     }));
   });
-  const laser = $derived(elements.find((element) => element.kind === 'laser'));
-  const laserIsSource = $derived(
-    !!laser && walls.some((wall) => wall.edge === oppositeDirection[laser.direction])
-  );
+  const lasers = $derived(elements.filter((element) => element.kind === 'laser'));
   const pusher = $derived(elements.find((element) => element.kind === 'pusher'));
   const dock = $derived(elements.find((element) => element.kind === 'dock'));
   const joinedWallCorners = $derived(
@@ -118,6 +115,10 @@
       return directionDegrees[element.direction];
     }
     return 0;
+  }
+
+  function laserIsSource(laser: Extract<BoardElement, { kind: 'laser' }>): boolean {
+    return walls.some((wall) => wall.edge === oppositeDirection[laser.direction]);
   }
 
   function describeElement(element: BoardElement): string {
@@ -171,15 +172,15 @@
     />
   {/if}
 
-  {#if laser}
+  {#each lasers as laser}
     <img
       class="laser-art"
-      src={`${base}/assets/board-tiles/${laserIsSource ? 'laser-source' : 'laser-beam'}-${laser.beamCount}.png`}
+      src={`${base}/assets/board-tiles/${laserIsSource(laser) ? 'laser-source' : 'laser-beam'}-${laser.beamCount}.png`}
       style={`--feature-rotation:${directionDegrees[laser.direction]}deg`}
       alt=""
       draggable="false"
     />
-  {/if}
+  {/each}
 
   {#if pusher}
     <strong class="register-badge" aria-hidden="true">{pusher.activeRegisters.join('·')}</strong>
