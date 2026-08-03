@@ -26,7 +26,7 @@
     {#each ALL_BOARD_FACES as board}
       {@const counts = boardElementCounts(board)}
       <li>
-        <a href={`${base}/boards/${board.id}/`} aria-label={`Open ${board.id.replaceAll('-', ' ')} board artwork`}>
+        <a href={`${base}/boards/${board.id}`} aria-label={`Open ${board.id.replaceAll('-', ' ')} board artwork`}>
           <BoardFace {board} compact />
           <div>
             <h2>{board.id.replaceAll('-', ' ')}</h2>

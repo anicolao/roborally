@@ -9,8 +9,11 @@ export function entries() {
 }
 
 export const load: PageLoad = ({ params }) => {
-  if (!BOARD_FACES_BY_ID.has(params.name)) {
+  const boardId = params.name.endsWith('.html')
+    ? params.name.slice(0, -'.html'.length)
+    : params.name;
+  if (!BOARD_FACES_BY_ID.has(boardId)) {
     error(404, 'Unknown Robo Rally board face');
   }
-  return { boardId: params.name };
+  return { boardId };
 };
