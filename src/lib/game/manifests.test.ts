@@ -75,7 +75,7 @@ describe('reviewed 2005 manifests', () => {
       createHash('sha256')
         .update(JSON.stringify({ cells: EXCHANGE_BOARD.cells, walls: EXCHANGE_BOARD.walls }))
         .digest('hex')
-    ).toBe('ab8ccb3c3dc53cf1e76616a9fa3de3c3291ff57eb6f19aac063ab7b6a7954a31');
+    ).toBe('dab3b5eb216c88413c2e2f95452bb1db0183e0101792d04fbd22b47c9a6d9802');
     expect(
       DOCKING_BAY_A.cells
         .flatMap((entry) =>

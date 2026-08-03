@@ -8,7 +8,7 @@ import {
   type Wall
 } from './course-manifest';
 
-export const COMPLETE_BOARD_MANIFEST_VERSION = 'boards-avalon-hill-2005-complete-v1';
+export const COMPLETE_BOARD_MANIFEST_VERSION = 'boards-avalon-hill-2005-complete-v2';
 
 type DirectionCode =
   | 'u'
@@ -80,6 +80,44 @@ class BoardBuilder {
     ]);
   }
 
+  private setConveyor(
+    x: number,
+    y: number,
+    conveyor: Extract<BoardElement, { kind: 'conveyor' }>
+  ) {
+    const key = this.key(x, y);
+    const existing = this.elements
+      .get(key)
+      ?.find((element): element is Extract<BoardElement, { kind: 'conveyor' }> =>
+        element.kind === 'conveyor'
+      );
+    if (!existing) {
+      this.set(x, y, conveyor);
+      return;
+    }
+    if (existing.direction !== conveyor.direction || existing.express !== conveyor.express) {
+      throw new Error(
+        `Conflicting conveyor exits at ${key}: ` +
+          `${existing.direction}/${existing.express} and ${conveyor.direction}/${conveyor.express}`
+      );
+    }
+    if (existing.turn && conveyor.turn && existing.turn !== conveyor.turn) {
+      throw new Error(
+        `Conflicting conveyor rotations at ${key}: ${existing.turn} and ${conveyor.turn}`
+      );
+    }
+    this.set(x, y, {
+      ...existing,
+      turn: existing.turn ?? conveyor.turn,
+      incomingDirections: [
+        ...new Set([
+          ...(existing.incomingDirections ?? [existing.direction]),
+          ...(conveyor.incomingDirections ?? [conveyor.direction])
+        ])
+      ]
+    });
+  }
+
   pit(x: number, y: number) {
     this.set(x, y, { kind: 'pit' });
   }
@@ -98,11 +136,12 @@ class BoardBuilder {
   conveyor(x: number, y: number, route: string, express = false) {
     const directions = [...route].map((code) => this.direction(code as DirectionCode));
     directions.forEach((direction, index) => {
-      this.set(x, y, {
+      this.setConveyor(x, y, {
         kind: 'conveyor',
         direction,
         express,
-        turn: conveyorTurn(direction, directions[index + 1])
+        turn: conveyorTurn(direction, directions[index + 1]),
+        incomingDirections: [directions[index - 1] ?? direction]
       });
       if (index === directions.length - 1) return;
       const [dx, dy] = stepByDirection[direction];
