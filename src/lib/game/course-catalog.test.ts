@@ -31,9 +31,9 @@ const EXPECTED_FACE_HASHES: Record<string, string> = {
   island: 'b7430d88be64b66ecadd4dedce9a8082d76358a5889ca58ac71951e9e15b4831',
   'chop-shop': '24765fc7a65e5dcaa19a4766dae30975abda9b5de24a9d41a785114a55e1697f',
   'spin-zone': '7730cecf82498abc80dda8a467d279ceff8d76b2c1446d338d89a52c0eb96116',
-  maelstrom: '06c14af74b1d1738e4f49b72b5d84f28fbdc9c3a689b2eab288c229dc30d33de',
+  maelstrom: 'ed7409748b98afa4a91421e559f7fa178e3e39f565586be338bd08cedec501b4',
   chess: '8467e5cf7156df49124c3347989024c5779ff517a878eede865bec7d32e9bdab',
-  cross: '5ac3bbb2f1e2051bf43e53b4b248d16b746fcf4ffa554446a258900543f82d1c',
+  cross: '39cf7d535ca1e9847f02862a8f32d37f69995414f10b7648fa789b143a3150ff',
   vault: '2d5376b40bd35e2f80f1826c18a99c6650b77a9bcb32405d696c04928bbffaf5',
   exchange: 'dab3b5eb216c88413c2e2f95452bb1db0183e0101792d04fbd22b47c9a6d9802',
   'docking-bay-a': 'f4667898f9ff2578175b6a6d0201b1330261b64716405b69ad4cf8f8e303bc92',
@@ -128,6 +128,48 @@ describe('complete Avalon Hill 2005 board catalog', () => {
       cross: ['6,2', '7,11'],
       vault: ['9,1']
     });
+  });
+
+  it('keeps the Maelstrom pit laser cross and the Cross edge wall exact', () => {
+    const maelstrom = BOARD_FACES_BY_ID.get('maelstrom')!;
+    const eastboundLasers = maelstrom.cells.flatMap(({ x, y, elements }) =>
+      elements
+        .filter((element) => element.kind === 'laser' && element.direction === 'east')
+        .map(() => `${x},${y}`)
+    );
+    const pitLaserDirections = maelstrom.cells
+      .filter(({ x, y }) => (x === 6 || x === 7) && (y === 6 || y === 7))
+      .map(({ x, y, elements }) => ({
+        coordinate: `${x},${y}`,
+        directions: elements
+          .filter((element) => element.kind === 'laser')
+          .map(({ direction }) => direction)
+          .sort()
+      }));
+
+    expect(eastboundLasers).toEqual([
+      '5,6',
+      '6,6',
+      '7,6',
+      '8,6',
+      '9,6',
+      '4,7',
+      '5,7',
+      '6,7',
+      '7,7',
+      '8,7'
+    ]);
+    expect(pitLaserDirections).toEqual([
+      { coordinate: '6,6', directions: ['east', 'south'] },
+      { coordinate: '7,6', directions: ['east', 'south'] },
+      { coordinate: '6,7', directions: ['east', 'south'] },
+      { coordinate: '7,7', directions: ['east', 'south'] }
+    ]);
+
+    const cross = BOARD_FACES_BY_ID.get('cross')!;
+    expect(cross.walls.filter(({ x, y }) => x === 10 && y === 12)).toEqual([
+      { x: 10, y: 12, edge: 'south' }
+    ]);
   });
 });
 

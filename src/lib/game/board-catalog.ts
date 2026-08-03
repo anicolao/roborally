@@ -8,7 +8,7 @@ import {
   type Wall
 } from './course-manifest';
 
-export const COMPLETE_BOARD_MANIFEST_VERSION = 'boards-avalon-hill-2005-complete-v2';
+export const COMPLETE_BOARD_MANIFEST_VERSION = 'boards-avalon-hill-2005-complete-v3';
 
 type DirectionCode =
   | 'u'
@@ -302,7 +302,6 @@ export const CROSS_BOARD = board('cross', (b) => {
     [10, 7, 'up'],
     [4, 8, 'up'],
     [2, 9, 'right'],
-    [9, 11, 'right'],
     [7, 11, 'right']
   ].forEach(([x, y, edges]) => b.compoundWall(x as number, y as number, edges as string));
   b.laser(4, 0, 'd', 3);
@@ -416,7 +415,7 @@ export const MAELSTROM_BOARD = board('maelstrom', (b) => {
   b.laser(5, 3, 'd', 5);
   b.laser(6, 4, 'd', 5);
   b.laser(4, 5, 'r', 5);
-  b.laser(3, 4, 'r', 5);
+  b.laser(3, 6, 'r', 5);
 });
 
 export const CHESS_BOARD = board('chess', (b) => {
