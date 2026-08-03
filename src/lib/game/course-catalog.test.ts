@@ -28,16 +28,16 @@ import {
 } from './course-rules';
 
 const EXPECTED_FACE_HASHES: Record<string, string> = {
-  island: '8cf31d63dcc9b226ee40a562c47696f7b5f712671ada6433273e8c5298bc025a',
-  'chop-shop': '7f666b41b679b043a02c7f44704ee372157a6bc172aa691d7dd54c83614c4a35',
-  'spin-zone': '277c5c2d14e8f88579242fd358f196673d95139959d87900904d8f0b070c827c',
-  maelstrom: '17301b92eefb1c55d97c7c9d32b869be6f0b42eb92552cbf004350235c1a12c4',
-  chess: 'a230ca5cc389fb651d1b33cfc81be513b58320eea389c54de2cf9133f8fe8cea',
-  cross: '3b521297b9095869b9efcf5219c450264c25bba4c68556a0c79078c279239ace',
-  vault: '5ad8e9fcee1291d884a58c082ae17bbf7a77bb3e615f483ab78d897484e025b9',
-  exchange: 'ab8ccb3c3dc53cf1e76616a9fa3de3c3291ff57eb6f19aac063ab7b6a7954a31',
+  island: 'b7430d88be64b66ecadd4dedce9a8082d76358a5889ca58ac71951e9e15b4831',
+  'chop-shop': '24765fc7a65e5dcaa19a4766dae30975abda9b5de24a9d41a785114a55e1697f',
+  'spin-zone': '7730cecf82498abc80dda8a467d279ceff8d76b2c1446d338d89a52c0eb96116',
+  maelstrom: '06c14af74b1d1738e4f49b72b5d84f28fbdc9c3a689b2eab288c229dc30d33de',
+  chess: '8467e5cf7156df49124c3347989024c5779ff517a878eede865bec7d32e9bdab',
+  cross: '5ac3bbb2f1e2051bf43e53b4b248d16b746fcf4ffa554446a258900543f82d1c',
+  vault: '2d5376b40bd35e2f80f1826c18a99c6650b77a9bcb32405d696c04928bbffaf5',
+  exchange: 'dab3b5eb216c88413c2e2f95452bb1db0183e0101792d04fbd22b47c9a6d9802',
   'docking-bay-a': 'f4667898f9ff2578175b6a6d0201b1330261b64716405b69ad4cf8f8e303bc92',
-  'docking-bay-b': '564481a608bdff0739d84ad9a504b345f9b13a61be91fbfacf621734ede4f751'
+  'docking-bay-b': 'e64c91c414edf53825a16582779a98d9b0e1da30e7ce04a1150faa050eacb447'
 };
 
 describe('complete Avalon Hill 2005 board catalog', () => {
@@ -72,10 +72,61 @@ describe('complete Avalon Hill 2005 board catalog', () => {
         true
       );
       expect(Object.values(boardElementCounts(face)).every((count) => count > 0)).toBe(true);
+      expect(
+        face.cells
+          .flatMap(({ elements }) => elements)
+          .filter((element) => element.kind === 'conveyor')
+          .every((element) => element.incomingDirections?.length)
+      ).toBe(true);
     }
     expect(boardElementCounts(BOARD_FACES_BY_ID.get('docking-bay-b')!)).toMatchObject({
       dock: 8,
       conveyor: 12
+    });
+  });
+
+  it('keeps conveyor rotation and rendered merge topology as separate manifest data', () => {
+    const island = BOARD_FACES_BY_ID.get('island')!;
+    const conveyorAt = (x: number, y: number) =>
+      island.cells
+        .find((cell) => cell.x === x && cell.y === y)
+        ?.elements.find((element) => element.kind === 'conveyor');
+
+    expect(conveyorAt(5, 6)).toMatchObject({
+      direction: 'west',
+      turn: 'left',
+      incomingDirections: ['west']
+    });
+    expect(conveyorAt(4, 6)).toMatchObject({
+      direction: 'south',
+      incomingDirections: ['south', 'west']
+    });
+    expect(conveyorAt(4, 6)?.turn).toBeUndefined();
+    expect(conveyorAt(9, 7)).toMatchObject({
+      direction: 'north',
+      incomingDirections: ['north', 'east']
+    });
+
+    expect(
+      Object.fromEntries(
+        ALL_BOARD_FACES.map((board) => [
+          board.id,
+          board.cells.flatMap((cell) =>
+            cell.elements.some(
+              (element) =>
+                element.kind === 'conveyor' && (element.incomingDirections?.length ?? 0) > 1
+            )
+              ? [`${cell.x},${cell.y}`]
+              : []
+          )
+        ]).filter(([, coordinates]) => coordinates.length)
+      )
+    ).toEqual({
+      island: ['4,6', '9,7'],
+      'chop-shop': ['3,9'],
+      maelstrom: ['6,2', '11,2', '11,6', '2,7', '2,11', '7,11'],
+      cross: ['6,2', '7,11'],
+      vault: ['9,1']
     });
   });
 });
@@ -156,6 +207,27 @@ describe('all 34 published course diagrams', () => {
     expect(around.width).toBe(28);
     expect(around.height).toBe(12);
     expect(around.cells.size).toBe(336);
+
+    const rotatedIsland = compilePublishedCourse({
+      ...PUBLISHED_COURSES.find(({ id }) => id === 'death-trap')!,
+      id: 'rotated-island-probe',
+      boardPlacements: [
+        {
+          instanceId: 'island-rotated',
+          boardId: 'island',
+          origin: [1, 1],
+          rotation: 1
+        }
+      ]
+    });
+    expect(
+      rotatedIsland.cells
+        .get('7,4')
+        ?.elements.find((element) => element.kind === 'conveyor')
+    ).toMatchObject({
+      direction: 'west',
+      incomingDirections: ['west', 'north']
+    });
 
     const race = completeRepresentativeRace();
     expect(race.start).toEqual([26, 6]);

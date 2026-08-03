@@ -22,5 +22,10 @@ rendering. Laser strengths 1, 2, and 3 likewise have separate source and beam
 assets, distinguished by both color and width. Left-turn conveyor art is the
 only directional feature mirrored by the renderer.
 
+Board manifests record each conveyor's incoming travel directions separately
+from its rules-facing rotation. The renderer layers the shared straight and
+curved assets for merge squares, preserving continuous belt edges without a
+special one-off merge image.
+
 The images are application assets and are licensed with this GPL-3.0-only
 repository.

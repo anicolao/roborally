@@ -51,6 +51,21 @@
       .filter((element) => element.kind !== 'laser')
       .sort((left, right) => elementPriority[right.kind] - elementPriority[left.kind])[0]
   );
+  const conveyorLayers = $derived.by(() => {
+    if (primaryElement?.kind !== 'conveyor') return [];
+    if (!primaryElement.incomingDirections) {
+      return [
+        {
+          incomingDirection: primaryElement.direction,
+          turn: primaryElement.turn
+        }
+      ];
+    }
+    return primaryElement.incomingDirections.map((incomingDirection) => ({
+      incomingDirection,
+      turn: conveyorTurn(incomingDirection, primaryElement.direction)
+    }));
+  });
   const laser = $derived(elements.find((element) => element.kind === 'laser'));
   const laserIsSource = $derived(
     !!laser && walls.some((wall) => wall.edge === oppositeDirection[laser.direction])
@@ -79,6 +94,21 @@
     return `${element.kind}.webp`;
   }
 
+  function conveyorTurn(
+    from: Direction,
+    to: Direction
+  ): 'left' | 'right' | undefined {
+    if (from === to) return undefined;
+    const order: Direction[] = ['north', 'east', 'south', 'west'];
+    const difference = (order.indexOf(to) - order.indexOf(from) + 4) % 4;
+    return difference === 1 ? 'right' : difference === 3 ? 'left' : undefined;
+  }
+
+  function conveyorAsset(express: boolean, turn: 'left' | 'right' | undefined): string {
+    if (turn) return express ? 'conveyor-express-turn.webp' : 'conveyor-turn.webp';
+    return express ? 'conveyor-express.webp' : 'conveyor.webp';
+  }
+
   function rotationFor(element: BoardElement): number {
     if (
       element?.kind === 'conveyor' ||
@@ -101,7 +131,8 @@
     if (element.kind === 'laser') {
       return `${element.beamCount}-beam laser facing ${element.direction}`;
     }
-    return `${element.express ? 'express ' : ''}${element.turn ? `${element.turn}-turn ` : ''}conveyor facing ${element.direction}`;
+    const incoming = element.incomingDirections?.join(' and ');
+    return `${element.express ? 'express ' : ''}${element.turn ? `${element.turn}-rotation ` : ''}conveyor${incoming ? ` entering ${incoming} and` : ''} exiting ${element.direction}`;
   }
 
   const label = $derived(
@@ -119,9 +150,19 @@
     draggable="false"
   />
 
-  {#if primaryElement}
+  {#if primaryElement?.kind === 'conveyor'}
+    {#each conveyorLayers as layer}
+      <img
+        class:turn-left={layer.turn === 'left'}
+        class="feature-art"
+        src={`${base}/assets/board-tiles/${conveyorAsset(primaryElement.express, layer.turn)}`}
+        style={`--tile-rotation:${directionDegrees[layer.incomingDirection]}deg`}
+        alt=""
+        draggable="false"
+      />
+    {/each}
+  {:else if primaryElement}
     <img
-      class:turn-left={primaryElement.kind === 'conveyor' && primaryElement.turn === 'left'}
       class="feature-art"
       src={`${base}/assets/board-tiles/${assetFor(primaryElement)}`}
       style={`--tile-rotation:${rotationFor(primaryElement)}deg`}

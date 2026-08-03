@@ -1,4 +1,4 @@
-export const BOARD_MANIFEST_VERSION = 'boards-avalon-hill-2005-exchange-v1';
+export const BOARD_MANIFEST_VERSION = 'boards-avalon-hill-2005-exchange-v2';
 export const COURSE_MANIFEST_VERSION = 'courses-avalon-hill-2005-risky-exchange-v1';
 
 export type Direction = 'north' | 'east' | 'south' | 'west';
@@ -6,7 +6,14 @@ export type BoardElement =
   | { kind: 'pit' }
   | { kind: 'repair'; option: boolean }
   | { kind: 'gear'; rotation: 'clockwise' | 'counterclockwise' }
-  | { kind: 'conveyor'; direction: Direction; express: boolean; turn?: 'left' | 'right' }
+  | {
+      kind: 'conveyor';
+      direction: Direction;
+      express: boolean;
+      turn?: 'left' | 'right';
+      /** Travel directions entering this square, used to render curves and merges. */
+      incomingDirections?: readonly Direction[];
+    }
   | { kind: 'pusher'; direction: Direction; activeRegisters: readonly number[] }
   | { kind: 'laser'; direction: Direction; beamCount: 1 | 2 | 3 }
   | { kind: 'dock'; number: number };
@@ -76,7 +83,8 @@ function buildExchangeCells(): BoardCell[] {
         kind: 'conveyor',
         direction: directionForCode[direction],
         express,
-        turn: turnForCodes(direction, directions[index + 1])
+        turn: turnForCodes(direction, directions[index + 1]),
+        incomingDirections: [directionForCode[directions[index - 1] ?? direction]]
       });
       if (index < directions.length - 1) {
         const [dx, dy] = stepForCode[direction];

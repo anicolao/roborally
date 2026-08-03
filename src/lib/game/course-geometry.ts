@@ -73,7 +73,17 @@ function worldPoint(
 
 function rotateElement(element: BoardElement, rotation: CourseRotation): BoardElement {
   if ('direction' in element) {
-    return { ...element, direction: rotateDirection(element.direction, rotation) };
+    return {
+      ...element,
+      direction: rotateDirection(element.direction, rotation),
+      ...(element.kind === 'conveyor' && element.incomingDirections
+        ? {
+            incomingDirections: element.incomingDirections.map((direction) =>
+              rotateDirection(direction, rotation)
+            )
+          }
+        : {})
+    };
   }
   if (element.kind === 'gear' && rotation % 2 === 1) {
     return { ...element };
