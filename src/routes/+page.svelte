@@ -33,6 +33,11 @@
   } from '$lib/game/setup';
   import { PUBLISHED_COURSES_BY_ID } from '$lib/game/course-catalog';
   import {
+    clearPlaybackTimer,
+    schedulePlaybackTimer,
+    type PlaybackTimer
+  } from '$lib/playback-clock';
+  import {
     MAX_ROOM_PLAYERS,
     ROBOTS,
     emptyRoomState,
@@ -97,7 +102,7 @@
   // Keep emulator playback quick, but long enough for Playwright and the browser
   // to observe each independently rendered movement stage.
   let playbackTimeScale = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' ? 0.1 : 1;
-  let playbackTimers: ReturnType<typeof setTimeout>[] = [];
+  let playbackTimers: PlaybackTimer[] = [];
   const PRODUCTION_PROGRAM_CARD_MS = 2_000;
   const PRODUCTION_FACTORY_STAGE_MS = 1_000;
   const PRODUCTION_COUNTDOWN_STEP_MS = 1_000;
@@ -237,7 +242,7 @@
     (mode !== 'join' || (!!roomState.gameId && !roomIsFull));
 
   function clearPlaybackTimers() {
-    for (const timer of playbackTimers) clearTimeout(timer);
+    for (const timer of playbackTimers) clearPlaybackTimer(timer);
     playbackTimers = [];
   }
 
@@ -257,7 +262,7 @@
   }
 
   function schedulePlayback(callback: () => void, delay: number) {
-    playbackTimers.push(setTimeout(callback, delay));
+    playbackTimers.push(schedulePlaybackTimer(callback, delay));
   }
 
   function productionDurationForFrame(frame: ProgramPlayback['frames'][number]) {

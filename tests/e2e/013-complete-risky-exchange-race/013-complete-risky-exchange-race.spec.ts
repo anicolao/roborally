@@ -1,5 +1,9 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { stayActiveInDockOrder } from '../helpers/game-actions';
+import {
+  enableSyntheticPlaybackClock,
+  finishSyntheticPlayback
+} from '../helpers/playback-clock';
 import { TestStepHelper } from '../helpers/test-step-helper';
 
 type Program = readonly string[];
@@ -87,6 +91,7 @@ async function commitOptionPlans(host: Page, guest: Page, turn: number) {
 }
 
 async function closeResolutionInterrupts(host: Page, guest: Page, turn: number) {
+  await finishSyntheticPlayback([host, guest]);
   const completed = host.getByRole('heading', {
     name: new RegExp(`Turn ${turn} (complete|finished)`)
   });
@@ -135,6 +140,8 @@ test('a production Risky Exchange race uses the complete rules loop', async (
   const guest = await guestContext.newPage();
 
   try {
+    await enableSyntheticPlaybackClock(host);
+    await enableSyntheticPlaybackClock(guest);
     await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a`);
     await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
     await host.getByRole('button', { name: 'Create race' }).click();

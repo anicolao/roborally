@@ -1,5 +1,9 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { stayActiveInDockOrder } from '../helpers/game-actions';
+import {
+  enableSyntheticPlaybackClock,
+  finishSyntheticPlayback
+} from '../helpers/playback-clock';
 import { TestStepHelper } from '../helpers/test-step-helper';
 
 type Program = readonly string[];
@@ -87,6 +91,7 @@ async function commitOptionPlans(host: Page, guest: Page, turn: number) {
 }
 
 async function closeResolutionInterrupts(host: Page, guest: Page, turn: number) {
+  await finishSyntheticPlayback([host, guest]);
   const completed = host.getByRole('heading', {
     name: new RegExp(`Turn ${turn} (complete|finished)`)
   });
@@ -142,6 +147,7 @@ test('a keyboard and touch-operable race completes at every target viewport', as
   );
 
   try {
+    await enableSyntheticPlaybackClock(host);
     await host.emulateMedia({ reducedMotion: 'reduce' });
     await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a`);
     await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
@@ -152,6 +158,7 @@ test('a keyboard and touch-operable race completes at every target viewport', as
 
     guestContext = await browser.newContext({ reducedMotion: 'reduce' });
     const guest = await guestContext.newPage();
+    await enableSyntheticPlaybackClock(guest);
     await guest.goto(`/?room=${roomCode}&e2eIdentity=GUEST`);
     await expect(guest.locator('[data-status]')).toHaveAttribute('data-status', 'synced');
     await guest.getByLabel('Racer name').fill('Grace');
@@ -261,6 +268,7 @@ test('a keyboard and touch-operable race completes at every target viewport', as
 
     await steps.step('responsive-race-reaches-three-flags', {
       description: 'The accessible production race reaches its immutable winner',
+      resetScroll: true,
       verifications: [
         {
           spec: 'All target viewports reach Flag 3 through twelve ordinary turns',

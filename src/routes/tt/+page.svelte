@@ -21,6 +21,11 @@
   import type { ProgramPlayback, RaceRobotPosition } from '$lib/game/movement';
   import type { Unsubscribe } from 'firebase/firestore';
   import { tabletopLayoutForCourse } from '$lib/tabletop-layout';
+  import {
+    clearPlaybackTimer,
+    schedulePlaybackTimer,
+    type PlaybackTimer
+  } from '$lib/playback-clock';
 
   type SeatQr = { seat: number; url: string; image: string };
   type PlaybackPhase = 'idle' | 'countdown' | 'register' | 'complete';
@@ -48,7 +53,7 @@
   let playbackFrameCount = 0;
   let playbackProductionDurationMs = 2_000;
   let playbackKey = '';
-  let playbackTimers: ReturnType<typeof setTimeout>[] = [];
+  let playbackTimers: PlaybackTimer[] = [];
   const PRODUCTION_PROGRAM_CARD_MS = 2_000;
   const PRODUCTION_FACTORY_STAGE_MS = 1_000;
   const PRODUCTION_COUNTDOWN_STEP_MS = 1_000;
@@ -130,7 +135,7 @@
   }
 
   function clearPlaybackTimers() {
-    for (const timer of playbackTimers) clearTimeout(timer);
+    for (const timer of playbackTimers) clearPlaybackTimer(timer);
     playbackTimers = [];
   }
 
@@ -150,7 +155,7 @@
   }
 
   function schedulePlayback(callback: () => void, delay: number) {
-    playbackTimers.push(setTimeout(callback, delay));
+    playbackTimers.push(schedulePlaybackTimer(callback, delay));
   }
 
   function productionDurationForFrame(frame: ProgramPlayback['frames'][number]) {
