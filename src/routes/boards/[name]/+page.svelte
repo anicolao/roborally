@@ -18,7 +18,7 @@
 </svelte:head>
 
 <main data-e2e-layout>
-  <a class="visually-hidden" href={`${base}/boards/`}>Back to all board faces</a>
+  <a class="visually-hidden" href={`${base}/boards`}>Back to all board faces</a>
   <h1 class="visually-hidden">{board.id.replaceAll('-', ' ')} board face</h1>
   <p class="visually-hidden" role="status" data-status="synced">Raster asset preview ready</p>
   <BoardFace {board} />

@@ -8,7 +8,7 @@ Each standalone board route renders the reviewed semantic manifest with the gene
 
 **Verifications:**
 
-- [x] The /boards/island/ route identifies the intended reviewed board face
+- [x] The /boards/island route identifies the intended reviewed board face
 - [x] The 12 × 12 manifest renders all 144 cells
 - [x] Every cell is square and every generated raster asset is fully loaded
 
@@ -18,7 +18,7 @@ Each standalone board route renders the reviewed semantic manifest with the gene
 
 **Verifications:**
 
-- [x] The /boards/chop-shop/ route identifies the intended reviewed board face
+- [x] The /boards/chop-shop route identifies the intended reviewed board face
 - [x] The 12 × 12 manifest renders all 144 cells
 - [x] Every cell is square and every generated raster asset is fully loaded
 
@@ -28,7 +28,7 @@ Each standalone board route renders the reviewed semantic manifest with the gene
 
 **Verifications:**
 
-- [x] The /boards/spin-zone/ route identifies the intended reviewed board face
+- [x] The /boards/spin-zone route identifies the intended reviewed board face
 - [x] The 12 × 12 manifest renders all 144 cells
 - [x] Every cell is square and every generated raster asset is fully loaded
 
@@ -38,7 +38,7 @@ Each standalone board route renders the reviewed semantic manifest with the gene
 
 **Verifications:**
 
-- [x] The /boards/maelstrom/ route identifies the intended reviewed board face
+- [x] The /boards/maelstrom route identifies the intended reviewed board face
 - [x] The 12 × 12 manifest renders all 144 cells
 - [x] Every cell is square and every generated raster asset is fully loaded
 
@@ -48,7 +48,7 @@ Each standalone board route renders the reviewed semantic manifest with the gene
 
 **Verifications:**
 
-- [x] The /boards/chess/ route identifies the intended reviewed board face
+- [x] The /boards/chess route identifies the intended reviewed board face
 - [x] The 12 × 12 manifest renders all 144 cells
 - [x] Every cell is square and every generated raster asset is fully loaded
 
@@ -58,7 +58,7 @@ Each standalone board route renders the reviewed semantic manifest with the gene
 
 **Verifications:**
 
-- [x] The /boards/cross/ route identifies the intended reviewed board face
+- [x] The /boards/cross route identifies the intended reviewed board face
 - [x] The 12 × 12 manifest renders all 144 cells
 - [x] Every cell is square and every generated raster asset is fully loaded
 
@@ -68,7 +68,7 @@ Each standalone board route renders the reviewed semantic manifest with the gene
 
 **Verifications:**
 
-- [x] The /boards/vault/ route identifies the intended reviewed board face
+- [x] The /boards/vault route identifies the intended reviewed board face
 - [x] The 12 × 12 manifest renders all 144 cells
 - [x] Every cell is square and every generated raster asset is fully loaded
 
@@ -78,7 +78,7 @@ Each standalone board route renders the reviewed semantic manifest with the gene
 
 **Verifications:**
 
-- [x] The /boards/exchange/ route identifies the intended reviewed board face
+- [x] The /boards/exchange route identifies the intended reviewed board face
 - [x] The 12 × 12 manifest renders all 144 cells
 - [x] Every cell is square and every generated raster asset is fully loaded
 
@@ -88,7 +88,7 @@ Each standalone board route renders the reviewed semantic manifest with the gene
 
 **Verifications:**
 
-- [x] The /boards/docking-bay-a/ route identifies the intended reviewed board face
+- [x] The /boards/docking-bay-a route identifies the intended reviewed board face
 - [x] The 12 × 4 manifest renders all 48 cells
 - [x] Every cell is square and every generated raster asset is fully loaded
 
@@ -98,6 +98,6 @@ Each standalone board route renders the reviewed semantic manifest with the gene
 
 **Verifications:**
 
-- [x] The /boards/docking-bay-b/ route identifies the intended reviewed board face
+- [x] The /boards/docking-bay-b route identifies the intended reviewed board face
 - [x] The 12 × 4 manifest renders all 48 cells
 - [x] Every cell is square and every generated raster asset is fully loaded

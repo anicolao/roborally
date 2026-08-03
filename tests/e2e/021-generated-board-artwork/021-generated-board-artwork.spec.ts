@@ -13,13 +13,13 @@ test('every board route renders its manifest with square generated raster tiles'
 
   for (const board of ALL_BOARD_FACES) {
     const readableName = board.id.replaceAll('-', ' ');
-    await page.goto(`/boards/${board.id}/`);
+    await page.goto(`/boards/${board.id}`);
 
     await steps.step(`${board.id}-board-artwork`, {
       description: `${readableName} uses the generated square tile artwork`,
       verifications: [
         {
-          spec: `The /boards/${board.id}/ route identifies the intended reviewed board face`,
+          spec: `The /boards/${board.id} route identifies the intended reviewed board face`,
           check: async () => {
             await expect(page).toHaveTitle(`${readableName} board — Robo Rally`);
             await expect(page.getByRole('heading', { name: `${readableName} board face` })).toBeAttached();
@@ -59,4 +59,12 @@ test('every board route renders its manifest with square generated raster tiles'
   }
 
   steps.generateDocs();
+});
+
+test('the generated static HTML board URL survives client hydration', async ({ page }) => {
+  await page.goto('/boards/island.html');
+
+  await expect(page).toHaveTitle('island board — Robo Rally');
+  await expect(page.getByRole('grid', { name: 'island board face' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '404' })).toHaveCount(0);
 });
