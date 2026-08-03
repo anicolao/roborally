@@ -72,9 +72,14 @@ async function phoneWithPowerChoice(
   await expect.poll(async () => {
     for (const [index, page] of pages.entries()) {
       const choice = page.getByLabel('Power-down choice');
+      const enabledStayActive = await choice
+        .getByRole('button', { name: 'STAY ACTIVE' })
+        .evaluateAll((buttons) =>
+          buttons.some((button) => !(button as HTMLButtonElement).disabled)
+        );
       if (
         (await choice.isVisible()) &&
-        (await choice.getByRole('button', { name: 'STAY ACTIVE' }).isEnabled())
+        enabledStayActive
       ) {
         selected = index;
         return selected;
