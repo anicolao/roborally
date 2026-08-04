@@ -178,6 +178,28 @@ describe('shared Program deck', () => {
     expect(timedOut.players.find(({ uid }) => uid === targetUid)?.draftCardIds).toEqual([]);
   });
 
+  it('persists positional drafts and timeout-fills only their empty registers', () => {
+    const initial = createProgrammingState(setup, config);
+    const submitted = submitProgram(
+      initial,
+      initial.players[0].uid,
+      initial.players[0].hand.slice(0, 5),
+      5_000
+    );
+    const targetUid = submitted.deadlinePlayerUid!;
+    const target = submitted.players.find(({ uid }) => uid === targetUid)!;
+    const preservedCard = target.hand[4];
+    const slots = [null, null, preservedCard, null, null];
+    const drafted = updateProgramDraft(submitted, targetUid, [preservedCard], slots);
+
+    expect(drafted.players.find(({ uid }) => uid === targetUid)?.draftSlots).toEqual(slots);
+
+    const timedOut = timeOutProgram(drafted, targetUid, drafted.deadline!, config.seed);
+    const registers = timedOut.players.find(({ uid }) => uid === targetUid)!.registers;
+    expect(registers[2].cardId).toBe(preservedCard);
+    expect(registers.map(({ cardId }) => cardId).filter(Boolean)).toHaveLength(5);
+  });
+
   it('rejects timeout prefixes that are duplicated or are not in the target hand', () => {
     const initial = createProgrammingState(setup, config);
     const first = initial.players[0];

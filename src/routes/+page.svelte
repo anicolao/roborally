@@ -9,7 +9,7 @@
   import type { FirebaseServices } from '$lib/firebase';
   import CourseBoard from '$lib/components/CourseBoard.svelte';
   import CourseCatalog from '$lib/components/CourseCatalog.svelte';
-  import ProgramCardFace from '$lib/components/ProgramCardFace.svelte';
+  import ProgramEditor from '$lib/components/ProgramEditor.svelte';
   import { PROGRAM_CARDS, type ProgramCard } from '$lib/game/program-manifest';
   import {
     OPTION_CARDS,
@@ -23,6 +23,9 @@
     type RaceRobotPosition
   } from '$lib/game/movement';
   import {
+    REGISTER_COUNT,
+    draftCardIdsInRegisterOrder,
+    draftSlotsForPlayer,
     previewProgram,
     programCardZones,
     type ProgrammingPlayer
@@ -76,9 +79,12 @@
   let e2eCourseOverride = '';
   let setupSeed = 'RALLY-2005';
   let setupLives: 3 | 4 = 3;
-  let selectedProgramCardIds: ProgramCard['id'][] = [];
+  let programDraftSlots: (ProgramCard['id'] | null)[] = Array.from(
+    { length: REGISTER_COUNT },
+    () => null
+  );
   let programDraftDirty = false;
-  let editingRegisterIndex = 0;
+  let programDraftWriteQueue: Promise<void> = Promise.resolve();
   let programHeadingElement: HTMLHeadingElement | undefined;
   let clockNow = Date.now();
   let clockInterval: ReturnType<typeof setInterval> | undefined;
@@ -149,6 +155,7 @@
             hand: [],
             registers: Array.from({ length: 5 }, () => ({ cardId: null, locked: false })),
             draftCardIds: [],
+            draftSlots: Array.from({ length: REGISTER_COUNT }, () => null),
             submitted: true,
             timedOut: false
           } satisfies ProgrammingPlayer)
@@ -158,6 +165,9 @@
     currentPlayerPoweredDown
       ? 0
       : programmingPlayer?.registers.filter(({ locked }) => !locked).length ?? 0;
+  $: selectedProgramCardIds = programmingPlayer
+    ? draftCardIdsInRegisterOrder(programmingPlayer, programDraftSlots)
+    : [];
   $: powerResponse = currentPlayer && activeProgramming
     ? roomState.powerDownResponses.find(
         ({ uid, turnId }) => uid === currentPlayer.uid && turnId === activeProgramming?.turnId
@@ -182,8 +192,6 @@
   $: programPreview = programmingPlayer
     ? previewProgram(programmingPlayer, selectedProgramCardIds)
     : [];
-  $: openRegisterSlots =
-    programmingPlayer?.registers.flatMap((register, index) => (register.locked ? [] : [index])) ?? [];
   $: playbackIsActive = playbackPhase === 'countdown' || playbackPhase === 'register';
   $: playbackTransitionMs = Math.round(playbackProductionDurationMs * playbackTimeScale);
   $: countdownStepMs = Math.round(PRODUCTION_COUNTDOWN_STEP_MS * playbackTimeScale);
@@ -362,8 +370,9 @@
     synchronizedCursor = '';
     formError = '';
     requestedTurnNumber = 1;
-    selectedProgramCardIds = [];
+    programDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
     programDraftDirty = false;
+    programDraftWriteQueue = Promise.resolve();
     selectedOptionPreventionIds = [];
     selectedReentryChoice = '';
     reentryPoweredDown = false;
@@ -378,11 +387,17 @@
           nextState.nextProgramming?.turnNumber === requestedTurnNumber
             ? nextState.nextProgramming
             : nextState.programming;
-        const currentDraft =
-          draftProgramming?.players.find((player) => player.uid === services?.user.uid)?.draftCardIds ??
-          [];
-        if (!programDraftDirty || JSON.stringify(currentDraft) === JSON.stringify(selectedProgramCardIds)) {
-          selectedProgramCardIds = [...currentDraft];
+        const draftPlayer = draftProgramming?.players.find(
+          (player) => player.uid === services?.user.uid
+        );
+        const currentDraft = draftPlayer
+          ? draftSlotsForPlayer(draftPlayer)
+          : Array.from({ length: REGISTER_COUNT }, () => null);
+        if (
+          !programDraftDirty ||
+          JSON.stringify(currentDraft) === JSON.stringify(programDraftSlots)
+        ) {
+          programDraftSlots = currentDraft;
           programDraftDirty = false;
         }
         const effectDraft = nextState.effectDrafts.find(
@@ -626,55 +641,11 @@
     }
   }
 
-  function toggleProgramCard(cardId: ProgramCard['id']) {
-    if (programmingPlayer?.submitted) return;
-    const selectedIndex = selectedProgramCardIds.indexOf(cardId);
-    if (selectedIndex >= 0) {
-      selectedProgramCardIds = selectedProgramCardIds.filter((selected) => selected !== cardId);
-      editingRegisterIndex = Math.max(
-        0,
-        Math.min(selectedIndex, selectedProgramCardIds.length - 1)
-      );
-    } else if (selectedProgramCardIds.length < openRegisterCount) {
-      selectedProgramCardIds = [...selectedProgramCardIds, cardId];
-      editingRegisterIndex = selectedProgramCardIds.length - 1;
-    }
+  function writeProgramDraft(nextSlots: (ProgramCard['id'] | null)[]) {
+    programDraftSlots = nextSlots;
     programDraftDirty = true;
-    void persistProgramDraft();
-  }
-
-  function moveSelectedProgramCard(index: number, offset: -1 | 1) {
-    const destination = index + offset;
-    if (index < 0 || destination < 0 || destination >= selectedProgramCardIds.length) return;
-    const reordered = [...selectedProgramCardIds];
-    [reordered[index], reordered[destination]] = [reordered[destination], reordered[index]];
-    selectedProgramCardIds = reordered;
-    editingRegisterIndex = destination;
-    programDraftDirty = true;
-    void persistProgramDraft();
-  }
-
-  function removeSelectedProgramCard(index: number) {
-    if (index < 0 || index >= selectedProgramCardIds.length) return;
-    selectedProgramCardIds = selectedProgramCardIds.filter((_, candidate) => candidate !== index);
-    editingRegisterIndex = Math.max(0, Math.min(index, selectedProgramCardIds.length - 1));
-    programDraftDirty = true;
-    void persistProgramDraft();
-  }
-
-  function handleProgramCardKeydown(event: KeyboardEvent, cardId: ProgramCard['id']) {
-    const index = selectedProgramCardIds.indexOf(cardId);
-    if (index < 0) return;
-    if (event.shiftKey && event.key === 'ArrowLeft') {
-      event.preventDefault();
-      moveSelectedProgramCard(index, -1);
-    } else if (event.shiftKey && event.key === 'ArrowRight') {
-      event.preventDefault();
-      moveSelectedProgramCard(index, 1);
-    } else if (event.key === 'Delete' || event.key === 'Backspace') {
-      event.preventDefault();
-      removeSelectedProgramCard(index);
-    }
+    const slots = [...nextSlots];
+    programDraftWriteQueue = programDraftWriteQueue.then(() => persistProgramDraft(slots));
   }
 
   async function openProgrammingConsole() {
@@ -683,15 +654,21 @@
     programHeadingElement?.focus();
   }
 
-  async function persistProgramDraft() {
+  async function persistProgramDraft(
+    slots: readonly (ProgramCard['id'] | null)[] = programDraftSlots
+  ) {
     if (!services || !roomService || !activeProgramming || programmingPlayer?.submitted) return;
+    const cardIds = programmingPlayer
+      ? draftCardIdsInRegisterOrder(programmingPlayer, slots)
+      : [];
     try {
       await roomService.updateProgramDraft(
         services.db,
         services.user,
         roomCode,
-        selectedProgramCardIds,
-        activeProgramming.turnId
+        cardIds,
+        activeProgramming.turnId,
+        [...slots]
       );
     } catch (error) {
       console.error(error);
@@ -708,6 +685,7 @@
     ) return;
     pending = true;
     try {
+      await programDraftWriteQueue;
       await roomService.submitProgram(
         services.db,
         services.user,
@@ -715,9 +693,9 @@
         selectedProgramCardIds,
         activeProgramming?.turnId
       );
-      selectedProgramCardIds = [];
+      programDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
       programDraftDirty = false;
-      editingRegisterIndex = 0;
+      programDraftWriteQueue = Promise.resolve();
     } catch (error) {
       console.error(error);
       formError = 'The immutable Program submission could not be written.';
@@ -739,9 +717,8 @@
         activeProgramming?.turnId,
         selectedProgramCardIds
       );
-      selectedProgramCardIds = [];
+      programDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
       programDraftDirty = false;
-      editingRegisterIndex = 0;
     } catch (error) {
       console.error(error);
       formError = 'The timeout claim could not be written.';
@@ -890,9 +867,8 @@
         }`
       });
       requestedTurnNumber = 1;
-      selectedProgramCardIds = [];
+      programDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
       programDraftDirty = false;
-      editingRegisterIndex = 0;
     } catch (error) {
       console.error(error);
       formError = 'The immutable rematch event could not be written.';
@@ -1011,7 +987,6 @@
           !!activeProgramming &&
           activeProgramming.turnNumber > roomState.resolution.turnNumber}
         class:many-robots={roomState.setup.players.length >= 3}
-        class:program-editing={selectedProgramCardIds.length > 0 && !programmingPlayer?.submitted}
         class="setup-summary"
       >
         <p class="eyebrow">
@@ -1141,109 +1116,20 @@
                 Factory Rejects rule · power down unavailable
               </p>
             {/if}
-            {#if programmingPlayer.submitted}
-              <p class="submission-state">Program committed. It cannot be inspected or changed.</p>
-            {:else}
-              <p class="sr-only" id="register-order-help">
-                Select cards in register order. On a selected card, use Shift plus Left or Right
-                Arrow to reorder it, or Delete to remove it. Touch users can use the register
-                ordering controls below.
-              </p>
-              <div class="program-hand" aria-label="Your Program hand">
-                {#each programmingPlayer.hand as cardId}
-                  {@const card = cardForId(cardId)}
-                  {@const selectedIndex = selectedProgramCardIds.indexOf(cardId)}
-                  <button
-                    type="button"
-                    class:selected={selectedIndex >= 0}
-                    aria-pressed={selectedIndex >= 0}
-                    aria-label={`${card?.action} priority ${card?.priority}`}
-                    aria-describedby="register-order-help"
-                    data-register-index={selectedIndex >= 0 ? selectedIndex + 1 : ''}
-                    onclick={() => toggleProgramCard(cardId)}
-                    onkeydown={(event) => handleProgramCardKeydown(event, cardId)}
-                  >
-                    {#if card}
-                      <ProgramCardFace {card} compact variant="adaptive" />
-                    {/if}
-                    {#if selectedIndex >= 0}
-                      <span class="register-badge">R{selectedIndex + 1}</span>
-                    {/if}
-                  </button>
-                {/each}
+            {#key activeProgramming.turnId}
+              <div class="shared-program-editor">
+                <ProgramEditor
+                  player={programmingPlayer}
+                  bind:draftSlots={programDraftSlots}
+                  {pending}
+                  showHeading={false}
+                  instructionsVisible={false}
+                  previewText={`Preview excludes robots and unrevealed board outcomes. ${programPreview.join(' · ')}`}
+                  ondraftchange={writeProgramDraft}
+                  onprogramsubmit={submitProgramCards}
+                />
               </div>
-              <ol class="chosen-registers" aria-label="Chosen registers">
-                {#each Array(5) as _, index}
-                  {@const register = programmingPlayer.registers[index]}
-                  {@const openIndex = programmingPlayer.registers
-                    .slice(0, index)
-                    .filter(({ locked }) => !locked).length}
-                  {@const card = cardForId(
-                    register.locked ? register.cardId : (selectedProgramCardIds[openIndex] ?? null)
-                  )}
-                  <li>
-                    <span>R{index + 1}</span>
-                    {card ? `${card.action} ${card.priority}${register.locked ? ' · locked' : ''}` : 'empty'}
-                  </li>
-                {/each}
-              </ol>
-              {#if selectedProgramCardIds.length > 0}
-                <div class="register-order-controls" aria-label="Register ordering controls">
-                  <label>
-                    <span>Edit register</span>
-                    <select bind:value={editingRegisterIndex} aria-label="Register to reorder">
-                      {#each selectedProgramCardIds as cardId, index}
-                        {@const selectedCard = cardForId(cardId)}
-                        <option value={index}>
-                          R{openRegisterSlots[index] + 1}: {selectedCard?.action} {selectedCard?.priority}
-                        </option>
-                      {/each}
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    aria-label="Move selected register earlier"
-                    title="Move selected register earlier"
-                    onclick={() => moveSelectedProgramCard(editingRegisterIndex, -1)}
-                    disabled={editingRegisterIndex === 0}
-                  >←</button>
-                  <button
-                    type="button"
-                    aria-label="Move selected register later"
-                    title="Move selected register later"
-                    onclick={() => moveSelectedProgramCard(editingRegisterIndex, 1)}
-                    disabled={editingRegisterIndex >= selectedProgramCardIds.length - 1}
-                  >→</button>
-                  <button
-                    type="button"
-                    aria-label="Remove selected register card"
-                    title="Remove selected register card"
-                    onclick={() => removeSelectedProgramCard(editingRegisterIndex)}
-                  >×</button>
-                </div>
-              {/if}
-              <p class="preview-note">
-                Preview excludes robots and unrevealed board outcomes.
-                {programPreview.join(' · ')}
-              </p>
-              <button
-                type="button"
-                onclick={submitProgramCards}
-                disabled={pending || selectedProgramCardIds.length !== openRegisterCount}
-              >Submit immutable program</button>
-              {#if selectedProgramCardIds.length > 0}
-                <button
-                  type="button"
-                  class="clear-program"
-                  onclick={() => {
-                    selectedProgramCardIds = [];
-                    editingRegisterIndex = 0;
-                    programDraftDirty = true;
-                    void persistProgramDraft();
-                  }}
-                >Clear register choices</button>
-              {/if}
-            {/if}
+            {/key}
 
             <ul class="opponent-programs" aria-label="Program submission status">
               {#each activeProgramming.players as player}
@@ -1422,12 +1308,13 @@
                     type="button"
                     onclick={() => {
                       requestedTurnNumber = roomState.nextProgramming?.turnNumber ?? requestedTurnNumber;
-                      const nextDraft = roomState.nextProgramming?.players.find(
+                      const nextDraftPlayer = roomState.nextProgramming?.players.find(
                         ({ uid }) => uid === currentPlayer.uid
-                      )?.draftCardIds ?? [];
-                      selectedProgramCardIds = [...nextDraft];
+                      );
+                      programDraftSlots = nextDraftPlayer
+                        ? draftSlotsForPlayer(nextDraftPlayer)
+                        : Array.from({ length: REGISTER_COUNT }, () => null);
                       programDraftDirty = false;
-                      editingRegisterIndex = 0;
                     }}
                   >
                     Begin Turn {roomState.nextProgramming.turnNumber}
@@ -2502,101 +2389,7 @@
     text-transform: uppercase;
   }
   .program-head span { color: #d2ff37; font: 16px 'Space Mono', monospace; text-transform: uppercase; }
-  .program-hand {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 4px;
-  }
-  .program-hand button {
-    position: relative;
-    display: block;
-    min-width: 0;
-    min-height: 0;
-    padding: 0;
-    overflow: visible;
-    border: 2px solid transparent;
-    border-radius: 4px;
-    color: inherit;
-    background: transparent;
-  }
-  .program-hand button.selected {
-    border-color: #d2ff37;
-    background: #d2ff3720;
-    box-shadow: 0 0 10px #d2ff3788;
-  }
-  .program-hand .register-badge {
-    position: absolute;
-    z-index: 5;
-    top: -5px;
-    right: -5px;
-    display: grid;
-    width: 28px;
-    height: 28px;
-    place-items: center;
-    border: 2px solid #111819;
-    border-radius: 50%;
-    color: #111819;
-    background: #d2ff37;
-    font: 700 13px/1 'Space Mono', monospace;
-    box-shadow: 0 2px 6px #0009;
-  }
-  .chosen-registers {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 3px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-  .chosen-registers li {
-    display: grid;
-    min-width: 0;
-    min-height: 29px;
-    place-items: center;
-    overflow: hidden;
-    border: 1px solid #354245;
-    color: #788588;
-    font: 12px 'Space Mono', monospace;
-    text-overflow: ellipsis;
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
-  .chosen-registers span { color: #d2ff37; }
-  .register-order-controls {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) repeat(3, auto);
-    gap: 3px;
-    align-items: end;
-    padding: 4px;
-    border: 1px solid #536164;
-    background: #0d1314;
-  }
-  .register-order-controls label {
-    display: grid;
-    gap: 2px;
-    color: #ffcf4b;
-    font: 12px 'Space Mono', monospace;
-    text-transform: uppercase;
-  }
-  .register-order-controls select {
-    min-width: 0;
-    min-height: 26px;
-    border: 1px solid #536164;
-    color: #eef4ee;
-    background: #11191a;
-    font: 14px 'Space Mono', monospace;
-  }
-  .register-order-controls button {
-    min-height: 26px;
-    padding: 0 4px;
-    font-size: 12px;
-  }
-  .preview-note, .submission-state {
-    margin: 0;
-    color: #778487;
-    font-size: 16px;
-    line-height: 1.35;
-  }
+  .shared-program-editor { min-width: 0; }
   .conservation {
     margin: 0;
     color: #ffcf4b;
@@ -2642,12 +2435,6 @@
   }
   .power-control > div { display: flex; gap: 3px; }
   .power-control button { flex: 1; min-height: 25px; padding: 0 4px; font-size: 12px; }
-  .submission-state {
-    padding: 9px;
-    border: 1px solid #53613b;
-    color: #d2ff37;
-    background: #151d13;
-  }
   .opponent-programs {
     display: grid;
     gap: 3px;
@@ -2910,13 +2697,6 @@
       .resolution-console > ol[aria-label='Resolution feed'] li:nth-child(-n + 2) {
       display: none;
     }
-    .program-hand { grid-template-columns: repeat(3, 1fr); }
-    .program-hand button { min-height: 0; padding: 0; }
-    .chosen-registers li { min-height: 23px; }
-    .register-order-controls {
-      grid-template-columns: minmax(0, 1fr) repeat(3, 24px);
-    }
-    .register-order-controls label > span { display: none; }
     .seats { grid-template-rows: repeat(4, 1fr); gap: 4px; }
     .seats li {
       min-height: 0;
@@ -3167,17 +2947,14 @@
       border: 0;
     }
     .program-head,
-    .program-hand,
-    .register-order-controls,
-    .submission-state,
+    .shared-program-editor,
     .opponent-programs,
     .deadline,
     .resolution-console {
       grid-column: 1 / -1;
     }
     .conservation,
-    .option-catalog,
-    .preview-note {
+    .option-catalog {
       display: none;
     }
     .program-head h2,
@@ -3194,42 +2971,6 @@
       min-height: 21px;
       font-size: 10px;
     }
-    .program-hand {
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 2px;
-    }
-    .program-hand button {
-      min-height: 0;
-      padding: 0;
-    }
-    .chosen-registers {
-      grid-column: 1 / -1;
-      gap: 2px;
-    }
-    .chosen-registers li {
-      min-height: 18px;
-      font-size: 10px;
-    }
-    .register-order-controls {
-      grid-template-columns: minmax(0, 1fr) repeat(3, 24px);
-      min-height: 26px;
-      padding: 1px;
-    }
-    .register-order-controls label > span { display: none; }
-    .register-order-controls select,
-    .register-order-controls button {
-      min-height: 22px;
-      font-size: 12px;
-    }
-    .program-console > button {
-      min-height: 23px;
-      padding: 0 4px;
-      font-size: 12px;
-    }
-    .submission-state {
-      padding: 3px;
-      font-size: 12px;
-    }
     .opponent-programs {
       gap: 2px;
       margin: 0;
@@ -3245,10 +2986,10 @@
       font-size: 12px;
     }
 
-    .setup-summary.resolution-active .program-head,
-    .setup-summary.resolution-active .submission-state,
-    .setup-summary.resolution-active .opponent-programs,
-    .setup-summary.resolution-active .deadline {
+    .setup-summary.resolution-active:not(.next-turn-programming) .program-head,
+    .setup-summary.resolution-active:not(.next-turn-programming) .shared-program-editor,
+    .setup-summary.resolution-active:not(.next-turn-programming) .opponent-programs,
+    .setup-summary.resolution-active:not(.next-turn-programming) .deadline {
       display: none;
     }
     .resolution-console {
@@ -3353,21 +3094,12 @@
       clip: rect(0, 0, 0, 0);
       white-space: nowrap;
     }
-    .preview-note {
-      max-height: 4.05em;
-      overflow: auto;
-    }
     .configured-race {
       grid-template-columns: 145px minmax(0, 1fr);
     }
     .setup-summary h1 { font-size: 44px; }
     .setup-summary .lede { font-size: 16px; }
     .setup-order small { display: none; }
-    .setup-summary.program-editing h1 {
-      margin-bottom: 2px;
-      font-size: 36px;
-      line-height: 0.9;
-    }
     .configured-race:has(.program-console) {
       grid-template-columns: minmax(0, 1fr);
     }

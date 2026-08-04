@@ -103,6 +103,7 @@ export interface ProgramDraftUpdatedPayload {
   uid: string;
   turnId: TurnId;
   cardIds: ProgramCard['id'][];
+  slots?: (ProgramCard['id'] | null)[];
 }
 
 export interface ProgramTimedOutPayload {
@@ -679,12 +680,18 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         !payload ||
         payload.uid !== event.actorUid ||
         !Array.isArray(payload.cardIds) ||
+        (payload.slots !== undefined && !Array.isArray(payload.slots)) ||
         !eventProgramming
       ) {
         diagnostic(state, event, 'invalid-program', 'The Program draft is malformed.');
         continue;
       }
-      const next = updateProgramDraft(eventProgramming, event.actorUid, payload.cardIds);
+      const next = updateProgramDraft(
+        eventProgramming,
+        event.actorUid,
+        payload.cardIds,
+        payload.slots
+      );
       if (next.diagnostics.length !== eventProgramming.diagnostics.length) {
         diagnostic(state, event, 'invalid-program', 'The Program draft is not legal.');
         continue;

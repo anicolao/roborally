@@ -34,7 +34,7 @@ async function expectFixedViewport(page: import('@playwright/test').Page) {
 }
 
 async function submitVisibleProgram(page: import('@playwright/test').Page) {
-  const cards = page.locator('.hand button');
+  const cards = page.getByLabel('Your Program hand').getByRole('button');
   const lockProgram = page.getByRole('button', { name: 'Lock program' });
   for (let index = 0; index < await cards.count(); index += 1) {
     await cards.nth(index).click();
@@ -322,8 +322,8 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await secondPhone.getByRole('button', { name: 'BEGIN TURN 2' }).click();
     await expect(firstPhone.getByText('Choose five registers privately for turn 2.')).toBeVisible();
     await expect(secondPhone.getByText('Choose five registers privately for turn 2.')).toBeVisible();
-    await expect(firstPhone.locator('.hand button').first()).toBeEnabled();
-    await expect(secondPhone.locator('.hand button').first()).toBeEnabled();
+    await expect(firstPhone.getByLabel('Your Program hand').getByRole('button').first()).toBeEnabled();
+    await expect(secondPhone.getByLabel('Your Program hand').getByRole('button').first()).toBeEnabled();
 
     const phones = [firstPhone, secondPhone];
     const damagedPhones = [];
@@ -348,7 +348,8 @@ test('the tabletop owns configuration and seat QR codes open private controllers
 
     await firstPhone.getByRole('button', { name: 'BEGIN TURN 3' }).click();
     await secondPhone.getByRole('button', { name: 'BEGIN TURN 3' }).click();
-    const activePhoneNeedsPowerChoice = (await activePhone.locator('.hand button').count()) < 9;
+    const activePhoneNeedsPowerChoice =
+      (await activePhone.getByLabel('Your Program hand').getByRole('button').count()) < 9;
     await submitVisibleProgram(activePhone);
 
     let activePhoneResponded = false;

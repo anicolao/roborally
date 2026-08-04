@@ -402,8 +402,23 @@ describe('immutable room replay', () => {
     const guestDraft = event('guest', 3, 'program/draft-updated', {
       uid: 'guest',
       turnId: 'turn-001',
-      cardIds: guestHand.slice(0, 2)
+      cardIds: guestHand.slice(0, 2),
+      slots: [null, guestHand[0], null, guestHand[1], null]
     }, 1_500);
+    const drafted = replayRoom([
+      created,
+      joinedHost,
+      joinedGuest,
+      configured,
+      hostReady,
+      guestReady,
+      hostProgram,
+      guestDraft
+    ]);
+    expect(drafted.programming?.players.find(({ uid }) => uid === 'guest')?.draftSlots).toEqual(
+      [null, guestHand[0], null, guestHand[1], null]
+    );
+
     const guestProgram = event('guest', 4, 'program/submitted', {
       uid: 'guest',
       turnId: 'turn-001',

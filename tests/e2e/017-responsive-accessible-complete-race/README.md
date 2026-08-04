@@ -9,7 +9,7 @@ Two ordinary clients complete the production twelve-turn race at phone portrait,
 **Verifications:**
 
 - [x] Arrow-key board navigation exposes a selected semantic grid cell
-- [x] Keyboard reordering and the pointer-friendly toolbar preserve the exact Program
+- [x] Keyboard slot selection and replacement preserve the exact Program
 
 ## Submission exposes an equivalent textual deadline and state cue
 
