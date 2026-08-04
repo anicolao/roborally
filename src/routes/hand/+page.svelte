@@ -355,6 +355,7 @@
 <svelte:head><title>Robo Rally · Private controller</title></svelte:head>
 <main class="phone" data-e2e-private-hand>
   <header><a href={`${base}/`}><strong>ROBO</strong> RALLY</a><span>{roomCode || 'NO ROOM'}</span></header>
+  <div class:programming={!!programming} class="controller-content">
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if !roomCode}
     <p class="empty">Scan a tabletop position to connect this private controller.</p>
@@ -468,6 +469,8 @@
             player={programming}
             bind:draftSlots
             {pending}
+            viewportFit
+            instructionsVisible={false}
             submitLabel="Lock program"
             submittedMessage="Program locked. Watch the tabletop for execution."
             ondraftchange={persistDraft}
@@ -485,18 +488,43 @@
       </section>
     {:else if !canRespondPowerDown}<p class="empty">{status}</p>{/if}
   {/if}
+  </div>
   <footer><a href={`${base}/tt/?room=${roomCode}`}>View shared tabletop ↗</a><span>Keep this screen private.</span></footer>
 </main>
 <style>
   :global(*) { box-sizing: border-box; }
   :global(html), :global(body) {
+    width: 100%;
+    height: 100%;
     margin: 0;
     min-width: 320px;
+    overflow: hidden;
+    overscroll-behavior: none;
     background: #0c1112;
     color: #eef4ee;
     font-family: 'Atkinson Hyperlegible', sans-serif;
   }
-  .phone { width: min(100%, 720px); min-height: 100vh; margin: auto; padding: 20px; }
+  .phone {
+    display: grid;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    margin: 0;
+    overflow: hidden;
+    padding:
+      max(10px, env(safe-area-inset-top))
+      max(12px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom))
+      max(12px, env(safe-area-inset-left));
+  }
+  .controller-content { min-height: 0; overflow: auto; }
+  .controller-content.programming {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
   header, footer {
     display: flex;
     align-items: center;
@@ -509,6 +537,26 @@
   header a, footer a { color: #eef4ee; text-decoration: none; }
   header strong, header span { color: #d2ff37; }
   .identity { margin: 28px 0; }
+  .programming .identity {
+    display: grid;
+    flex: none;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 4px 10px;
+    align-items: baseline;
+    margin: 6px 0;
+  }
+  .programming .identity > span { display: none; }
+  .programming .identity h1 { margin: 0; font-size: clamp(22px, 7vw, 34px); }
+  .programming .identity strong { justify-self: end; }
+  .programming .identity p {
+    grid-column: 1 / -1;
+    margin: 0;
+    overflow: hidden;
+    font-size: 14px;
+    line-height: 1.1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .identity span, .join-position > span, h2 {
     color: #d2ff37;
     font: 700 18px 'Space Mono', monospace;
@@ -529,6 +577,18 @@
     border: 1px solid #465356;
     background: #141c1d;
   }
+  .programming .private-programming {
+    display: grid;
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+    margin-top: 0;
+    overflow: hidden;
+    padding: 8px;
+  }
+  .programming .private-programming > p { display: none; }
+  .programming .power-control,
+  .programming .effect-control { flex: none; margin-top: 4px; padding: 6px; }
   .private-programming > p { margin-top: 0; font-size: 17px; }
   button {
     min-height: 48px;
@@ -543,8 +603,8 @@
   .empty, .error { margin-top: 35vh; text-align: center; }
   .error { color: #ffbf69; }
   footer {
-    margin-top: 26px;
-    padding-top: 15px;
+    margin-top: 4px;
+    padding-top: 4px;
     border-top: 1px solid #465356;
     border-bottom: 0;
     color: #aebbb9;
@@ -576,4 +636,18 @@
   .effect-control button.selected { color: #111; background: #ffcf4b; border-color: #ffcf4b; }
   .effect-control .check-control { display: flex; align-items: center; text-transform: none; }
   .effect-control .check-control input { width: 24px; height: 24px; }
+
+  @media (max-width: 700px) {
+    header, footer { padding-bottom: 6px; font-size: 12px; }
+    footer span { display: none; }
+  }
+
+  @media (max-height: 720px) {
+    .phone { padding-top: max(4px, env(safe-area-inset-top)); padding-bottom: max(3px, env(safe-area-inset-bottom)); }
+    header { padding-bottom: 3px; }
+    footer { display: none; }
+    .programming .identity { margin: 2px 0; }
+    .programming .identity p { display: none; }
+    .programming .private-programming { padding: 3px; }
+  }
 </style>

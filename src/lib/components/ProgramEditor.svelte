@@ -13,6 +13,7 @@
   export let heading = 'Program deck';
   export let showHeading = true;
   export let instructionsVisible = true;
+  export let viewportFit = false;
   export let submitLabel = 'Submit immutable program';
   export let submittedMessage = 'Program committed. It cannot be inspected or changed.';
   export let previewText = '';
@@ -20,6 +21,17 @@
   export let onprogramsubmit: () => void | Promise<void>;
 
   let selectedRegisterIndex: number | null = null;
+  let pointerDrag:
+    | {
+        cardId: ProgramCard['id'];
+        pointerId: number;
+        startX: number;
+        startY: number;
+        targetIndex: number | null;
+        moved: boolean;
+      }
+    | undefined;
+  let suppressCardClick: ProgramCard['id'] | null = null;
 
   $: openRegisterCount = player.registers.filter((register) => !register.locked).length;
   $: selectedCardIds = draftCardIdsInRegisterOrder(player, draftSlots);
@@ -54,6 +66,10 @@
   }
 
   function tapCard(cardId: ProgramCard['id']) {
+    if (suppressCardClick === cardId) {
+      suppressCardClick = null;
+      return;
+    }
     if (player.submitted) return;
     const existingIndex = draftSlots.indexOf(cardId);
     if (existingIndex >= 0) {
@@ -96,13 +112,70 @@
     placeCard(cardId, registerIndex);
   }
 
+  function registerIndexAtPoint(clientX: number, clientY: number) {
+    const slot = document
+      .elementFromPoint(clientX, clientY)
+      ?.closest<HTMLElement>('[data-register-slot]');
+    const registerIndex = Number(slot?.dataset.registerSlot ?? 0) - 1;
+    return registerIndex >= 0 && editableRegister(registerIndex) ? registerIndex : null;
+  }
+
+  function startPointerDrag(event: PointerEvent, cardId: ProgramCard['id']) {
+    if (event.pointerType === 'mouse' || player.submitted) return;
+    pointerDrag = {
+      cardId,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      targetIndex: null,
+      moved: false
+    };
+    try {
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    } catch {
+      // Synthetic pointer events do not always create a capturable active pointer.
+    }
+  }
+
+  function movePointerDrag(event: PointerEvent) {
+    if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
+    const moved =
+      pointerDrag.moved ||
+      Math.hypot(event.clientX - pointerDrag.startX, event.clientY - pointerDrag.startY) > 8;
+    pointerDrag = {
+      ...pointerDrag,
+      moved,
+      targetIndex: moved ? registerIndexAtPoint(event.clientX, event.clientY) : null
+    };
+    if (moved) event.preventDefault();
+  }
+
+  function finishPointerDrag(event: PointerEvent) {
+    if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
+    const completedDrag = pointerDrag.moved;
+    const { cardId, targetIndex } = pointerDrag;
+    pointerDrag = undefined;
+    if (completedDrag) {
+      suppressCardClick = cardId;
+      requestAnimationFrame(() => {
+        if (suppressCardClick === cardId) suppressCardClick = null;
+      });
+      event.preventDefault();
+      if (targetIndex !== null) placeCard(cardId, targetIndex);
+    }
+  }
+
+  function cancelPointerDrag(event: PointerEvent) {
+    if (pointerDrag?.pointerId === event.pointerId) pointerDrag = undefined;
+  }
+
   function clearDraft() {
     selectedRegisterIndex = null;
     updateDraft(Array.from({ length: REGISTER_COUNT }, () => null));
   }
 </script>
 
-<section class="program-editor" aria-label="Program editor">
+<section class:viewport-fit={viewportFit} class="program-editor" aria-label="Program editor">
   {#if showHeading}
     <div class="editor-heading">
       <h2>{heading}</h2>
@@ -129,9 +202,13 @@
           data-register-index={selectedIndex >= 0 ? selectedIndex + 1 : ''}
           draggable="true"
           ondragstart={(event) => startCardDrag(event, cardId)}
+          onpointerdown={(event) => startPointerDrag(event, cardId)}
+          onpointermove={movePointerDrag}
+          onpointerup={finishPointerDrag}
+          onpointercancel={cancelPointerDrag}
           onclick={() => tapCard(cardId)}
         >
-          {#if card}<ProgramCardFace {card} compact variant="adaptive" />{/if}
+          {#if card}<ProgramCardFace {card} compact variant={viewportFit ? 'square' : 'adaptive'} />{/if}
           {#if selectedIndex >= 0}<span class="register-badge">R{selectedIndex + 1}</span>{/if}
         </button>
       {/each}
@@ -146,6 +223,7 @@
             class:targeted={selectedRegisterIndex === index}
             class:filled={!!card}
             class:locked={register.locked}
+            class:pointer-targeted={pointerDrag?.targetIndex === index}
             aria-label={`Register ${index + 1}, ${card ? `${card.action} priority ${card.priority}` : 'empty'}${register.locked ? ', locked' : selectedRegisterIndex === index ? ', selected' : ''}`}
             aria-pressed={!register.locked && selectedRegisterIndex === index}
             data-register-slot={index + 1}
@@ -180,6 +258,12 @@
 
 <style>
   .program-editor { display: grid; min-width: 0; gap: 8px; }
+  .program-editor.viewport-fit {
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    overflow: hidden;
+  }
   .editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   h2 { margin: 0; color: #eef4ee; font: 700 20px 'Space Mono', monospace; text-transform: uppercase; }
   .editor-heading span { color: #d2ff37; font: 16px 'Space Mono', monospace; text-transform: uppercase; }
@@ -205,6 +289,18 @@
     border-radius: 4px;
     color: inherit;
     background: transparent;
+    touch-action: none;
+  }
+  .viewport-fit .program-hand {
+    min-height: 0;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    align-items: center;
+    overflow: hidden;
+  }
+  .viewport-fit .program-hand button {
+    width: 100%;
+    max-height: 100%;
+    aspect-ratio: 1;
   }
   .program-hand button.selected {
     border-color: #d2ff37;
@@ -252,12 +348,19 @@
     text-overflow: ellipsis;
     text-transform: uppercase;
     white-space: nowrap;
+    touch-action: none;
   }
   .chosen-registers button.targeted {
     border-color: #d2ff37;
     color: #eef4ee;
     background: #1a2418;
     box-shadow: inset 0 0 0 1px #d2ff37, 0 0 8px #d2ff3766;
+  }
+  .chosen-registers button.pointer-targeted {
+    border-color: #ffcf4b;
+    color: #eef4ee;
+    background: #2b2514;
+    box-shadow: inset 0 0 0 1px #ffcf4b, 0 0 8px #ffcf4b66;
   }
   .chosen-registers button.filled { color: #eef4ee; }
   .chosen-registers button.locked:disabled {
@@ -297,18 +400,31 @@
   .editor-actions button { width: 100%; }
   .editor-actions button:disabled { cursor: not-allowed; opacity: .54; }
   .editor-actions .clear-program { color: #a5b0ae; border-color: #4e5a5c; background: transparent; }
+  .viewport-fit .editor-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .viewport-fit .editor-actions button { min-height: 44px; padding: 0 8px; font-size: 14px; }
+  .viewport-fit .editor-actions button:only-child { grid-column: 1 / -1; }
 
   @media (max-width: 700px) {
     .program-hand { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
     .register-badge { width: 34px; height: 34px; font-size: 14px; }
     .instructions { font-size: 17px; }
     .editor-actions button { width: 100%; min-height: 48px; }
+    .viewport-fit .program-hand {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-rows: repeat(3, minmax(0, 1fr));
+      gap: 4px;
+    }
+    .viewport-fit .editor-actions button { min-height: 44px; }
   }
 
   @media (max-height: 720px) and (max-width: 820px) {
     .program-editor { gap: 2px; }
     .instructions, .preview-note { display: none; }
     .program-hand { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; }
+    .viewport-fit .program-hand {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-rows: repeat(2, minmax(0, 1fr));
+    }
     .chosen-registers { gap: 2px; }
     .chosen-registers li, .chosen-registers button { min-height: 30px; }
     .chosen-registers button { font-size: 9px; }
