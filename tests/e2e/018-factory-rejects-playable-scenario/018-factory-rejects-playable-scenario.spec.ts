@@ -72,8 +72,8 @@ test('five players configure and enter the Factory Rejects scenario', async ({
         {
           spec: 'Chop Shop, Docking Bay B, all three flags, and all five robots render from compiled geometry',
           check: async () => {
-            await expect(page.locator('[data-coordinate="4,3"] .pit')).toHaveText('PIT');
-            await expect(page.locator('[data-coordinate="1,15"] .conveyor')).toBeVisible();
+            await expect(page.locator('[data-coordinate="4,3"]')).toHaveAccessibleName(/pit/);
+            await expect(page.locator('[data-coordinate="1,15"]')).toHaveAccessibleName(/conveyor/);
             await expect(page.locator('.course-flag')).toHaveText(['1', '3', '2']);
             await expect(page.locator('.race-robot')).toHaveCount(5);
           }

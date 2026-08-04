@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { BoardElement, Direction } from '$lib/game/course-manifest';
+  import BoardTile from '$lib/components/BoardTile.svelte';
+  import type { BoardElement, Direction, Wall } from '$lib/game/course-manifest';
   import { PUBLISHED_COURSES_BY_ID } from '$lib/game/course-catalog';
   import { compilePlayableCourse } from '$lib/game/playable-courses';
   import { ROBOTS } from '$lib/room-model';
@@ -56,8 +57,15 @@
   const walls = $derived(
     [...compiledCourse.walls].map((wall) => {
       const [x, y, edge] = wall.split(',');
-      return { x: Number(x), y: Number(y), edge };
+      return { x: Number(x), y: Number(y), edge: edge as Direction };
     })
+  );
+  const wallsByCell = $derived(
+    walls.reduce<Map<string, Wall[]>>((byCell, wall) => {
+      const key = `${wall.x},${wall.y}`;
+      byCell.set(key, [...(byCell.get(key) ?? []), wall]);
+      return byCell;
+    }, new Map())
   );
   const flags = $derived(
     new Map(course.flags.map((flag) => [`${flag.x},${flag.y}`, flag.number]))
@@ -79,10 +87,6 @@
     }
     if (element.kind === 'laser') return `${element.beamCount}-beam laser ${element.direction}`;
     return `${element.express ? 'express ' : ''}conveyor ${element.direction}`;
-  }
-
-  function arrow(direction: Direction): string {
-    return { north: '↑', east: '→', south: '↓', west: '←' }[direction];
   }
 
   function fitCourse() {
@@ -176,27 +180,14 @@
           aria-label={describeCell(position.x, position.y)}
           aria-selected={position.x === activeX && position.y === activeY}
         >
-          {#each manifestCell?.elements ?? [] as element}
-            {#if element.kind === 'pit'}
-              <span class="pit">PIT</span>
-            {:else if element.kind === 'repair'}
-              <span class:option={element.option} class="repair">{element.option ? '⚒' : '⌁'}</span>
-            {:else if element.kind === 'conveyor'}
-              <span class:express={element.express} class="conveyor">{arrow(element.direction)}</span>
-            {:else if element.kind === 'dock'}
-              <span class="dock">D{element.number}</span>
-            {:else if element.kind === 'gear'}
-              <span class="gear">{element.rotation === 'clockwise' ? '↻' : '↺'}</span>
-            {:else if element.kind === 'laser'}
-              <span class="laser">{arrow(element.direction)}</span>
-            {:else if element.kind === 'pusher'}
-              <span class="pusher">{element.activeRegisters.join('/')}</span>
-            {/if}
-          {/each}
+          <BoardTile
+            embedded
+            elements={manifestCell?.elements ?? []}
+            walls={wallsByCell.get(`${position.x},${position.y}`) ?? []}
+            x={position.x}
+            y={position.y}
+          />
           {#if flag}<span class="course-flag">{flag}</span>{/if}
-          {#each walls.filter((wall) => wall.x === position.x && wall.y === position.y) as wall}
-            <span class={`wall ${wall.edge}`}></span>
-          {/each}
           {#each displayedRobots.filter((player) => player.position.x === position.x && player.position.y === position.y) as player}
             {@const robot = ROBOTS.find((entry) => entry.id === player.robotId)}
             <span
@@ -364,26 +355,6 @@
   .board-cell:nth-child(-n + 12) { border-top: 1px solid #344346; }
   .board-cell.dock-bay { background: #222a2b; }
   .course-board:focus .board-cell.active-cell { box-shadow: inset 0 0 0 2px #d2ff37; }
-  .pit {
-    position: absolute; inset: 4px;
-    display: grid; place-items: center;
-    color: #788184; background: #030505;
-    font: 12px 'Space Mono', monospace;
-  }
-  .repair, .gear, .conveyor, .dock, .laser, .pusher {
-    position: absolute; inset: 1px;
-    display: grid; place-items: center;
-    color: #8ddad0;
-    font: 700 22px 'Space Mono', monospace;
-  }
-  .repair { color: #ffcf4b; }
-  .repair.option { color: #ee8bff; }
-  .gear { color: #ff9a6a; }
-  .laser { color: #ff6961; background: linear-gradient(90deg, transparent 42%, #ff6961 42% 58%, transparent 58%); }
-  .pusher { color: #ffcf4b; }
-  .conveyor { background: repeating-linear-gradient(135deg, #133936 0 3px, #102b2a 3px 6px); }
-  .conveyor.express { color: white; box-shadow: inset 0 0 0 2px #337c76; }
-  .dock { color: #91a0a2; font-size: 16px; }
   .course-flag {
     position: absolute; z-index: 3; top: 50%; left: 50%;
     display: grid; width: 18px; height: 18px; place-items: center;
@@ -393,11 +364,6 @@
     transform: translate(-50%, -50%);
     box-shadow: 0 0 0 2px #151b1b;
   }
-  .wall { position: absolute; z-index: 2; background: #ff7c63; box-shadow: 0 0 4px #ff7c63; }
-  .wall.north, .wall.south { right: 0; left: 0; height: 2px; }
-  .wall.north { top: -1px; } .wall.south { bottom: -1px; }
-  .wall.east, .wall.west { top: 0; bottom: 0; width: 2px; }
-  .wall.east { right: -1px; } .wall.west { left: -1px; }
   .race-robot {
     position: absolute; z-index: 4; top: 50%; left: 50%;
     display: grid; width: 23px; height: 20px; place-items: center;
