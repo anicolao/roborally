@@ -68,6 +68,8 @@ export type RoomEventType =
   | 'effect/draft-updated'
   | 'effect/chosen'
   | 'game/rematched'
+  | 'game/roster-transferred'
+  | 'game/rematch-redirected'
   | 'power-down/responded';
 
 export interface GameCreatedPayload {
@@ -126,6 +128,15 @@ export interface GameRematchedPayload {
   seed: string;
 }
 
+export interface GameRosterTransferredPayload {
+  sourceRoomCode: string;
+  players: RoomPlayer[];
+}
+
+export interface GameRematchRedirectedPayload {
+  roomCode: string;
+}
+
 export interface PowerDownRespondedPayload {
   uid: string;
   turnId: TurnId;
@@ -163,6 +174,8 @@ export type RoomEventPayload =
   | EffectDraftUpdatedPayload
   | EffectChosenPayload
   | GameRematchedPayload
+  | GameRosterTransferredPayload
+  | GameRematchRedirectedPayload
   | PowerDownRespondedPayload;
 
 export interface RoomEvent {
@@ -217,6 +230,7 @@ export interface RoomState {
   gameId: string;
   roomCode: string;
   hostUid: string;
+  rematchRoomCode: string;
   players: RoomPlayer[];
   configuration: RaceConfig | null;
   configurationEventId: string;
@@ -241,6 +255,7 @@ export function emptyRoomState(): RoomState {
     gameId: '',
     roomCode: '',
     hostUid: '',
+    rematchRoomCode: '',
     players: [],
     configuration: null,
     configurationEventId: '',
@@ -542,6 +557,52 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       state.gameId = payload.gameId;
       state.roomCode = roomCode;
       state.hostUid = payload.hostUid;
+    } else if (event.type === 'game/roster-transferred') {
+      const payload = event.payload as GameRosterTransferredPayload;
+      const sourceRoomCode = normalizeRoomCode(payload?.sourceRoomCode ?? '');
+      const transferredPlayers = Array.isArray(payload?.players) ? payload.players : [];
+      const normalizedPlayers = transferredPlayers.map((player) => ({
+        uid: typeof player?.uid === 'string' ? player.uid : '',
+        name: normalizePlayerName(player?.name ?? ''),
+        robotId: player?.robotId,
+        seat: player?.seat
+      }));
+      const validPlayers = normalizedPlayers.every(
+        (player) =>
+          !!player.uid &&
+          !!player.name &&
+          isRobotId(player.robotId) &&
+          Number.isInteger(player.seat) &&
+          player.seat >= 1 &&
+          player.seat <= MAX_ROOM_PLAYERS
+      );
+      const uniquePlayers =
+        new Set(normalizedPlayers.map(({ uid }) => uid)).size === normalizedPlayers.length &&
+        new Set(normalizedPlayers.map(({ name }) => name.toLowerCase())).size === normalizedPlayers.length &&
+        new Set(normalizedPlayers.map(({ robotId }) => robotId)).size === normalizedPlayers.length &&
+        new Set(normalizedPlayers.map(({ seat }) => seat)).size === normalizedPlayers.length;
+      if (
+        !state.gameId ||
+        event.actorUid !== state.hostUid ||
+        state.players.length > 0 ||
+        sourceRoomCode.length !== 6 ||
+        sourceRoomCode === state.roomCode ||
+        normalizedPlayers.length < 2 ||
+        normalizedPlayers.length > MAX_ROOM_PLAYERS ||
+        !validPlayers ||
+        !uniquePlayers
+      ) {
+        diagnostic(
+          state,
+          event,
+          'invalid-rematch',
+          'A tabletop host can transfer one valid finished-race roster into a fresh room.'
+        );
+        continue;
+      }
+      state.players = normalizedPlayers
+        .map(({ uid, name, robotId, seat }) => ({ uid, name, robotId, seat }))
+        .sort((left, right) => left.seat - right.seat);
     } else if (event.type === 'player/joined') {
       const payload = event.payload as PlayerJoinedPayload;
       const name = normalizePlayerName(payload.name);
@@ -984,6 +1045,25 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       state.optionPlans = [];
       state.effectDrafts = [];
       refreshPowerDownPending(state);
+    } else if (event.type === 'game/rematch-redirected') {
+      const payload = event.payload as GameRematchRedirectedPayload;
+      const nextRoomCode = normalizeRoomCode(payload?.roomCode ?? '');
+      if (
+        state.resolution?.phase !== 'race-finished' ||
+        !state.resolution.summary ||
+        state.rematchRoomCode ||
+        nextRoomCode.length !== 6 ||
+        nextRoomCode === state.roomCode
+      ) {
+        diagnostic(
+          state,
+          event,
+          'invalid-rematch',
+          'A finished race can redirect its retained racers to one fresh rematch room.'
+        );
+        continue;
+      }
+      state.rematchRoomCode = nextRoomCode;
     } else {
       diagnostic(state, event, 'invalid-event', `Event ${event.id} has an unknown type.`);
       continue;

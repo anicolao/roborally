@@ -20,7 +20,9 @@ import {
   normalizeRoomCode,
   replayRoom,
   type GameCreatedPayload,
+  type GameRematchRedirectedPayload,
   type GameRematchedPayload,
+  type GameRosterTransferredPayload,
   type EffectChosenPayload,
   type EffectDraft,
   type EffectDraftUpdatedPayload,
@@ -33,6 +35,7 @@ import {
   type RoomEvent,
   type RoomEventPayload,
   type RoomEventType,
+  type RoomPlayer,
   type RoomState
 } from './room-model';
 
@@ -296,6 +299,42 @@ export async function createTabletopRoom(
     roomCode: normalizedCode,
     hostUid: user.uid
   });
+}
+
+/**
+ * Create a table-owned rematch room, seed it with the retained racer roster,
+ * then publish the destination to the finished room so connected controllers
+ * can follow it without scanning again.
+ */
+export async function createTabletopRematch(
+  db: Firestore,
+  user: User,
+  sourceRoomCode: string,
+  roomCode: string,
+  players: readonly RoomPlayer[]
+) {
+  const normalizedSource = normalizeRoomCode(sourceRoomCode);
+  const normalizedDestination = normalizeRoomCode(roomCode);
+  await createTabletopRoom(db, user, normalizedDestination);
+  const transfer: GameRosterTransferredPayload = {
+    sourceRoomCode: normalizedSource,
+    players: players.map(({ uid, name, robotId, seat }) => ({ uid, name, robotId, seat }))
+  };
+  await appendRoomEvent(
+    db,
+    user,
+    normalizedDestination,
+    'game/roster-transferred',
+    transfer
+  );
+  const redirect: GameRematchRedirectedPayload = { roomCode: normalizedDestination };
+  await appendRoomEvent(
+    db,
+    user,
+    normalizedSource,
+    'game/rematch-redirected',
+    redirect
+  );
 }
 
 export async function joinRoom(

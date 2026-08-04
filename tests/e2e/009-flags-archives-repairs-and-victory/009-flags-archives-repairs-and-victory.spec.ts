@@ -64,8 +64,11 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
 ) => {
   test.setTimeout(360_000);
   const roomCode = testInfo.project.name === 'phone' ? 'R9PHON' : 'R9DESK';
+  const rematchCode = testInfo.project.name === 'phone' ? 'N9PHON' : 'N9DESK';
   const guestContext: BrowserContext = await browser.newContext();
   const guest = await guestContext.newPage();
+  const tableContext: BrowserContext = await browser.newContext();
+  const table = await tableContext.newPage();
 
   try {
     await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a`);
@@ -84,7 +87,7 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
     const steps = new TestStepHelper(host, testInfo);
     steps.setMetadata(
       'Finish a race through flags, archives, repairs, and rematch',
-      'Two real clients play ten deterministic turns. Ada archives on a repair site, touches all three flags in order, wins from ordinary Program submissions, and the tabletop presents the finish before returning the retained racers to course configuration.'
+      'Two real clients play ten deterministic turns. Ada archives on a repair site, touches all three flags in order, wins from ordinary Program submissions, and a separately authenticated tabletop creates a fresh rematch room that both connected controllers follow automatically.'
     );
 
     await host.getByLabel('Setup seed').fill('REPAIR-4');
@@ -203,24 +206,34 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
       ]
     });
 
-    await enableSyntheticPlaybackClock(host);
-    await host.goto(`/tt/?room=${roomCode}`);
-    await expect(host.getByTestId('tabletop-program-countdown')).toBeVisible();
-    await finishSyntheticPlayback([host]);
-    const finishDialog = host.getByRole('dialog', { name: 'Race finished' });
+    await host.goto(`/hand/?room=${roomCode}&seat=1`);
+    await guest.goto(`/hand/?room=${roomCode}&seat=2`);
+    await expect(host.getByRole('heading', { name: 'Ada' })).toBeVisible();
+    await expect(guest.getByRole('heading', { name: 'Grace' })).toBeVisible();
+
+    await enableSyntheticPlaybackClock(table);
+    await table.goto(`/tt/?room=${roomCode}&e2eRematchRoomCode=${rematchCode}`);
+    steps.setPage(table);
+    await expect(table.getByTestId('tabletop-program-countdown')).toBeVisible();
+    await finishSyntheticPlayback([table]);
+    const finishDialog = table.getByRole('dialog', { name: 'Race finished' });
     await expect(finishDialog.getByRole('heading', { name: 'ADA WINS!' })).toBeVisible();
-    await expect(host.locator('[data-seat="1"] .flag-track')).toHaveAttribute(
+    await expect(table.locator('[data-seat="1"] .flag-track')).toHaveAttribute(
       'aria-label',
       'Ada touched flags: 1, 2, 3'
     );
     await expect(finishDialog.getByRole('button', { name: 'REMATCH · CHOOSE COURSE' })).toBeVisible();
     await expect(finishDialog.getByRole('button', { name: 'NEW GAME' })).toBeVisible();
 
-    const newGameProbe = await host.context().newPage();
+    const newGameProbe = await table.context().newPage();
     await enableSyntheticPlaybackClock(newGameProbe);
     await newGameProbe.goto(`/tt/?room=${roomCode}`);
     await finishSyntheticPlayback([newGameProbe]);
     await newGameProbe.getByRole('button', { name: 'NEW GAME' }).click();
+    await expect(newGameProbe.locator('[data-e2e-tabletop]')).toHaveAttribute(
+      'data-room-code',
+      /^[A-Z0-9]{6}$/
+    );
     await expect(newGameProbe.locator('[data-e2e-tabletop]')).not.toHaveAttribute(
       'data-room-code',
       roomCode
@@ -243,7 +256,7 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
         {
           spec: 'The final player panel retains all three touched flags',
           check: async () => {
-            await expect(host.locator('[data-seat="1"] .flag-track')).toHaveAttribute(
+            await expect(table.locator('[data-seat="1"] .flag-track')).toHaveAttribute(
               'aria-label',
               'Ada touched flags: 1, 2, 3'
             );
@@ -253,27 +266,50 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
     });
 
     await finishDialog.getByRole('button', { name: 'REMATCH · CHOOSE COURSE' }).click();
-    await expect(host.getByLabel('Tabletop race configuration')).toBeVisible();
-    await expect(host.locator('[data-seat="1"]')).toContainText('Ada');
-    await expect(host.locator('[data-seat="2"]')).toContainText('Grace');
-    await expect(host.getByRole('img', { name: /QR code to join position/ })).toHaveCount(6);
+    await expect(table.locator('[data-e2e-tabletop]')).toHaveAttribute(
+      'data-room-code',
+      /^[A-Z0-9]{6}$/
+    );
+    await expect(table.locator('[data-e2e-tabletop]')).not.toHaveAttribute(
+      'data-room-code',
+      roomCode
+    );
+    const rematchRoomCode = await table.locator('[data-e2e-tabletop]').getAttribute('data-room-code');
+    expect(rematchRoomCode).toBe(rematchCode);
+    await expect(table.getByLabel('Tabletop race configuration')).toBeVisible();
+    await expect(table.getByLabel('Setup seed')).toHaveValue('REPAIR-4:rematch');
+    await expect(table.locator('[data-seat="1"]')).toContainText('Ada');
+    await expect(table.locator('[data-seat="2"]')).toContainText('Grace');
+    await expect(table.getByRole('img', { name: /QR code to join position/ })).toHaveCount(6);
+    await expect(host).toHaveURL(new RegExp(`/hand/\\?room=${rematchRoomCode}&seat=1$`));
+    await expect(guest).toHaveURL(new RegExp(`/hand/\\?room=${rematchRoomCode}&seat=2$`));
+    await expect(host.getByRole('heading', { name: 'Ada' })).toBeVisible();
+    await expect(guest.getByRole('heading', { name: 'Grace' })).toBeVisible();
+    await expect(
+      host.locator('section.identity').getByText('The tabletop is choosing the course and settings.')
+    ).toBeVisible();
+    await expect(
+      guest.locator('section.identity').getByText('The tabletop is choosing the course and settings.')
+    ).toBeVisible();
     await steps.step('rematch-starts-new-epoch', {
-      description: 'Rematch returns the retained racers to shared course configuration',
+      description: 'Rematch moves the retained racers and controllers to fresh configuration',
       status: 'skip',
       verifications: [
         {
           spec: 'The table can choose a new board before the next race',
           check: async () => {
-            await expect(host.getByLabel('Tabletop race configuration')).toBeVisible();
-            await expect(host.getByRole('button', { name: 'CONFIGURE RACE' })).toBeEnabled();
+            await expect(table.getByLabel('Tabletop race configuration')).toBeVisible();
+            await expect(table.getByRole('button', { name: 'CONFIGURE RACE' })).toBeEnabled();
           }
         },
         {
-          spec: 'Both existing racers remain seated while the six open positions keep their QR codes',
+          spec: 'Both controllers follow the new room while their seats and the six open QR positions persist',
           check: async () => {
-            await expect(host.locator('[data-seat="1"]')).toContainText('Ada');
-            await expect(host.locator('[data-seat="2"]')).toContainText('Grace');
-            await expect(host.getByRole('img', { name: /QR code to join position/ })).toHaveCount(6);
+            await expect(table.locator('[data-seat="1"]')).toContainText('Ada');
+            await expect(table.locator('[data-seat="2"]')).toContainText('Grace');
+            await expect(table.getByRole('img', { name: /QR code to join position/ })).toHaveCount(6);
+            await expect(host.getByRole('heading', { name: 'Ada' })).toBeVisible();
+            await expect(guest.getByRole('heading', { name: 'Grace' })).toBeVisible();
           }
         }
       ]
@@ -282,5 +318,6 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
     steps.generateDocs();
   } finally {
     await guestContext.close();
+    await tableContext.close();
   }
 });
