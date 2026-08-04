@@ -1,5 +1,9 @@
 import { expect, test, type BrowserContext } from '@playwright/test';
 import { stayActiveInDockOrder } from '../helpers/game-actions';
+import {
+  enableSyntheticPlaybackClock,
+  finishSyntheticPlayback
+} from '../helpers/playback-clock';
 import { TestStepHelper } from '../helpers/test-step-helper';
 
 async function rewindSubmissionDeadline(roomCode: string) {
@@ -76,6 +80,7 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
   let guestContext: BrowserContext | undefined;
 
   try {
+    await enableSyntheticPlaybackClock(host);
     await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}`);
     await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
     await host.getByRole('button', { name: 'Create race' }).click();
@@ -85,6 +90,7 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
 
     guestContext = await browser.newContext();
     const guest = await guestContext.newPage();
+    await enableSyntheticPlaybackClock(guest);
     const steps = new TestStepHelper(host, testInfo);
     steps.setMetadata(
       'Deal and commit programs from one shared deck',
@@ -191,6 +197,8 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
     ).toContainText(preservedPriorities[1]);
 
     await host.getByRole('button', { name: 'Fill timed-out program' }).click();
+    await finishSyntheticPlayback([host, guest]);
+    await expect(host.getByTestId('register-playback')).toBeHidden();
 
     await steps.step('timeout-filled-and-revealed', {
       description: 'An explicit canonical timestamp enables deterministic timeout fill',

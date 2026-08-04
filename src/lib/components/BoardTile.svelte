@@ -6,12 +6,14 @@
     elements,
     walls,
     x,
-    y
+    y,
+    embedded = false
   }: {
     elements: readonly BoardElement[];
     walls: readonly Wall[];
     x: number;
     y: number;
+    embedded?: boolean;
   } = $props();
 
   const directionDegrees: Record<Direction, number> = {
@@ -67,7 +69,6 @@
     }));
   });
   const lasers = $derived(elements.filter((element) => element.kind === 'laser'));
-  const pusher = $derived(elements.find((element) => element.kind === 'pusher'));
   const dock = $derived(elements.find((element) => element.kind === 'dock'));
   const joinedWallCorners = $derived(
     cornerWalls.filter(({ edges }) =>
@@ -77,6 +78,11 @@
 
   function assetFor(element: BoardElement): string {
     if (element.kind === 'repair') return element.option ? 'repair-option.webp' : 'repair.webp';
+    if (element.kind === 'pusher') {
+      return element.activeRegisters.every((register) => register % 2 === 0)
+        ? 'pusher-even.webp'
+        : 'pusher-odd.webp';
+    }
     if (element.kind === 'gear') {
       return element.rotation === 'clockwise'
         ? 'gear-clockwise.webp'
@@ -143,7 +149,13 @@
   );
 </script>
 
-<div class="board-tile" role="gridcell" aria-label={label} data-coordinate={`${x},${y}`}>
+<div
+  class:embedded
+  class="board-tile"
+  role={embedded ? 'presentation' : 'gridcell'}
+  aria-label={embedded ? undefined : label}
+  data-coordinate={embedded ? undefined : `${x},${y}`}
+>
   <img
     class="base-art"
     src={`${base}/assets/board-tiles/floor.webp`}
@@ -174,6 +186,7 @@
 
   {#each lasers as laser}
     <img
+      class:laser-source={laserIsSource(laser)}
       class="laser-art"
       src={`${base}/assets/board-tiles/${laserIsSource(laser) ? 'laser-source' : 'laser-beam'}-${laser.beamCount}.png`}
       style={`--feature-rotation:${directionDegrees[laser.direction]}deg`}
@@ -181,10 +194,6 @@
       draggable="false"
     />
   {/each}
-
-  {#if pusher}
-    <strong class="register-badge" aria-hidden="true">{pusher.activeRegisters.join('·')}</strong>
-  {/if}
 
   {#if dock}
     <strong class="dock-number" aria-hidden="true">{dock.number}</strong>
@@ -221,6 +230,13 @@
     background: #182124;
   }
 
+  .board-tile.embedded {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    aspect-ratio: auto;
+  }
+
   .base-art,
   .feature-art,
   .laser-art,
@@ -254,6 +270,10 @@
     transform: rotate(var(--feature-rotation));
   }
 
+  .laser-art.laser-source {
+    z-index: 7;
+  }
+
   .wall-art {
     z-index: 5;
     object-fit: contain;
@@ -266,7 +286,6 @@
     transform: rotate(var(--wall-corner-rotation));
   }
 
-  .register-badge,
   .dock-number {
     position: absolute;
     z-index: 7;
@@ -276,18 +295,6 @@
     font-family: 'Space Mono', monospace;
     line-height: 1;
     text-shadow: 0 1px 2px #000, 0 0 4px #000;
-  }
-
-  .register-badge {
-    right: 4%;
-    bottom: 5%;
-    min-width: 52%;
-    padding: 4%;
-    border: 1px solid #f4b543;
-    border-radius: 0.18rem;
-    background: rgb(22 17 8 / 88%);
-    color: #ffd879;
-    font-size: clamp(0.38rem, 0.72vw, 0.62rem);
   }
 
   .dock-number {
