@@ -117,7 +117,40 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
     await expect(host.getByTestId('program-conservation')).toContainText('66 undealt');
 
     const guestCards = guest.getByLabel('Your Program hand').getByRole('button');
-    for (let index = 0; index < 5; index += 1) await guestCards.nth(index).click();
+    const guestRegisters = guest
+      .getByRole('list', { name: 'Chosen registers' })
+      .getByRole('button');
+    const priorityOf = async (cardIndex: number) => {
+      const label = await guestCards.nth(cardIndex).getAttribute('aria-label');
+      const priority = label?.match(/priority (\d+)$/)?.[1];
+      if (!priority) throw new Error(`Program card has no priority: ${label}`);
+      return priority;
+    };
+
+    // Targeted tap placement and drag/drop share the same editor on the regular and
+    // private-phone routes. Deliberately fill registers out of order so a compact
+    // prefix implementation cannot accidentally satisfy this test.
+    await guestRegisters.nth(2).click();
+    await guestCards.nth(0).click();
+    await expect(guestRegisters.nth(2)).toContainText(await priorityOf(0));
+    await guestCards.nth(1).dragTo(guestRegisters.nth(4));
+    await expect(guestRegisters.nth(4)).toContainText(await priorityOf(1));
+    await guestCards.nth(2).click();
+    await guestCards.nth(3).click();
+    await guestCards.nth(4).click();
+    await expect(guestRegisters).not.toContainText(['empty', 'empty', 'empty', 'empty', 'empty']);
+
+    // A full program must remain editable: tapping an assigned card clears and
+    // selects its slot, and the next card replaces it without shifting neighbours.
+    const replacedPriority = await priorityOf(0);
+    const replacementPriority = await priorityOf(5);
+    await guestCards.nth(0).click();
+    await expect(guestRegisters.nth(2)).toHaveAttribute('aria-pressed', 'true');
+    await expect(guestRegisters.nth(2)).not.toContainText(replacedPriority);
+    await guestCards.nth(5).click();
+    await expect(guestRegisters.nth(2)).toContainText(replacementPriority);
+    await expect(guestRegisters.nth(4)).toContainText(await priorityOf(1));
+
     await expect(guest.getByRole('list', { name: 'Chosen registers' }).getByRole('listitem'))
       .not.toContainText(['empty', 'empty', 'empty', 'empty', 'empty']);
     await expect(guest.getByText(/Preview excludes robots and unrevealed board outcomes/)).toBeVisible();

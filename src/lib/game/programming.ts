@@ -18,6 +18,8 @@ export interface ProgrammingPlayer {
   registers: ProgramRegister[];
   /** Cards selected in the private, editable draft before submission. */
   draftCardIds: ProgramCard['id'][];
+  /** Five positional draft slots. Locked registers remain null until submission. */
+  draftSlots: (ProgramCard['id'] | null)[];
   submitted: boolean;
   timedOut: boolean;
 }
@@ -95,6 +97,7 @@ export function createProgrammingState(
         return { cardId, locked: cardId !== null };
       }),
       draftCardIds: [],
+      draftSlots: Array.from({ length: REGISTER_COUNT }, () => null),
       submitted: false,
       timedOut: false
     };
@@ -145,7 +148,8 @@ function cloneState(state: ProgrammingState): ProgrammingState {
       ...player,
       hand: [...player.hand],
       registers: player.registers.map((register) => ({ ...register })),
-      draftCardIds: [...player.draftCardIds]
+      draftCardIds: [...player.draftCardIds],
+      draftSlots: draftSlotsForPlayer(player)
     })),
     drawPile: [...state.drawPile],
     currentTurnDiscard: [...state.currentTurnDiscard],
@@ -153,26 +157,75 @@ function cloneState(state: ProgrammingState): ProgrammingState {
   };
 }
 
+export function draftSlotsForPlayer(
+  player: Pick<ProgrammingPlayer, 'registers' | 'draftCardIds' | 'draftSlots'>
+): (ProgramCard['id'] | null)[] {
+  if (Array.isArray(player.draftSlots) && player.draftSlots.length === REGISTER_COUNT) {
+    return [...player.draftSlots];
+  }
+  const slots: (ProgramCard['id'] | null)[] = Array.from(
+    { length: REGISTER_COUNT },
+    () => null
+  );
+  let draftIndex = 0;
+  for (const [registerIndex, register] of player.registers.entries()) {
+    if (!register.locked) slots[registerIndex] = player.draftCardIds[draftIndex++] ?? null;
+  }
+  return slots;
+}
+
+export function draftCardIdsInRegisterOrder(
+  player: Pick<ProgrammingPlayer, 'registers'>,
+  slots: readonly (ProgramCard['id'] | null)[]
+): ProgramCard['id'][] {
+  return player.registers.flatMap((register, registerIndex) => {
+    const cardId = slots[registerIndex];
+    return register.locked || !cardId ? [] : [cardId];
+  });
+}
+
 export function updateProgramDraft(
   current: ProgrammingState,
   actorUid: string,
-  cardIds: readonly ProgramCard['id'][]
+  cardIds: readonly ProgramCard['id'][],
+  draftSlots?: readonly (ProgramCard['id'] | null)[]
 ): ProgrammingState {
   const state = cloneState(current);
   const player = state.players.find(({ uid }) => uid === actorUid);
   const openRegisters = player?.registers.filter(({ locked }) => !locked) ?? [];
+  const nextSlots = player
+    ? draftSlots
+      ? [...draftSlots]
+      : (() => {
+          const slots: (ProgramCard['id'] | null)[] = Array.from(
+            { length: REGISTER_COUNT },
+            () => null
+          );
+          let cardIndex = 0;
+          for (const [registerIndex, register] of player.registers.entries()) {
+            if (!register.locked) slots[registerIndex] = cardIds[cardIndex++] ?? null;
+          }
+          return slots;
+        })()
+    : [];
+  const positionalCardIds = player ? draftCardIdsInRegisterOrder(player, nextSlots) : [];
   if (
     state.phase !== 'programming' ||
     !player ||
     player.submitted ||
+    nextSlots.length !== REGISTER_COUNT ||
+    player.registers.some(({ locked }, index) => locked && nextSlots[index] !== null) ||
     cardIds.length > openRegisters.length ||
-    new Set(cardIds).size !== cardIds.length ||
-    cardIds.some((cardId) => !player.hand.includes(cardId))
+    positionalCardIds.length !== cardIds.length ||
+    positionalCardIds.some((cardId, index) => cardId !== cardIds[index]) ||
+    new Set(positionalCardIds).size !== positionalCardIds.length ||
+    positionalCardIds.some((cardId) => !player.hand.includes(cardId))
   ) {
     state.diagnostics.push(`invalid-program-draft:${actorUid}`);
     return state;
   }
-  player.draftCardIds = [...cardIds];
+  player.draftCardIds = positionalCardIds;
+  player.draftSlots = nextSlots;
   return state;
 }
 
@@ -208,6 +261,7 @@ function placeProgram(
   );
   player.hand = [];
   player.draftCardIds = [];
+  player.draftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
   player.submitted = true;
   player.timedOut = timedOut;
   return true;
@@ -264,8 +318,21 @@ export function timeOutProgram(
   // Draft updates are persisted separately from the timeout claim. They are
   // authoritative for both an owner- and opponent-claimed timeout; the payload
   // remains accepted for replaying older rooms.
-  const effectivePreservedCardIds =
-    target.draftCardIds.length > 0 ? target.draftCardIds : preservedCardIds;
+  const persistedDraftSlots = draftSlotsForPlayer(target);
+  const effectiveDraftSlots = persistedDraftSlots.some(Boolean)
+    ? persistedDraftSlots
+    : (() => {
+        const slots: (ProgramCard['id'] | null)[] = Array.from(
+          { length: REGISTER_COUNT },
+          () => null
+        );
+        let preservedIndex = 0;
+        for (const [registerIndex, register] of target.registers.entries()) {
+          if (!register.locked) slots[registerIndex] = preservedCardIds[preservedIndex++] ?? null;
+        }
+        return slots;
+      })();
+  const effectivePreservedCardIds = draftCardIdsInRegisterOrder(target, effectiveDraftSlots);
   const needed = target.registers.filter(({ locked }) => !locked).length;
   if (
     effectivePreservedCardIds.length > needed ||
@@ -286,12 +353,13 @@ export function timeOutProgram(
     const selected = Math.floor(random() * (index + 1));
     [available[index], available[selected]] = [available[selected], available[index]];
   }
-  placeProgram(
-    state,
-    target,
-    [...effectivePreservedCardIds, ...available.slice(0, needed - effectivePreservedCardIds.length)],
-    true
-  );
+  const randomFill = available.slice(0, needed - effectivePreservedCardIds.length);
+  let fillIndex = 0;
+  const completedCardIds = target.registers.flatMap((register, registerIndex) => {
+    if (register.locked) return [];
+    return [effectiveDraftSlots[registerIndex] ?? randomFill[fillIndex++]];
+  });
+  placeProgram(state, target, completedCardIds, true);
   closeProgrammingIfComplete(state);
   return state;
 }

@@ -350,12 +350,14 @@ export async function updateProgramDraft(
   user: User,
   roomCode: string,
   cardIds: ProgramDraftUpdatedPayload['cardIds'],
-  turnId: ProgramDraftUpdatedPayload['turnId'] = 'turn-001'
+  turnId: ProgramDraftUpdatedPayload['turnId'] = 'turn-001',
+  slots?: ProgramDraftUpdatedPayload['slots']
 ) {
   await appendRoomEvent(db, user, roomCode, 'program/draft-updated', {
     uid: user.uid,
     turnId,
-    cardIds
+    cardIds,
+    ...(slots ? { slots } : {})
   });
 }
 

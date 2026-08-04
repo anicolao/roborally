@@ -189,11 +189,29 @@ test('a keyboard and touch-operable race completes at every target viewport', as
       name: turns[0].host[2],
       exact: true
     });
+    const secondRegister = host
+      .getByRole('list', { name: 'Chosen registers' })
+      .getByRole('button')
+      .nth(1);
+    await secondRegister.focus();
+    await secondRegister.press('Enter');
+    await expect(secondRegister).toHaveAttribute('aria-pressed', 'true');
+    const replacementCard = host
+      .getByLabel('Your Program hand')
+      .locator('button[aria-pressed="false"]')
+      .first();
+    const replacementLabel = await replacementCard.getAttribute('aria-label');
+    if (!replacementLabel) throw new Error('Replacement Program card has no accessible label.');
+    const stableReplacementCard = host.getByRole('button', {
+      name: replacementLabel,
+      exact: true
+    });
+    await replacementCard.focus();
+    await replacementCard.press('Enter');
+    await expect(stableReplacementCard).toHaveAttribute('data-register-index', '2');
+    await stableReplacementCard.press('Enter');
     await keyboardCard.focus();
-    await keyboardCard.press('Shift+ArrowLeft');
-    await expect(keyboardCard).toHaveAttribute('data-register-index', '2');
-    await host.getByLabel('Register to reorder').selectOption('1');
-    await host.getByRole('button', { name: 'Move selected register later' }).click();
+    await host.getByRole('button', { name: turns[0].host[1], exact: true }).press('Enter');
     await expect(keyboardCard).toHaveAttribute('data-register-index', '3');
     const chosenRegisters = host
       .getByRole('list', { name: 'Chosen registers' })
@@ -215,9 +233,9 @@ test('a keyboard and touch-operable race completes at every target viewport', as
           }
         },
         {
-          spec: 'Keyboard reordering and the pointer-friendly toolbar preserve the exact Program',
+          spec: 'Keyboard slot selection and replacement preserve the exact Program',
           check: async () => {
-            await expect(host.getByLabel('Register ordering controls')).toBeVisible();
+            await expect(host.getByLabel('Register ordering controls')).toHaveCount(0);
             await expect(keyboardCard).toHaveAttribute('data-register-index', '3');
           }
         }
