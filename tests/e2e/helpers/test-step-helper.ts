@@ -36,6 +36,10 @@ export class TestStepHelper {
     this.metadataDescription = description;
   }
 
+  setPage(page: Page) {
+    this.page = page;
+  }
+
   async step(id: string, options: StepOptions) {
     for (const verification of options.verifications) {
       await verification.check();

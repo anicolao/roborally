@@ -36,6 +36,8 @@ service cloud.firestore {
           'effect/draft-updated',
           'effect/chosen',
           'game/rematched',
+          'game/roster-transferred',
+          'game/rematch-redirected',
           'power-down/responded'
         ]
         && request.resource.data.payload is map
@@ -138,6 +140,21 @@ service cloud.firestore {
             && request.resource.data.payload.epoch is int
             && request.resource.data.payload.epoch > 1
             && request.resource.data.payload.seed is string
+          )
+          ||
+          (
+            request.resource.data.type == 'game/roster-transferred'
+            && request.resource.data.payload.sourceRoomCode is string
+            && request.resource.data.payload.sourceRoomCode.matches('[A-Z0-9]{6}')
+            && request.resource.data.payload.players is list
+            && request.resource.data.payload.players.size() >= 2
+            && request.resource.data.payload.players.size() <= 8
+          )
+          ||
+          (
+            request.resource.data.type == 'game/rematch-redirected'
+            && request.resource.data.payload.roomCode is string
+            && request.resource.data.payload.roomCode.matches('[A-Z0-9]{6}')
           )
           ||
           (

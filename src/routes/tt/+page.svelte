@@ -9,7 +9,13 @@
   import CourseBoard from '$lib/components/CourseBoard.svelte';
   import ProgramCardFace from '$lib/components/ProgramCardFace.svelte';
   import { initializeFirebase, type FirebaseServices } from '$lib/firebase';
-  import { MAX_ROOM_PLAYERS, ROBOTS, emptyRoomState, type RoomState } from '$lib/room-model';
+  import {
+    MAX_ROOM_PLAYERS,
+    ROBOTS,
+    emptyRoomState,
+    normalizeRoomCode,
+    type RoomState
+  } from '$lib/room-model';
   import * as RoomService from '$lib/room-service';
   import { PUBLISHED_COURSES_BY_ID } from '$lib/game/course-catalog';
   import { compilePlayableCourse } from '$lib/game/playable-courses';
@@ -41,6 +47,7 @@
   let selectedCourseId: PlayableCourseId = 'risky-exchange';
   let setupSeed = 'RALLY-2005';
   let setupLives: 3 | 4 = 3;
+  let e2eRematchRoomCode = '';
   let unsubscribe: Unsubscribe | undefined;
   let playbackPhase: PlaybackPhase = 'idle';
   let playbackCountdown = 3;
@@ -97,10 +104,22 @@
     try {
       services = await initializeFirebase();
       const params = new URLSearchParams(location.search);
-      const requestedRoom = (params.get('room') ?? '').trim().toUpperCase();
+      const requestedRoom = normalizeRoomCode(params.get('room') ?? '');
       const e2eRoom = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true'
-        ? (params.get('e2eRoomCode') ?? '').trim().toUpperCase()
+        ? normalizeRoomCode(params.get('e2eRoomCode') ?? '')
         : '';
+      e2eRematchRoomCode = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true'
+        ? normalizeRoomCode(params.get('e2eRematchRoomCode') ?? '')
+        : '';
+      const requestedCourse = params.get('course');
+      if (
+        requestedCourse &&
+        PLAYABLE_COURSE_IDS.includes(requestedCourse as (typeof PLAYABLE_COURSE_IDS)[number])
+      ) {
+        selectedCourseId = requestedCourse as PlayableCourseId;
+      }
+      if (params.get('lives') === '4') setupLives = 4;
+      setupSeed = params.get('seed')?.slice(0, 64) || setupSeed;
       roomCode = requestedRoom || e2eRoom || RoomService.createRoomCode();
 
       const joinBase = `${location.origin}${base}/hand/`;
@@ -127,6 +146,10 @@
       }
       unsubscribe = RoomService.subscribeRoom(services.db, roomCode, (next) => {
         state = next;
+        if (next.rematchRoomCode && next.rematchRoomCode !== roomCode && !pending) {
+          location.replace(`${base}/tt/?room=${next.rematchRoomCode}`);
+          return;
+        }
         status = next.resolution ? `Turn ${next.resolution.turnNumber} · ${next.resolution.phase.replaceAll('-', ' ')}` :
           next.configuration ? 'Race configured · waiting for racers' : 'Waiting for race configuration';
       }, (error) => { status = error.message; });
@@ -244,7 +267,7 @@
   }
 
   async function rematchRace() {
-    if (!services || !isTableHost || state.resolution?.phase !== 'race-finished') return;
+    if (!services || state.resolution?.phase !== 'race-finished' || pending) return;
     const priorConfiguration = state.configuration;
     if (
       priorConfiguration &&
@@ -255,19 +278,27 @@
       selectedCourseId = priorConfiguration.courseId;
     }
     setupLives = priorConfiguration?.lives ?? 3;
-    setupSeed = `${priorConfiguration?.seed ?? 'RALLY-2005'}:rematch-${state.raceEpoch + 1}`;
+    setupSeed = `${priorConfiguration?.seed ?? 'RALLY-2005'}:rematch`;
+    const nextRoomCode = e2eRematchRoomCode || RoomService.createRoomCode();
     pending = true;
     error = '';
     try {
-      await RoomService.rematchGame(services.db, services.user, roomCode, {
-        epoch: state.raceEpoch + 1,
-        seed: setupSeed
-      });
-      resetProgramPlayback();
+      await RoomService.createTabletopRematch(
+        services.db,
+        services.user,
+        roomCode,
+        nextRoomCode,
+        state.players
+      );
+      const destination = new URL(`${location.origin}${base}/tt/`);
+      destination.searchParams.set('room', nextRoomCode);
+      destination.searchParams.set('course', selectedCourseId);
+      destination.searchParams.set('lives', String(setupLives));
+      destination.searchParams.set('seed', setupSeed);
+      location.replace(destination.toString());
     } catch (nextError) {
       console.error(nextError);
-      error = 'The tabletop could not return the racers to configuration.';
-    } finally {
+      error = 'The tabletop could not create and connect the rematch room.';
       pending = false;
     }
   }
@@ -321,11 +352,9 @@
             : 'The final flag was touched simultaneously. The victory is shared.'}
         </p>
         <div class="finish-actions">
-          {#if isTableHost}
-            <button type="button" onclick={rematchRace} disabled={pending}>
-              {pending ? 'RESETTING…' : 'REMATCH · CHOOSE COURSE'}
-            </button>
-          {/if}
+          <button type="button" onclick={rematchRace} disabled={pending}>
+            {pending ? 'CONNECTING REMATCH…' : 'REMATCH · CHOOSE COURSE'}
+          </button>
           <button type="button" class="new-game" onclick={startNewGame}>NEW GAME</button>
         </div>
       </div>

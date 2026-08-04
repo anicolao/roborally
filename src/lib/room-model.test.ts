@@ -102,6 +102,43 @@ describe('immutable room replay', () => {
     expect(state.diagnostics.map(({ code }) => code)).toEqual(['seat-unavailable']);
   });
 
+  it('transfers a retained tabletop roster into a fresh table-owned room', () => {
+    const rematchCreated = event('table', 1, 'game/created', {
+      gameId: 'newrm2',
+      roomCode: 'NEWRM2',
+      hostUid: 'table'
+    });
+    const transferred = event('table', 2, 'game/roster-transferred', {
+      sourceRoomCode: 'OLDRM2',
+      players: [
+        { uid: 'ada', name: 'Ada', robotId: 'axle', seat: 7 },
+        { uid: 'grace', name: 'Grace', robotId: 'bit', seat: 2 }
+      ]
+    });
+
+    const state = replayRoom([transferred, rematchCreated]);
+
+    expect(state.hostUid).toBe('table');
+    expect(state.players).toEqual([
+      { uid: 'grace', name: 'Grace', robotId: 'bit', seat: 2 },
+      { uid: 'ada', name: 'Ada', robotId: 'axle', seat: 7 }
+    ]);
+    expect(state.configuration).toBeNull();
+    expect(state.rematchRoomCode).toBe('');
+    expect(state.diagnostics).toEqual([]);
+  });
+
+  it('rejects rematch redirects before a race has finished', () => {
+    const redirect = event('table', 1, 'game/rematch-redirected', {
+      roomCode: 'NEWRM2'
+    }, 2);
+
+    const state = replayRoom([created, redirect]);
+
+    expect(state.rematchRoomCode).toBe('');
+    expect(state.diagnostics.map(({ code }) => code)).toEqual(['invalid-rematch']);
+  });
+
   it('rejects stale, duplicate, incompatible, and conflicting events without partial mutation', () => {
     const joinedHost = event('host', 2, 'player/joined', {
       uid: 'host',

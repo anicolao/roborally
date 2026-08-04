@@ -268,6 +268,44 @@ describe('append-only game stream rules', () => {
     );
   });
 
+  it('allows shaped tabletop roster transfers and finished-room redirects', async () => {
+    const db = environment.authenticatedContext('tabletop').firestore();
+    const players = [
+      { uid: 'robot-a', name: 'Ada', robotId: 'axle', seat: 1 },
+      { uid: 'robot-b', name: 'Grace', robotId: 'bit', seat: 7 }
+    ];
+    await assertSucceeds(
+      setDoc(doc(db, 'games/newrm2/events/tabletop-000001'), {
+        ...eventData('tabletop'),
+        type: 'game/roster-transferred',
+        payload: { sourceRoomCode: 'OLDRM2', players }
+      })
+    );
+    await assertSucceeds(
+      setDoc(doc(db, 'games/oldrm2/events/tabletop-000001'), {
+        ...eventData('tabletop'),
+        type: 'game/rematch-redirected',
+        payload: { roomCode: 'NEWRM2' }
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, 'games/newrm2/events/tabletop-000002'), {
+        ...eventData('tabletop'),
+        type: 'game/roster-transferred',
+        clientSeq: 2,
+        payload: { sourceRoomCode: 'BAD', players }
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, 'games/oldrm2/events/tabletop-000002'), {
+        ...eventData('tabletop'),
+        type: 'game/rematch-redirected',
+        clientSeq: 2,
+        payload: { roomCode: 'TOO-LONG' }
+      })
+    );
+  });
+
   it('attributes ordered power-down responses to their owner', async () => {
     const db = environment.authenticatedContext('robot-a').firestore();
     await assertSucceeds(

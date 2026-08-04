@@ -20,6 +20,7 @@
     MAX_ROOM_PLAYERS,
     ROBOTS,
     emptyRoomState,
+    normalizeRoomCode,
     normalizePlayerName,
     type RobotId,
     type RoomState
@@ -80,7 +81,7 @@
 
   onMount(async () => {
     const params = new URLSearchParams(location.search);
-    roomCode = (params.get('room') ?? '').trim().toUpperCase();
+    roomCode = normalizeRoomCode(params.get('room') ?? '');
     requestedSeat = Number(params.get('seat') ?? 0);
     if (!roomCode) return;
     try {
@@ -88,6 +89,13 @@
       unsubscribe = RoomService.subscribeRoom(services.db, roomCode, (next) => {
         state = next;
         const nextPlayer = next.players.find((candidate) => candidate.uid === uid);
+        if (next.rematchRoomCode && nextPlayer) {
+          unsubscribe?.();
+          location.replace(
+            `${base}/hand/?room=${next.rematchRoomCode}&seat=${nextPlayer.seat}`
+          );
+          return;
+        }
         const nextActiveProgramming =
           next.nextProgramming?.turnNumber === requestedTurnNumber
             ? next.nextProgramming
