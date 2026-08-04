@@ -860,11 +860,22 @@
     }
     pending = true;
     try {
+      const nextSeed = `${roomState.configuration?.seed ?? 'RALLY-2005'}:rematch-${
+        roomState.raceEpoch + 1
+      }`;
+      if (
+        roomState.configuration &&
+        PLAYABLE_COURSE_IDS.includes(
+          roomState.configuration.courseId as (typeof PLAYABLE_COURSE_IDS)[number]
+        )
+      ) {
+        selectedCourseId = roomState.configuration.courseId;
+      }
+      setupLives = roomState.configuration?.lives ?? 3;
+      setupSeed = nextSeed;
       await roomService.rematchGame(services.db, services.user, roomCode, {
         epoch: roomState.raceEpoch + 1,
-        seed: `${roomState.configuration?.seed ?? 'RALLY-2005'}:rematch-${
-          roomState.raceEpoch + 1
-        }`
+        seed: nextSeed
       });
       requestedTurnNumber = 1;
       programDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
@@ -1321,11 +1332,15 @@
                   </button>
                 {/if}
                 {#if !playbackIsActive && roomState.resolution.summary}
-                  {@const winner = roomState.players.find(
-                    ({ uid }) => uid === roomState.resolution?.summary?.winnerUid
-                  )}
+                  {@const winners = roomState.resolution.summary.winnerUids
+                    .map((uid) => roomState.players.find((player) => player.uid === uid))
+                    .filter((player) => player !== undefined)}
                   <section class="race-summary" aria-label="Immutable race summary">
-                    <strong>{winner?.name} wins {configuredCourse?.name ?? 'the race'}</strong>
+                    <strong>
+                      {winners.length === 1
+                        ? `${winners[0].name} wins ${configuredCourse?.name ?? 'the race'}`
+                        : `${winners.map(({ name }) => name).join(' & ')} tie for the win in ${configuredCourse?.name ?? 'the race'}`}
+                    </strong>
                     <span>
                       Epoch {roomState.raceEpoch} ·
                       {roomState.resolution.summary.standings.length} final standings retained

@@ -19,7 +19,7 @@ The shared display creates a fresh room, exposes eight position-specific QR join
 
 - [x] Each scanned phone occupies the physical position encoded by its QR link
 - [x] The course fills its center viewport with square, fully visible cells
-- [x] Claimed positions show public Life, damage, and power tracks
+- [x] Claimed positions show public Life, damage, power, and ordered flag tracks
 - [x] Private phones receive Program decks without course controls
 - [x] Private Program controllers fill the phone viewport and support touch dragging without scrolling
 

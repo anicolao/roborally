@@ -83,6 +83,15 @@
             : '';
   $: presentedRobots = playbackRobots ?? state.resolution?.robots;
   $: latestPlaybackEntry = playbackTrace.at(-1);
+  $: isTableHost = services?.user.uid === state.hostUid;
+  $: finishWinners = (state.resolution?.summary?.winnerUids ?? [])
+    .map((uid) => state.players.find((player) => player.uid === uid))
+    .filter((player) => player !== undefined);
+  $: finishOverlayVisible =
+    state.resolution?.phase === 'race-finished' &&
+    !!state.resolution.summary &&
+    !playbackIsActive &&
+    playbackPhase === 'complete';
 
   onMount(async () => {
     try {
@@ -233,6 +242,39 @@
       pending = false;
     }
   }
+
+  async function rematchRace() {
+    if (!services || !isTableHost || state.resolution?.phase !== 'race-finished') return;
+    const priorConfiguration = state.configuration;
+    if (
+      priorConfiguration &&
+      PLAYABLE_COURSE_IDS.includes(
+        priorConfiguration.courseId as (typeof PLAYABLE_COURSE_IDS)[number]
+      )
+    ) {
+      selectedCourseId = priorConfiguration.courseId;
+    }
+    setupLives = priorConfiguration?.lives ?? 3;
+    setupSeed = `${priorConfiguration?.seed ?? 'RALLY-2005'}:rematch-${state.raceEpoch + 1}`;
+    pending = true;
+    error = '';
+    try {
+      await RoomService.rematchGame(services.db, services.user, roomCode, {
+        epoch: state.raceEpoch + 1,
+        seed: setupSeed
+      });
+      resetProgramPlayback();
+    } catch (nextError) {
+      console.error(nextError);
+      error = 'The tabletop could not return the racers to configuration.';
+    } finally {
+      pending = false;
+    }
+  }
+
+  function startNewGame() {
+    location.assign(`${base}/tt/`);
+  }
 </script>
 
 <svelte:head><title>Robo Rally · Tabletop</title></svelte:head>
@@ -264,6 +306,32 @@
     </div>
   {/if}
 
+  {#if finishOverlayVisible}
+    <div class="race-finish-overlay" role="dialog" aria-modal="true" aria-label="Race finished">
+      <div>
+        <span>RACE COMPLETE</span>
+        <h1>
+          {finishWinners.length === 1
+            ? `${finishWinners[0].name} WINS!`
+            : `${finishWinners.map(({ name }) => name).join(' + ')} TIE!`}
+        </h1>
+        <p>
+          {finishWinners.length === 1
+            ? `${finishWinners[0].name} touched every flag in order.`
+            : 'The final flag was touched simultaneously. The victory is shared.'}
+        </p>
+        <div class="finish-actions">
+          {#if isTableHost}
+            <button type="button" onclick={rematchRace} disabled={pending}>
+              {pending ? 'RESETTING…' : 'REMATCH · CHOOSE COURSE'}
+            </button>
+          {/if}
+          <button type="button" class="new-game" onclick={startNewGame}>NEW GAME</button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <section
     class:side-seats={tabletopLayout === 'side-seats'}
     class:top-bottom-seats={tabletopLayout === 'top-bottom-seats'}
@@ -288,6 +356,7 @@
             : raceRobot?.powerDownNextTurn
               ? 'announced'
               : 'active'}
+          {@const touchedFlags = raceRobot?.touchedFlags ?? []}
           <strong>{player.name}</strong>
           <small>{robot?.name}</small>
           <div
@@ -305,6 +374,15 @@
               <b>DMG</b>
               {#each Array(10) as _, damageIndex}
                 <i class:taken={damageIndex < damage} class:available={damageIndex >= damage}></i>
+              {/each}
+            </div>
+            <div
+              class="flag-track"
+              aria-label={`${player.name} touched flags: ${touchedFlags.length ? touchedFlags.join(', ') : 'none'}`}
+            >
+              <b>FLAGS</b>
+              {#each layoutCourse.course.flags as flag}
+                <i class:touched={touchedFlags.includes(flag.number)}>{flag.number}</i>
               {/each}
             </div>
             <div class:down={powerMode === 'down'} class:announced={powerMode === 'announced'} class="power-state">
@@ -417,6 +495,15 @@
   .register-playback strong { color: #d2ff37; font-size: clamp(16px, 2vw, 28px); text-transform: uppercase; }
   .register-playback span { overflow: hidden; font-size: clamp(14px, 1.5vw, 20px); text-overflow: ellipsis; white-space: nowrap; }
   .register-playback i { display: block; height: 5px; background: linear-gradient(90deg, #d2ff37 0 calc(var(--playback-progress) * 100%), #344043 calc(var(--playback-progress) * 100%) 100%); }
+  .race-finish-overlay { position: fixed; z-index: 55; inset: 0; display: grid; padding: clamp(16px, 5vw, 70px); place-items: center; background: #050909e8; }
+  .race-finish-overlay > div { display: grid; width: min(92vw, 1000px); gap: clamp(12px, 2vh, 28px); justify-items: center; padding: clamp(24px, 5vw, 70px); border: 4px solid #d2ff37; border-radius: 18px; background: radial-gradient(circle at top, #243739, #0c1213 72%); box-shadow: 0 0 80px #d2ff3744; text-align: center; }
+  .race-finish-overlay span { color: #ffcf4b; font: 700 clamp(20px, 3vw, 42px) 'Space Mono', monospace; letter-spacing: .14em; }
+  .race-finish-overlay h1 { margin: 0; color: #d2ff37; font: 700 clamp(48px, 10vw, 150px)/.95 'Space Mono', monospace; text-shadow: 0 0 32px #d2ff3766; text-transform: uppercase; }
+  .race-finish-overlay p { margin: 0; color: #eef4ee; font-size: clamp(18px, 2.4vw, 34px); }
+  .finish-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+  .finish-actions button { min-height: 58px; padding: 10px 24px; border: 2px solid #d2ff37; border-radius: 6px; color: #101718; background: #d2ff37; font: 700 clamp(15px, 1.8vw, 24px) 'Space Mono', monospace; }
+  .finish-actions button.new-game { border-color: #eef4ee; color: #eef4ee; background: transparent; }
+  .finish-actions button:disabled { opacity: .55; }
   .table { position: relative; display: grid; width: 100%; height: 100%; min-width: 0; min-height: 0; gap: clamp(4px, 1vw, 12px); margin: 0; }
   .table.top-bottom-seats { grid-template-columns: repeat(4, minmax(78px, 1fr)); grid-template-rows: clamp(120px, 20vh, 190px) minmax(0, 1fr) clamp(120px, 20vh, 190px); }
   .table.side-seats { grid-template-columns: clamp(78px, 18vw, 260px) minmax(0, 1fr) clamp(78px, 18vw, 260px); grid-template-rows: repeat(4, minmax(0, 1fr)); }
@@ -436,11 +523,14 @@
   .life-track, .damage-track { display: flex; min-width: 0; align-items: center; gap: 3px; }
   .life-track { grid-column: 1; }
   .damage-track { grid-column: 1 / -1; }
+  .flag-track { grid-column: 1 / -1; display: flex; align-items: center; gap: 5px; }
   .robot-vitals b { width: 32px; flex: 0 0 32px; color: #849294; font-size: 9px; letter-spacing: .08em; }
   .life-track i { color: #394648; font-size: 14px; font-style: normal; line-height: 1; }
   .life-track i.remaining { color: #d2ff37; filter: drop-shadow(0 0 3px #d2ff3788); }
   .damage-track i { height: 9px; min-width: 8px; flex: 1; border: 1px solid #4c5a5d; border-radius: 1px; background: #202b2d; }
   .damage-track i.taken { border-color: #ff684f; background: #ff684f; box-shadow: 0 0 3px #ff684f99; }
+  .flag-track i { display: grid; width: 18px; height: 18px; place-items: center; border: 1px solid #526164; border-radius: 50%; color: #718083; background: #202b2d; font: 700 10px 'Space Mono', monospace; font-style: normal; }
+  .flag-track i.touched { border-color: #ffcf4b; color: #111718; background: #ffcf4b; box-shadow: 0 0 6px #ffcf4b99; }
   .power-state { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: 5px; color: #9ff07f; font-size: 9px; white-space: nowrap; }
   .power-state i { width: 10px; height: 10px; border: 2px solid #263126; border-radius: 50%; background: #8dff69; box-shadow: 0 0 6px #8dff69; }
   .power-state.announced { color: #ffcf4b; }
@@ -458,9 +548,9 @@
   .course-control > div span { color: #d2ff37; font: 700 20px 'Space Mono', monospace; }
   .course-control > div strong { font: 700 clamp(32px, 5vw, 66px) 'Space Mono', monospace; text-transform: uppercase; }
   .course-control > div small { color: #aebbb9; font-size: 20px; }
-  .course-control form { display: grid; grid-template-columns: 1.4fr 1fr 1fr auto; align-items: end; gap: 12px; }
-  .course-control label { display: grid; gap: 6px; color: #d2ff37; font: 700 14px 'Space Mono', monospace; text-transform: uppercase; }
-  .course-control :is(select, input, button) { min-height: 52px; border: 1px solid #657577; padding: 8px 12px; color: #eef4ee; background: #101718; font: 700 16px 'Atkinson Hyperlegible', sans-serif; }
+  .course-control form { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 12px; }
+  .course-control label { display: grid; min-width: 0; gap: 6px; color: #d2ff37; font: 700 14px 'Space Mono', monospace; text-transform: uppercase; }
+  .course-control :is(select, input, button) { width: 100%; min-width: 0; min-height: 52px; border: 1px solid #657577; padding: 8px 12px; color: #eef4ee; background: #101718; font: 700 16px 'Atkinson Hyperlegible', sans-serif; }
   .course-control button { border-color: #d2ff37; color: #101718; background: #d2ff37; font-family: 'Space Mono', monospace; }
   .course-control button:disabled { opacity: .45; }
   .configured { margin: 0; color: #ffcf4b; font: 700 15px 'Space Mono', monospace; text-align: center; text-transform: uppercase; }

@@ -472,7 +472,6 @@ function resolveReadyProgramming(state: RoomState) {
     state.programming,
     state.setup,
     robots,
-    false,
     state.resolution?.optionDeck ?? createOptionDeck(state.configuration?.seed ?? state.gameId),
     optionPlans
   );
@@ -662,7 +661,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         state.setup = deriveRaceSetup(state.players, state.configuration);
         state.programming = createProgrammingState(state.setup, state.configuration);
         state.nextProgramming = null;
-        state.raceEpoch = 1;
+        if (state.raceEpoch === 0) state.raceEpoch = 1;
         state.powerDownResponses = [];
         state.optionPlans = [];
         state.effectDrafts = [];
@@ -974,9 +973,11 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         summary: state.resolution.summary
       });
       state.raceEpoch = payload.epoch;
-      state.configuration = { ...state.configuration, seed: payload.seed };
-      state.setup = deriveRaceSetup(state.players, state.configuration);
-      state.programming = createProgrammingState(state.setup, state.configuration);
+      state.configuration = null;
+      state.configurationEventId = '';
+      state.readyPlayerUids = [];
+      state.setup = null;
+      state.programming = null;
       state.nextProgramming = null;
       state.resolution = null;
       state.powerDownResponses = [];

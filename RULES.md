@@ -22,6 +22,10 @@ Each player controls one robot. The first robot to touch every flag in numeric
 order wins immediately. The players may instead agree to continue after the
 winner finishes to determine runners-up.
 
+If multiple robots touch their final required flag during the same Touch
+Checkpoints phase, they tie for the win. Program-card priority and original
+Dock order do not break a simultaneous checkpoint tie.
+
 Touching a later flag early gives no progress. A robot must survive through the
 laser step before it can touch a flag during that register.
 
@@ -336,9 +340,9 @@ Archive updates happen after every register, but repair and Option benefits
 happen only during cleanup after register 5.
 
 The current projection enforces this checkpoint after every laser snapshot.
-Out-of-order flags still move the Archive but do not advance progress. Flag 3
-ends Program resolution immediately and freezes winner, optional runner-up,
-and final robot standings for the race epoch.
+Out-of-order flags still move the Archive but do not advance progress. The
+course's final flag ends Program resolution immediately and freezes all tied
+winners, optional runners-up, and final robot standings for the race epoch.
 
 ## Cleanup
 

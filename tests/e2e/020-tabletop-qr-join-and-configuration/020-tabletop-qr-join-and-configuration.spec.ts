@@ -319,6 +319,11 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expect(adaSeat.locator('.life-track i.remaining')).toHaveCount(3);
     await expect(adaSeat.locator('.damage-track i.available')).toHaveCount(10);
     await expect(adaSeat.locator('.power-state')).toContainText('ACTIVE');
+    await expect(adaSeat.locator('.flag-track')).toHaveAttribute(
+      'aria-label',
+      'Ada touched flags: none'
+    );
+    await expect(adaSeat.locator('.flag-track i')).toHaveCount(3);
     await expect(firstPhone.getByRole('heading', { name: 'Program deck' })).toBeVisible();
     await expect(secondPhone.getByRole('heading', { name: 'Program deck' })).toBeVisible();
     await expect(firstPhone.getByLabel('Course')).toHaveCount(0);
@@ -373,11 +378,12 @@ test('the tabletop owns configuration and seat QR codes open private controllers
           }
         },
         {
-          spec: 'Claimed positions show public Life, damage, and power tracks',
+          spec: 'Claimed positions show public Life, damage, power, and ordered flag tracks',
           check: async () => {
             await expect(adaSeat.locator('.life-track i.remaining')).toHaveCount(3);
             await expect(adaSeat.locator('.damage-track i.available')).toHaveCount(10);
             await expect(adaSeat.locator('.power-state')).toContainText('ACTIVE');
+            await expect(adaSeat.locator('.flag-track i')).toHaveCount(3);
           }
         },
         {
