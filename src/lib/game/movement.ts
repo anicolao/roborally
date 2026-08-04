@@ -122,14 +122,14 @@ export interface ProgramResolution {
   optionDeck: OptionDeckState;
   nextOptionChoiceUid: string | null;
   nextReentryUid: string | null;
-  winnerUid: string | null;
+  winnerUids: string[];
   runnersUpUids: string[];
   summary: RaceSummary | null;
   playback: ProgramPlayback;
 }
 
 export interface RaceSummary {
-  winnerUid: string;
+  winnerUids: readonly string[];
   runnersUpUids: readonly string[];
   standings: readonly {
     uid: string;
@@ -1172,11 +1172,11 @@ export function resolveRepairCleanup(
 
 export function createRaceSummary(
   robots: readonly RaceRobotPosition[],
-  winnerUid: string,
+  winnerUids: readonly string[],
   runnersUpUids: readonly string[]
 ): RaceSummary {
   return Object.freeze({
-    winnerUid,
+    winnerUids: Object.freeze([...winnerUids]),
     runnersUpUids: Object.freeze([...runnersUpUids]),
     standings: Object.freeze(
       robots.map((robot) =>
@@ -1213,7 +1213,7 @@ function nextOptionLossRobot(robots: readonly RaceRobotPosition[]) {
 }
 
 function updateResolutionPhase(resolution: ProgramResolution) {
-  if (resolution.winnerUid) {
+  if (resolution.winnerUids.length > 0) {
     resolution.nextReentryUid = null;
     resolution.phase = 'race-finished';
     return;
@@ -1433,7 +1433,6 @@ export function resolveProgrammedTurn(
   programming: ProgrammingState,
   setup: RaceSetup,
   initialRobots = createRaceRobotPositions(setup),
-  includeRunnersUp = false,
   initialOptionDeck?: OptionDeckState,
   optionPlans: Readonly<Record<string, OptionTurnPlan>> = {}
 ): ProgramResolution | null {
@@ -1561,16 +1560,20 @@ export function resolveProgrammedTurn(
       optionDeck
     );
     if (finishers.length > 0) {
-      const winnerUid = finishers[0];
-      const runnersUpUids = includeRunnersUp ? finishers.slice(1) : [];
-      const winner = robots.find(({ uid }) => uid === winnerUid)!;
+      const winnerUids = finishers;
+      const runnersUpUids: string[] = [];
+      const winnerNames = winnerUids.map(
+        (uid) => robots.find((robot) => robot.uid === uid)!.name
+      );
       addTrace(
         trace,
         register,
-        winnerUid,
+        winnerUids[0],
         null,
         'winner',
-        `${winner.name} touched the final Flag in order and won the race.`
+        winnerNames.length === 1
+          ? `${winnerNames[0]} touched the final Flag in order and won the race.`
+          : `${winnerNames.join(' and ')} touched the final Flag simultaneously and tied for the win.`
       );
       playback.frames.push({
         register: register as RegisterNumber,
@@ -1589,9 +1592,9 @@ export function resolveProgrammedTurn(
         optionDeck,
         nextOptionChoiceUid: null,
         nextReentryUid: null,
-        winnerUid,
+        winnerUids,
         runnersUpUids,
-        summary: createRaceSummary(robots, winnerUid, runnersUpUids),
+        summary: createRaceSummary(robots, winnerUids, runnersUpUids),
         playback
       };
     }
@@ -1624,7 +1627,7 @@ export function resolveProgrammedTurn(
     optionDeck,
     nextOptionChoiceUid: null,
     nextReentryUid: null,
-    winnerUid: null,
+    winnerUids: [],
     runnersUpUids: [],
     summary: null,
     playback

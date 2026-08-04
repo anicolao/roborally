@@ -1,5 +1,9 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { stayActiveInDockOrder } from '../helpers/game-actions';
+import {
+  enableSyntheticPlaybackClock,
+  finishSyntheticPlayback
+} from '../helpers/playback-clock';
 import { TestStepHelper } from '../helpers/test-step-helper';
 
 type Program = readonly string[];
@@ -80,7 +84,7 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
     const steps = new TestStepHelper(host, testInfo);
     steps.setMetadata(
       'Finish a race through flags, archives, repairs, and rematch',
-      'Two real clients play ten deterministic turns. Ada archives on a repair site, touches all three flags in order, wins from ordinary Program submissions, retains an immutable summary, and starts a fresh race epoch.'
+      'Two real clients play ten deterministic turns. Ada archives on a repair site, touches all three flags in order, wins from ordinary Program submissions, and the tabletop presents the finish before returning the retained racers to course configuration.'
     );
 
     await host.getByLabel('Setup seed').fill('REPAIR-4');
@@ -199,23 +203,77 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
       ]
     });
 
-    await host.getByRole('button', { name: 'Start rematch epoch 2' }).click();
-    await expect(host.getByText('Race epoch 2 · 1 retained summary')).toBeVisible();
-    await expect(guest.getByText('Race epoch 2 · 1 retained summary')).toBeVisible();
-    await steps.step('rematch-starts-new-epoch', {
-      description: 'The host starts a fresh epoch without mutating the retained summary',
+    await enableSyntheticPlaybackClock(host);
+    await host.goto(`/tt/?room=${roomCode}`);
+    await expect(host.getByTestId('tabletop-program-countdown')).toBeVisible();
+    await finishSyntheticPlayback([host]);
+    const finishDialog = host.getByRole('dialog', { name: 'Race finished' });
+    await expect(finishDialog.getByRole('heading', { name: 'ADA WINS!' })).toBeVisible();
+    await expect(host.locator('[data-seat="1"] .flag-track')).toHaveAttribute(
+      'aria-label',
+      'Ada touched flags: 1, 2, 3'
+    );
+    await expect(finishDialog.getByRole('button', { name: 'REMATCH · CHOOSE COURSE' })).toBeVisible();
+    await expect(finishDialog.getByRole('button', { name: 'NEW GAME' })).toBeVisible();
+
+    const newGameProbe = await host.context().newPage();
+    await enableSyntheticPlaybackClock(newGameProbe);
+    await newGameProbe.goto(`/tt/?room=${roomCode}`);
+    await finishSyntheticPlayback([newGameProbe]);
+    await newGameProbe.getByRole('button', { name: 'NEW GAME' }).click();
+    await expect(newGameProbe.locator('[data-e2e-tabletop]')).not.toHaveAttribute(
+      'data-room-code',
+      roomCode
+    );
+    await expect(newGameProbe.getByRole('img', { name: /QR code to join position/ })).toHaveCount(8);
+    await newGameProbe.close();
+
+    await steps.step('tabletop-announces-finished-race', {
+      description: 'The tabletop unmistakably announces the completed race',
+      status: 'skip',
       verifications: [
         {
-          spec: 'Both clients receive a fresh Turn 1 hand',
+          spec: 'The winner overlay offers rematch configuration and a genuinely fresh game',
           check: async () => {
-            await expect(host.getByRole('heading', { name: /Your hand · 9/ })).toBeVisible();
-            await expect(guest.getByRole('heading', { name: /Your hand · 9/ })).toBeVisible();
+            await expect(finishDialog.getByRole('heading', { name: 'ADA WINS!' })).toBeVisible();
+            await expect(finishDialog.getByRole('button', { name: 'REMATCH · CHOOSE COURSE' })).toBeVisible();
+            await expect(finishDialog.getByRole('button', { name: 'NEW GAME' })).toBeVisible();
           }
         },
         {
-          spec: 'The completed race remains counted as an immutable prior summary',
+          spec: 'The final player panel retains all three touched flags',
           check: async () => {
-            await expect(host.getByText('Race epoch 2 · 1 retained summary')).toBeVisible();
+            await expect(host.locator('[data-seat="1"] .flag-track')).toHaveAttribute(
+              'aria-label',
+              'Ada touched flags: 1, 2, 3'
+            );
+          }
+        }
+      ]
+    });
+
+    await finishDialog.getByRole('button', { name: 'REMATCH · CHOOSE COURSE' }).click();
+    await expect(host.getByLabel('Tabletop race configuration')).toBeVisible();
+    await expect(host.locator('[data-seat="1"]')).toContainText('Ada');
+    await expect(host.locator('[data-seat="2"]')).toContainText('Grace');
+    await expect(host.getByRole('img', { name: /QR code to join position/ })).toHaveCount(6);
+    await steps.step('rematch-starts-new-epoch', {
+      description: 'Rematch returns the retained racers to shared course configuration',
+      status: 'skip',
+      verifications: [
+        {
+          spec: 'The table can choose a new board before the next race',
+          check: async () => {
+            await expect(host.getByLabel('Tabletop race configuration')).toBeVisible();
+            await expect(host.getByRole('button', { name: 'CONFIGURE RACE' })).toBeEnabled();
+          }
+        },
+        {
+          spec: 'Both existing racers remain seated while the six open positions keep their QR codes',
+          check: async () => {
+            await expect(host.locator('[data-seat="1"]')).toContainText('Ada');
+            await expect(host.locator('[data-seat="2"]')).toContainText('Grace');
+            await expect(host.getByRole('img', { name: /QR code to join position/ })).toHaveCount(6);
           }
         }
       ]

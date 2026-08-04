@@ -1,6 +1,6 @@
 # Finish a race through flags, archives, repairs, and rematch
 
-Two real clients play ten deterministic turns. Ada archives on a repair site, touches all three flags in order, wins from ordinary Program submissions, retains an immutable summary, and starts a fresh race epoch.
+Two real clients play ten deterministic turns. Ada archives on a repair site, touches all three flags in order, wins from ordinary Program submissions, and the tabletop presents the finish before returning the retained racers to course configuration.
 
 ## Register 5 reaches a repair site and moves the Archive before cleanup
 
@@ -29,11 +29,20 @@ Two real clients play ten deterministic turns. Ada archives on a repair site, to
 - [x] The final ordered flag ends resolution immediately
 - [x] Owner and observer see the same winner summary
 
-## The host starts a fresh epoch without mutating the retained summary
+## The tabletop unmistakably announces the completed race
 
-![The host starts a fresh epoch without mutating the retained summary](./screenshots/003-rematch-starts-new-epoch-desktop.png)
+![The tabletop unmistakably announces the completed race](./screenshots/003-tabletop-announces-finished-race-desktop.png)
 
 **Verifications:**
 
-- [x] Both clients receive a fresh Turn 1 hand
-- [x] The completed race remains counted as an immutable prior summary
+- [x] The winner overlay offers rematch configuration and a genuinely fresh game
+- [x] The final player panel retains all three touched flags
+
+## Rematch returns the retained racers to shared course configuration
+
+![Rematch returns the retained racers to shared course configuration](./screenshots/004-rematch-starts-new-epoch-desktop.png)
+
+**Verifications:**
+
+- [x] The table can choose a new board before the next race
+- [x] Both existing racers remain seated while the six open positions keep their QR codes

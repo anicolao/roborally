@@ -401,7 +401,7 @@ describe('priority Program movement', () => {
       optionDeck: createOptionDeck('reentry-order'),
       nextOptionChoiceUid: null,
       nextReentryUid: 'first',
-      winnerUid: null,
+      winnerUids: [],
       runnersUpUids: [],
       summary: null,
       playback: { initialRobots: [], frames: [] }
@@ -451,7 +451,7 @@ describe('priority Program movement', () => {
       optionDeck: createOptionDeck('destroyed-announcer'),
       nextOptionChoiceUid: null,
       nextReentryUid: destroyed.uid,
-      winnerUid: null,
+      winnerUids: [],
       runnersUpUids: [],
       summary: null,
       playback: { initialRobots: [], frames: [] }
@@ -1024,7 +1024,7 @@ describe('priority Program movement', () => {
       optionDeck,
       nextOptionChoiceUid: null,
       nextReentryUid: target.uid,
-      winnerUid: null,
+      winnerUids: [],
       runnersUpUids: [],
       summary: null,
       playback: { initialRobots: [], frames: [] }
@@ -1064,7 +1064,7 @@ describe('priority Program movement', () => {
       optionDeck: createOptionDeck('OPTION-LOSS'),
       nextOptionChoiceUid: 'owner',
       nextReentryUid: null,
-      winnerUid: null,
+      winnerUids: [],
       runnersUpUids: [],
       summary: null,
       playback: { initialRobots: [], frames: [] }
@@ -1192,7 +1192,7 @@ describe('priority Program movement', () => {
     expect(trace.filter(({ kind }) => kind === 'option-drawn')).toHaveLength(3);
   });
 
-  it('ends immediately on Flag 3 with frozen winner and optional runner-up standings', () => {
+  it('ends immediately on Flag 3 with frozen simultaneous winners', () => {
     const config = riskyExchangeConfig('FLAG-FINISH');
     const setup = deriveRaceSetup(
       [
@@ -1221,19 +1221,25 @@ describe('priority Program movement', () => {
       robot.nextFlag = 3;
     }
 
-    const resolution = resolveProgrammedTurn(programming, setup, robots, true)!;
+    const resolution = resolveProgrammedTurn(programming, setup, robots)!;
     expect(resolution).toMatchObject({
       phase: 'race-finished',
-      winnerUid: robots[0].uid,
-      runnersUpUids: [robots[1].uid],
+      winnerUids: [robots[0].uid, robots[1].uid],
+      runnersUpUids: [],
       summary: {
-        winnerUid: robots[0].uid,
-        runnersUpUids: [robots[1].uid]
+        winnerUids: [robots[0].uid, robots[1].uid],
+        runnersUpUids: []
       }
     });
     expect(Object.isFrozen(resolution.summary)).toBe(true);
+    expect(Object.isFrozen(resolution.summary?.winnerUids)).toBe(true);
     expect(Object.isFrozen(resolution.summary?.standings)).toBe(true);
-    expect(resolution.trace).toContainEqual(expect.objectContaining({ kind: 'winner' }));
+    expect(resolution.trace).toContainEqual(
+      expect.objectContaining({
+        kind: 'winner',
+        text: `${robots.map(({ name }) => name).join(' and ')} touched the final Flag simultaneously and tied for the win.`
+      })
+    );
   });
 
   it('begins and continues power down by clearing damage and every retained lock', () => {

@@ -274,7 +274,10 @@ test('a production Risky Exchange race uses the complete rules loop', async (
     });
 
     await host.getByRole('button', { name: 'Start rematch epoch 2' }).click();
-    await expect(host.getByText('Race epoch 2 · 1 retained summary')).toBeVisible();
+    await expect(host.getByLabel('Race configuration')).toBeVisible();
+    await expect(host.getByRole('button', { name: 'Configure Risky Exchange' })).toBeEnabled();
+    await expect(host.getByRole('list', { name: 'Race room players' })).toContainText('Ada');
+    await expect(host.getByRole('list', { name: 'Race room players' })).toContainText('Grace');
     steps.generateDocs();
   } finally {
     await guestContext.close();
