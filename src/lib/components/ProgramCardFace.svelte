@@ -24,7 +24,7 @@
   }: {
     card: ProgramCard;
     compact?: boolean;
-    variant?: 'portrait' | 'square';
+    variant?: 'portrait' | 'square' | 'adaptive';
   } = $props();
 
   const presentation = $derived(actionPresentation[card.action]);
@@ -35,21 +35,38 @@
   const reversed = $derived(card.action === 'back-up');
 </script>
 
-<article
+<span
+  role="img"
   class:compact
   class:square={variant === 'square'}
+  class:adaptive={variant === 'adaptive'}
   class="program-card"
   aria-label={`${presentation.label}, priority ${card.priority}`}
   data-card-id={card.id}
 >
-  <img
-    class="chassis"
-    src={`${base}/assets/cards/${variant === 'square' ? 'program-card-background-square-v1.webp' : 'program-card-background-v1.webp'}`}
-    alt=""
-    draggable="false"
-  />
+  {#if variant === 'adaptive'}
+    <img
+      class="chassis portrait-chassis"
+      src={`${base}/assets/cards/program-card-background-v1.webp`}
+      alt=""
+      draggable="false"
+    />
+    <img
+      class="chassis square-chassis"
+      src={`${base}/assets/cards/program-card-background-square-v1.webp`}
+      alt=""
+      draggable="false"
+    />
+  {:else}
+    <img
+      class="chassis"
+      src={`${base}/assets/cards/${variant === 'square' ? 'program-card-background-square-v1.webp' : 'program-card-background-v1.webp'}`}
+      alt=""
+      draggable="false"
+    />
+  {/if}
 
-  {#if variant === 'portrait'}
+  {#if variant !== 'square'}
     <img
       class="corner-command"
       class:mirrored
@@ -75,13 +92,15 @@
   {/if}
 
   <span class:long-title={presentation.label.length > 8} class="title">{presentation.label}</span>
-</article>
+</span>
 
 <style>
   .program-card {
     container-type: inline-size;
     position: relative;
+    display: block;
     isolation: isolate;
+    width: 100%;
     aspect-ratio: 1014 / 1424;
     overflow: hidden;
     border-radius: 0.8cqw;
@@ -122,6 +141,10 @@
     inset: 0;
     width: 100%;
     height: 100%;
+  }
+
+  .square-chassis {
+    display: none;
   }
 
   .corner-command {
@@ -219,6 +242,56 @@
   .square .title.long-title {
     top: 82.2%;
     font-size: 6.5cqw;
+  }
+
+  @media (max-height: 560px) and (orientation: landscape) {
+    .program-card.adaptive {
+      aspect-ratio: 1;
+      border-radius: 0.4cqw;
+    }
+
+    .adaptive .portrait-chassis,
+    .adaptive .corner-command {
+      display: none;
+    }
+
+    .adaptive .square-chassis {
+      display: block;
+    }
+
+    .adaptive .priority {
+      top: 8.8%;
+      left: 12.7%;
+      width: 74.6%;
+      height: 13.1%;
+      font-size: 10.5cqw;
+      letter-spacing: -0.04em;
+    }
+
+    .adaptive .main-command {
+      top: 27%;
+      left: 22%;
+      width: 56%;
+    }
+
+    .adaptive .move-count {
+      top: 48.2%;
+      left: 36%;
+      width: 28%;
+      font-size: 22cqw;
+    }
+
+    .adaptive .title {
+      top: 81.8%;
+      left: 14%;
+      width: 72%;
+      font-size: 8.2cqw;
+    }
+
+    .adaptive .title.long-title {
+      top: 82.2%;
+      font-size: 6.5cqw;
+    }
   }
 
 </style>
