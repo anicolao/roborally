@@ -1,4 +1,9 @@
 import { expect, test } from '@playwright/test';
+import {
+  advanceSyntheticPlayback,
+  enableSyntheticPlaybackClock,
+  finishSyntheticPlayback
+} from '../helpers/playback-clock';
 
 async function expectFixedViewport(page: import('@playwright/test').Page) {
   const geometry = await page.evaluate(() => {
@@ -101,6 +106,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
   const secondPhone = await secondContext.newPage();
 
   try {
+    await enableSyntheticPlaybackClock(table);
     await table.goto(`/tt/?e2eIdentity=TABLE&e2eRoomCode=${roomCode}`);
     await expect(table.locator('[data-e2e-tabletop]')).toHaveAttribute('data-room-code', roomCode);
     await expect(table.locator('header, footer')).toHaveCount(0);
@@ -203,12 +209,23 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await submitVisibleProgram(secondPhone);
 
     await expect(table.getByTestId('tabletop-program-countdown')).toBeVisible();
+    await advanceSyntheticPlayback([table]);
+    await advanceSyntheticPlayback([table]);
+    await advanceSyntheticPlayback([table]);
     await expect(table.getByTestId('tabletop-register-playback')).toBeVisible();
     await expect(table.getByTestId('tabletop-register-playback')).toHaveAttribute(
       'data-stage',
       'program-card'
     );
+    for (
+      let advance = 0;
+      advance < 100 && (await table.locator('.program-card.revealed').count()) < 10;
+      advance += 1
+    ) {
+      await advanceSyntheticPlayback([table]);
+    }
     await expect(table.locator('.program-card.revealed')).toHaveCount(10);
+    await finishSyntheticPlayback([table]);
     await completePrivateResolutionChoices([firstPhone, secondPhone]);
     await expect.poll(() => table.locator('.damage-track i.taken').count()).toBeGreaterThan(0);
     await expect(firstPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toBeVisible();

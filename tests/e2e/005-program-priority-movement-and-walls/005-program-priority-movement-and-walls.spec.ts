@@ -1,5 +1,10 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { stayActiveInDockOrder } from '../helpers/game-actions';
+import {
+  advanceSyntheticPlayback,
+  enableSyntheticPlaybackClock,
+  finishSyntheticPlayback
+} from '../helpers/playback-clock';
 import { TestStepHelper } from '../helpers/test-step-helper';
 
 async function chooseProgram(page: Page, labels: readonly string[]) {
@@ -17,6 +22,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
   let guestContext: BrowserContext | undefined;
 
   try {
+    await enableSyntheticPlaybackClock(host);
     await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2ePlayback=slow`);
     await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
     await host.getByRole('button', { name: 'Create race' }).click();
@@ -26,6 +32,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
 
     guestContext = await browser.newContext();
     const guest = await guestContext.newPage();
+    await enableSyntheticPlaybackClock(guest);
     const steps = new TestStepHelper(host, testInfo);
     steps.setMetadata(
       'Resolve Program priority movement and walls',
@@ -64,8 +71,11 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     const countdown = host.getByTestId('program-countdown');
     await expect(countdown).toContainText('ALL PROGRAMS LOCKED');
     await expect(countdown).toContainText('3');
+    await advanceSyntheticPlayback([host, guest]);
     await expect(countdown).toContainText('2');
+    await advanceSyntheticPlayback([host, guest]);
     await expect(countdown).toContainText('1');
+    await advanceSyntheticPlayback([host, guest]);
     const registerPlayback = host.getByTestId('register-playback');
     await expect(registerPlayback).toHaveAttribute('data-register', '1');
     await expect(host.getByTestId('resolution-live')).toContainText('register 1');
@@ -73,14 +83,19 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '2000');
     await expect(registerPlayback).toContainText('Grace · back up');
     await expect(registerPlayback).toContainText('priority 450');
+    await advanceSyntheticPlayback([host, guest]);
     await expect(registerPlayback).toContainText('Ada · rotate right');
     await expect(registerPlayback).toContainText('priority 110');
+    await advanceSyntheticPlayback([host, guest]);
     await expect(registerPlayback).toHaveAttribute('data-stage', 'express-conveyors');
     await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '1000');
+    await advanceSyntheticPlayback([host, guest]);
     await expect(registerPlayback).toHaveAttribute('data-stage', 'conveyors');
     await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '1000');
+    await advanceSyntheticPlayback([host, guest]);
     await expect(registerPlayback).toHaveAttribute('data-stage', 'pushers');
     await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '1000');
+    await advanceSyntheticPlayback([host, guest]);
     await expect(registerPlayback).toHaveAttribute('data-stage', 'gears');
     await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '1000');
     await expect(host.locator('[data-playback-robot]')).toHaveCount(2);
@@ -91,10 +106,14 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     };
 
     for (const register of [2, 3, 4, 5]) {
+      while ((await registerPlayback.getAttribute('data-register')) !== String(register)) {
+        await advanceSyntheticPlayback([host, guest]);
+      }
       await expect(registerPlayback).toHaveAttribute('data-register', String(register), {
         timeout: 10_000
       });
     }
+    await finishSyntheticPlayback([host, guest]);
     await expect(registerPlayback).toBeHidden({ timeout: 10_000 });
 
     // Docking Bay B can route Grace through the pit during this control
