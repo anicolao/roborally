@@ -1,0 +1,26 @@
+name: E2E quarter 1
+
+on:
+  workflow_call:
+
+jobs:
+  e2e:
+    name: E2E quarter 1 of 4
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - run: nix develop --command bun install --frozen-lockfile
+      - run: nix develop --command bunx playwright install chromium
+      - run: >-
+          nix develop --command firebase emulators:exec
+          --project roborally-e2e --only auth,firestore
+          "playwright test --shard=1/4"
+        env:
+          CI: 'true'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-quarter-1
+          path: playwright-report/
+          retention-days: 30

@@ -23,43 +23,61 @@ concurrency:
 
 jobs:
   verify:
+    name: Static, unit, rules, and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - run: nix develop --command bun install --frozen-lockfile
+      - run: nix develop --command bun run check
+      - run: nix develop --command bun run check:workflow
+      - run: nix develop --command bun run test:unit
+      - run: nix develop --command bun run test:rules
+      - run: nix develop --command bun run build
+
+  e2e-quarter-1:
+    if: inputs.update_snapshots != true
+    uses: ./.github/workflows/e2e-quarter-1.yml
+
+  e2e-quarter-2:
+    if: inputs.update_snapshots != true
+    uses: ./.github/workflows/e2e-quarter-2.yml
+
+  e2e-quarter-3:
+    if: inputs.update_snapshots != true
+    uses: ./.github/workflows/e2e-quarter-3.yml
+
+  e2e-quarter-4:
+    if: inputs.update_snapshots != true
+    uses: ./.github/workflows/e2e-quarter-4.yml
+
+  snapshot-baselines:
+    if: inputs.update_snapshots == true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v31
       - run: nix develop --command bun install --frozen-lockfile
       - run: nix develop --command bunx playwright install chromium
-      - run: nix develop --command bun run verify:change
-        if: inputs.update_snapshots != true
-        env:
-          CI: 'true'
       - name: Generate Linux screenshot baselines
-        if: inputs.update_snapshots == true
-        run: |
-          nix develop --command bun run check
-          nix develop --command bun run test:unit
-          nix develop --command bun run test:rules
-          nix develop --command bun run test:e2e:update-snapshots
-          nix develop --command bun run build
+        run: nix develop --command bun run test:e2e:update-snapshots
         env:
           CI: 'true'
       - uses: actions/upload-artifact@v4
-        if: inputs.update_snapshots == true
         with:
           name: linux-screenshot-baselines
           path: tests/e2e/**/screenshots/*.png
           retention-days: 7
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 30
 
   deploy:
-    needs: verify
+    needs: [verify, e2e-quarter-1, e2e-quarter-2, e2e-quarter-3, e2e-quarter-4]
     if: >-
       inputs.update_snapshots != true &&
+      needs.verify.result == 'success' &&
+      needs.e2e-quarter-1.result == 'success' &&
+      needs.e2e-quarter-2.result == 'success' &&
+      needs.e2e-quarter-3.result == 'success' &&
+      needs.e2e-quarter-4.result == 'success' &&
       (github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
       )
