@@ -13,9 +13,9 @@ jobs:
       - run: nix develop --command bun install --frozen-lockfile
       - run: nix develop --command bunx playwright install chromium
       - run: >-
-          nix develop --command firebase emulators:exec
+          nix develop --command bunx firebase emulators:exec
           --project roborally-e2e --only auth,firestore
-          "playwright test --shard=2/4"
+          "bunx playwright test --shard=2/4"
         env:
           CI: 'true'
       - uses: actions/upload-artifact@v4
