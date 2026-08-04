@@ -9,6 +9,7 @@
   import type { FirebaseServices } from '$lib/firebase';
   import CourseBoard from '$lib/components/CourseBoard.svelte';
   import CourseCatalog from '$lib/components/CourseCatalog.svelte';
+  import ProgramCardFace from '$lib/components/ProgramCardFace.svelte';
   import { PROGRAM_CARDS, type ProgramCard } from '$lib/game/program-manifest';
   import {
     OPTION_CARDS,
@@ -1162,8 +1163,12 @@
                     onclick={() => toggleProgramCard(cardId)}
                     onkeydown={(event) => handleProgramCardKeydown(event, cardId)}
                   >
-                    <small>{selectedIndex >= 0 ? `R${selectedIndex + 1}` : card?.priority}</small>
-                    <strong>{card?.action.replaceAll('-', ' ')}</strong>
+                    {#if card}
+                      <ProgramCardFace {card} compact variant="adaptive" />
+                    {/if}
+                    {#if selectedIndex >= 0}
+                      <span class="register-badge">R{selectedIndex + 1}</span>
+                    {/if}
                   </button>
                 {/each}
               </div>
@@ -2499,40 +2504,41 @@
   .program-head span { color: #d2ff37; font: 16px 'Space Mono', monospace; text-transform: uppercase; }
   .program-hand {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 4px;
   }
   .program-hand button {
     position: relative;
-    display: grid;
+    display: block;
     min-width: 0;
-    min-height: 44px;
-    place-items: center;
-    padding: 12px 3px 3px;
-    border-color: #465356;
-    color: #a8b3b1;
-    background: #111819;
+    min-height: 0;
+    padding: 0;
+    overflow: visible;
+    border: 2px solid transparent;
+    border-radius: 4px;
+    color: inherit;
+    background: transparent;
   }
   .program-hand button.selected {
     border-color: #d2ff37;
-    color: #eef4ee;
-    background: #1a2418;
+    background: #d2ff3720;
+    box-shadow: 0 0 10px #d2ff3788;
   }
-  .program-hand small {
+  .program-hand .register-badge {
     position: absolute;
-    top: 3px;
-    right: 4px;
-    color: #ffcf4b;
-    font: 14px 'Space Mono', monospace;
-  }
-  .program-hand strong {
-    min-width: 0;
-    max-width: 100%;
-    overflow: hidden;
-    font: 700 14px 'Space Mono', monospace;
-    text-overflow: ellipsis;
-    text-transform: uppercase;
-    white-space: nowrap;
+    z-index: 5;
+    top: -5px;
+    right: -5px;
+    display: grid;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    border: 2px solid #111819;
+    border-radius: 50%;
+    color: #111819;
+    background: #d2ff37;
+    font: 700 13px/1 'Space Mono', monospace;
+    box-shadow: 0 2px 6px #0009;
   }
   .chosen-registers {
     display: grid;
@@ -2905,7 +2911,7 @@
       display: none;
     }
     .program-hand { grid-template-columns: repeat(3, 1fr); }
-    .program-hand button { min-height: 37px; padding: 10px 2px 2px; }
+    .program-hand button { min-height: 0; padding: 0; }
     .chosen-registers li { min-height: 23px; }
     .register-order-controls {
       grid-template-columns: minmax(0, 1fr) repeat(3, 24px);
@@ -3193,11 +3199,9 @@
       gap: 2px;
     }
     .program-hand button {
-      min-height: 24px;
-      padding: 8px 1px 1px;
-      font-size: 12px;
+      min-height: 0;
+      padding: 0;
     }
-    .program-hand button small { top: 1px; left: 2px; font-size: 10px; }
     .chosen-registers {
       grid-column: 1 / -1;
       gap: 2px;

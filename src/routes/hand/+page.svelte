@@ -6,6 +6,7 @@
   import { base } from '$app/paths';
   import { onDestroy, onMount } from 'svelte';
   import { initializeFirebase, type FirebaseServices } from '$lib/firebase';
+  import ProgramCardFace from '$lib/components/ProgramCardFace.svelte';
   import * as RoomService from '$lib/room-service';
   import { PROGRAM_CARDS, type ProgramCard } from '$lib/game/program-manifest';
   import { OPTION_CARDS_BY_ID, type OptionCardId } from '$lib/game/option-manifest';
@@ -414,7 +415,26 @@
         </section>
       {/if}
       <section class="registers"><h2>Registers · {selected.length}/{openSlots}</h2><ol>{#each Array(5) as _, index}<li><span>R{index + 1}</span>{programming.registers[index]?.locked ? 'LOCKED' : (PROGRAM_CARDS.find((card) => card.id === selected[index])?.action.replaceAll('-', ' ') ?? 'EMPTY')}</li>{/each}</ol><button onclick={submit} disabled={programming.submitted || selected.length !== openSlots}>{programming.submitted ? 'PROGRAM LOCKED' : 'Lock program'}</button></section>
-      <section class="hand"><h2>Program deck</h2><p>These choices remain private. The tabletop reveals cards only when execution begins.</p><div>{#each programming.hand as cardId}{@const card = PROGRAM_CARDS.find((entry) => entry.id === cardId)}<button class:selected={selected.includes(cardId)} onclick={() => toggle(cardId)} disabled={programming.submitted}><small>{card?.priority}</small><strong>{card?.action.replaceAll('-', ' ')}</strong></button>{/each}</div></section>
+      <section class="hand">
+        <h2>Program deck</h2>
+        <p>These choices remain private. The tabletop reveals cards only when execution begins.</p>
+        <div>
+          {#each programming.hand as cardId}
+            {@const card = PROGRAM_CARDS.find((entry) => entry.id === cardId)}
+            {@const registerIndex = selected.indexOf(cardId)}
+            <button
+              class:selected={registerIndex >= 0}
+              aria-label={`${card?.action} priority ${card?.priority}`}
+              aria-pressed={registerIndex >= 0}
+              onclick={() => toggle(cardId)}
+              disabled={programming.submitted}
+            >
+              {#if card}<ProgramCardFace {card} compact variant="adaptive" />{/if}
+              {#if registerIndex >= 0}<span class="register-badge">R{registerIndex + 1}</span>{/if}
+            </button>
+          {/each}
+        </div>
+      </section>
     {:else if state.configuration && !state.setup}
       <section class="ready-control">
         <h2>Race configured</h2>
@@ -428,7 +448,7 @@
   <footer><a href={`${base}/tt/?room=${roomCode}`}>View shared tabletop ↗</a><span>Keep this screen private.</span></footer>
 </main>
 <style>
-  :global(*) { box-sizing: border-box; } :global(html), :global(body) { margin: 0; min-width: 320px; background: #0c1112; color: #eef4ee; font-family: 'Atkinson Hyperlegible', sans-serif; } .phone { width: min(100%, 720px); min-height: 100vh; margin: auto; padding: 20px; } header, footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 15px; border-bottom: 1px solid #465356; font-family: 'Space Mono', monospace; } header a, footer a { color: #eef4ee; text-decoration: none; } header strong { color: #d2ff37; } header span { color: #d2ff37; } .identity { margin: 28px 0; } .identity span, .join-position > span, h2 { color: #d2ff37; font: 700 18px 'Space Mono', monospace; letter-spacing: .08em; text-transform: uppercase; } h1 { margin: 6px 0; font: 700 clamp(44px, 13vw, 88px) 'Space Mono', monospace; text-transform: uppercase; } .identity strong { color: #ffcf4b; font-family: 'Space Mono', monospace; } p { color: #aebbb9; font-size: 20px; } .registers, .hand, .ready-control, .next-turn-control, .power-control { margin-top: 20px; padding: 16px; border: 1px solid #465356; background: #141c1d; } h2 { margin: 0 0 12px; font-size: 16px; } ol { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 0 0 14px; padding: 0; list-style: none; } ol li { display: grid; min-height: 70px; place-content: center; gap: 5px; border: 1px solid #526265; background: #202b2d; color: #eef4ee; font: 700 13px 'Space Mono', monospace; text-align: center; text-transform: uppercase; } ol span { color: #d2ff37; font-size: 12px; } button { min-height: 48px; padding: 8px 12px; border: 1px solid #d2ff37; color: #111; background: #d2ff37; font: 700 16px 'Space Mono', monospace; text-transform: uppercase; } button:disabled { opacity: .5; } .hand > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .hand button { display: grid; min-height: 82px; gap: 4px; align-content: center; color: #d2ff37; background: #202b2d; text-align: left; } .hand button.selected { color: #111; background: #d2ff37; } .hand small { color: #ffcf4b; } .hand button.selected small { color: #111; } .hand p { margin-top: 0; font-size: 17px; } .empty, .error { margin-top: 35vh; text-align: center; } .error { color: #ffbf69; } footer { margin-top: 26px; border-top: 1px solid #465356; border-bottom: 0; padding-top: 15px; color: #aebbb9; font-size: 14px; }
+  :global(*) { box-sizing: border-box; } :global(html), :global(body) { margin: 0; min-width: 320px; background: #0c1112; color: #eef4ee; font-family: 'Atkinson Hyperlegible', sans-serif; } .phone { width: min(100%, 720px); min-height: 100vh; margin: auto; padding: 20px; } header, footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 15px; border-bottom: 1px solid #465356; font-family: 'Space Mono', monospace; } header a, footer a { color: #eef4ee; text-decoration: none; } header strong { color: #d2ff37; } header span { color: #d2ff37; } .identity { margin: 28px 0; } .identity span, .join-position > span, h2 { color: #d2ff37; font: 700 18px 'Space Mono', monospace; letter-spacing: .08em; text-transform: uppercase; } h1 { margin: 6px 0; font: 700 clamp(44px, 13vw, 88px) 'Space Mono', monospace; text-transform: uppercase; } .identity strong { color: #ffcf4b; font-family: 'Space Mono', monospace; } p { color: #aebbb9; font-size: 20px; } .registers, .hand, .ready-control, .next-turn-control, .power-control { margin-top: 20px; padding: 16px; border: 1px solid #465356; background: #141c1d; } h2 { margin: 0 0 12px; font-size: 16px; } ol { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 0 0 14px; padding: 0; list-style: none; } ol li { display: grid; min-height: 70px; place-content: center; gap: 5px; border: 1px solid #526265; background: #202b2d; color: #eef4ee; font: 700 13px 'Space Mono', monospace; text-align: center; text-transform: uppercase; } ol span { color: #d2ff37; font-size: 12px; } button { min-height: 48px; padding: 8px 12px; border: 1px solid #d2ff37; color: #111; background: #d2ff37; font: 700 16px 'Space Mono', monospace; text-transform: uppercase; } button:disabled { opacity: .5; } .hand > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .hand button { position: relative; display: block; min-height: 0; padding: 0; overflow: visible; border: 2px solid transparent; border-radius: 5px; color: inherit; background: transparent; text-align: left; } .hand button.selected { border-color: #d2ff37; background: #d2ff3720; box-shadow: 0 0 12px #d2ff3788; } .hand .register-badge { position: absolute; z-index: 5; top: -6px; right: -6px; display: grid; width: 34px; height: 34px; place-items: center; border: 2px solid #111819; border-radius: 50%; color: #111819; background: #d2ff37; font: 700 14px/1 'Space Mono', monospace; box-shadow: 0 2px 7px #000a; } .hand p { margin-top: 0; font-size: 17px; } .empty, .error { margin-top: 35vh; text-align: center; } .error { color: #ffbf69; } footer { margin-top: 26px; border-top: 1px solid #465356; border-bottom: 0; padding-top: 15px; color: #aebbb9; font-size: 14px; }
   .join-position { margin: 30px 0; }
   .join-position > p { margin: 8px 0 24px; }
   .join-position form { display: grid; gap: 18px; }

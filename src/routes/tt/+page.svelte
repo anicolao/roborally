@@ -7,6 +7,7 @@
   import { onDestroy, onMount } from 'svelte';
   import QRCode from 'qrcode';
   import CourseBoard from '$lib/components/CourseBoard.svelte';
+  import ProgramCardFace from '$lib/components/ProgramCardFace.svelte';
   import { initializeFirebase, type FirebaseServices } from '$lib/firebase';
   import { MAX_ROOM_PLAYERS, ROBOTS, emptyRoomState, type RoomState } from '$lib/room-model';
   import * as RoomService from '$lib/room-service';
@@ -129,10 +130,6 @@
     unsubscribe?.();
     clearPlaybackTimers();
   });
-
-  function cardLabel(cardId: string | null | undefined) {
-    return PROGRAM_CARDS.find((card) => card.id === cardId)?.action.replaceAll('-', ' ') ?? '—';
-  }
 
   function clearPlaybackTimers() {
     for (const timer of playbackTimers) clearPlaybackTimer(timer);
@@ -323,7 +320,14 @@
                 (playbackPhase === 'complete' ||
                   (playbackPhase === 'register' && cardIndex + 1 <= (playbackRegister ?? 0)))}
               {@const cardId = programPlayer?.registers[cardIndex]?.cardId}
-              <span class:revealed class="program-card">{revealed ? cardLabel(cardId) : '●'}</span>
+              {@const card = PROGRAM_CARDS.find((entry) => entry.id === cardId)}
+              <span class:revealed class="program-card">
+                {#if revealed && card}
+                  <ProgramCardFace {card} compact variant="square" />
+                {:else}
+                  <span class="program-card-back" aria-hidden="true">●</span>
+                {/if}
+              </span>
             {/each}
           </div>
         {:else if qr}
@@ -448,7 +452,7 @@
   .seat-join span { display: grid; gap: 5px; min-width: 0; }
   .seat-join strong { color: #d2ff37; font: 700 clamp(12px, 1.1vw, 18px) 'Space Mono', monospace; }
   .seat-join small, .qr-placeholder { color: #aebbb9; font-size: 14px; }
-  .program-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin-top: 5px; } .program-card { display: grid; min-height: 35px; place-items: center; overflow: hidden; border: 1px solid #435052; color: #8b999a; background: #263235; font: 700 10px 'Space Mono', monospace; text-align: center; text-transform: uppercase; } .program-card.revealed { color: #111; border-color: #d2ff37; background: #d2ff37; }
+  .program-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; margin-top: 5px; } .program-card { position: relative; display: grid; min-width: 0; aspect-ratio: 1; place-items: center; overflow: hidden; border: 1px solid #435052; border-radius: 2px; color: #8b999a; background: linear-gradient(135deg, #202b2d, #344245); font: 700 10px 'Space Mono', monospace; text-align: center; text-transform: uppercase; } .program-card.revealed { overflow: visible; border-color: transparent; background: transparent; } .program-card-back { display: grid; width: 100%; height: 100%; place-items: center; border: 2px solid #4a595c; background: repeating-linear-gradient(135deg, #1a2325 0 5px, #263235 5px 10px); }
   .course-control { display: grid; height: 100%; max-width: 920px; margin: auto; place-content: center; gap: 24px; padding: 30px; }
   .course-control > div { display: grid; gap: 8px; text-align: center; }
   .course-control > div span { color: #d2ff37; font: 700 20px 'Space Mono', monospace; }
@@ -474,6 +478,6 @@
     .seat > small, .power-state span, .robot-vitals b { display: none; }
     .robot-vitals { display: block; }
     .life-track, .damage-track { margin-top: 3px; }
-    .program-card { min-height: 22px; font-size: 7px; }
+    .program-card { font-size: 7px; }
   }
 </style>
