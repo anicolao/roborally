@@ -33,11 +33,97 @@ async function expectFixedViewport(page: import('@playwright/test').Page) {
   });
 }
 
+async function expectFixedPrivateViewport(page: import('@playwright/test').Page) {
+  const geometry = await page.evaluate(() => {
+    const root = document.scrollingElement!;
+    const controller = document
+      .querySelector('[data-e2e-private-hand]')!
+      .getBoundingClientRect();
+    return {
+      clientWidth: root.clientWidth,
+      clientHeight: root.clientHeight,
+      scrollWidth: root.scrollWidth,
+      scrollHeight: root.scrollHeight,
+      controller: {
+        x: controller.x,
+        y: controller.y,
+        width: controller.width,
+        height: controller.height
+      }
+    };
+  });
+  expect(geometry.scrollWidth).toBe(geometry.clientWidth);
+  expect(geometry.scrollHeight).toBe(geometry.clientHeight);
+  expect(geometry.controller).toEqual({
+    x: 0,
+    y: 0,
+    width: geometry.clientWidth,
+    height: geometry.clientHeight
+  });
+
+  const editorGeometry = await page.evaluate(() => {
+    const editor = document.querySelector<HTMLElement>('.program-editor')!;
+    const controls = [...editor.querySelectorAll<HTMLElement>('button')].map((control) => {
+      const bounds = control.getBoundingClientRect();
+      return { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom };
+    });
+    return {
+      clientHeight: editor.clientHeight,
+      scrollHeight: editor.scrollHeight,
+      controls,
+      viewportWidth: innerWidth,
+      viewportHeight: innerHeight
+    };
+  });
+  expect(editorGeometry.scrollHeight).toBeLessThanOrEqual(editorGeometry.clientHeight);
+  for (const control of editorGeometry.controls) {
+    expect(control.left).toBeGreaterThanOrEqual(0);
+    expect(control.top).toBeGreaterThanOrEqual(0);
+    expect(control.right).toBeLessThanOrEqual(editorGeometry.viewportWidth);
+    expect(control.bottom).toBeLessThanOrEqual(editorGeometry.viewportHeight);
+  }
+}
+
+async function touchDrag(
+  page: import('@playwright/test').Page,
+  source: import('@playwright/test').Locator,
+  target: import('@playwright/test').Locator
+) {
+  const sourceBounds = await source.boundingBox();
+  const targetBounds = await target.boundingBox();
+  expect(sourceBounds).not.toBeNull();
+  expect(targetBounds).not.toBeNull();
+  const start = {
+    x: sourceBounds!.x + sourceBounds!.width / 2,
+    y: sourceBounds!.y + sourceBounds!.height / 2
+  };
+  const end = {
+    x: targetBounds!.x + targetBounds!.width / 2,
+    y: targetBounds!.y + targetBounds!.height / 2
+  };
+  const session = await page.context().newCDPSession(page);
+  try {
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ ...start, id: 1 }]
+    });
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ ...end, id: 1 }]
+    });
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } finally {
+    await session.detach();
+  }
+}
+
 async function submitVisibleProgram(page: import('@playwright/test').Page) {
   const cards = page.getByLabel('Your Program hand').getByRole('button');
   const lockProgram = page.getByRole('button', { name: 'Lock program' });
   for (let index = 0; index < await cards.count(); index += 1) {
-    await cards.nth(index).click();
+    if ((await cards.nth(index).getAttribute('aria-pressed')) !== 'true') {
+      await cards.nth(index).click();
+    }
     if (await lockProgram.isEnabled()) break;
   }
   await lockProgram.click();
@@ -101,8 +187,12 @@ test('the tabletop owns configuration and seat QR codes open private controllers
   page: table
 }, testInfo) => {
   const roomCode = testInfo.project.name === 'phone' ? 'T20PHN' : 'T20DSK';
-  const firstContext = await browser.newContext();
-  const secondContext = await browser.newContext();
+  const privateControllerOptions = {
+    viewport: { width: 393, height: 852 },
+    hasTouch: true
+  };
+  const firstContext = await browser.newContext(privateControllerOptions);
+  const secondContext = await browser.newContext(privateControllerOptions);
   const firstPhone = await firstContext.newPage();
   const secondPhone = await secondContext.newPage();
   const steps = new TestStepHelper(table, testInfo);
@@ -233,6 +323,31 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expect(secondPhone.getByRole('heading', { name: 'Program deck' })).toBeVisible();
     await expect(firstPhone.getByLabel('Course')).toHaveCount(0);
     await expect(secondPhone.getByLabel('Course')).toHaveCount(0);
+    await expectFixedPrivateViewport(firstPhone);
+    await expectFixedPrivateViewport(secondPhone);
+
+    const touchCard = firstPhone.getByLabel('Your Program hand').getByRole('button').first();
+    const touchCardLabel = await touchCard.getAttribute('aria-label');
+    const touchCardPriority = touchCardLabel?.match(/priority (\d+)$/)?.[1];
+    if (!touchCardPriority) throw new Error(`Program card has no priority: ${touchCardLabel}`);
+    const touchRegister = firstPhone
+      .getByRole('list', { name: 'Chosen registers' })
+      .getByRole('button')
+      .first();
+    await expect(touchCard).toHaveCSS('touch-action', 'none');
+    await touchDrag(firstPhone, touchCard, touchRegister);
+    await expect(touchRegister).toContainText(touchCardPriority);
+    await touchCard.click();
+    await expect(touchRegister).toContainText('empty');
+    await touchDrag(firstPhone, touchCard, touchRegister);
+    await expect(touchRegister).toContainText(touchCardPriority);
+    await expectFixedPrivateViewport(firstPhone);
+    await firstPhone.setViewportSize({ width: 820, height: 1180 });
+    await expectFixedPrivateViewport(firstPhone);
+    await firstPhone.setViewportSize({ width: 852, height: 393 });
+    await expectFixedPrivateViewport(firstPhone);
+    await firstPhone.setViewportSize(privateControllerOptions.viewport);
+    await expectFixedPrivateViewport(firstPhone);
 
     await steps.step('configured-tabletop-course', {
       description: 'Joined players surround the fully visible configured course',
@@ -272,6 +387,14 @@ test('the tabletop owns configuration and seat QR codes open private controllers
             await expect(secondPhone.getByRole('heading', { name: 'Program deck' })).toBeVisible();
             await expect(firstPhone.getByLabel('Course')).toHaveCount(0);
             await expect(secondPhone.getByLabel('Course')).toHaveCount(0);
+          }
+        },
+        {
+          spec: 'Private Program controllers fill the phone viewport and support touch dragging without scrolling',
+          check: async () => {
+            await expectFixedPrivateViewport(firstPhone);
+            await expectFixedPrivateViewport(secondPhone);
+            await expect(touchRegister).toContainText(touchCardPriority);
           }
         }
       ]
