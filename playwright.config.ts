@@ -3,7 +3,7 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false,
-  workers: 1,
+  workers: 8,
   forbidOnly: true,
   retries: 0,
   reporter: [['html', { open: 'never' }]],
