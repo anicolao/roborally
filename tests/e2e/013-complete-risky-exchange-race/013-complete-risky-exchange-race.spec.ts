@@ -275,6 +275,7 @@ test('a production Risky Exchange race uses the complete rules loop', async (
 
     await host.getByRole('button', { name: 'Start rematch epoch 2' }).click();
     await expect(host.getByText('Race epoch 2 · 1 retained summary')).toBeVisible();
+    steps.generateDocs();
   } finally {
     await guestContext.close();
   }

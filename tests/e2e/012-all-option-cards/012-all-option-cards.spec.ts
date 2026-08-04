@@ -72,6 +72,7 @@ test('all 26 reviewed Option behaviors are inspectable in product', async (
         }
       ]
     });
+    steps.generateDocs();
   } finally {
     await guestContext.close();
   }

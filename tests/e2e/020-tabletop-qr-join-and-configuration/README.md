@@ -1,19 +1,39 @@
 # Tabletop QR joining and configuration
 
-The shared display creates a fresh room, presents one unique QR join link at each of its eight
-physical positions, and owns the course, seed, and life settings. Two isolated phones claim the
-positions they scanned, become ready privately, and receive their Program decks after the table
-closes the setup barrier.
+The shared display creates a fresh room, exposes eight position-specific QR joins, owns race configuration, renders the course and public player state, and animates Program execution while phones retain private choices.
+
+## A fresh tabletop exposes eight QR positions and owns configuration
+
+![A fresh tabletop exposes eight QR positions and owns configuration](./screenshots/000-open-table-qr-configuration-desktop.png)
+
+**Verifications:**
 
 - [x] Eight open positions expose seat-specific QR join links
-- [x] A scanned phone claims the physical position encoded in its link
-- [x] Course configuration is available on the table and absent from each phone
-- [x] Ready phones receive private Program decks while the course remains on the shared display
-- [x] The tabletop occupies exactly one viewport with no header, footer, or scrolling
-- [x] The shared center contains only the fully visible course, fills one available dimension, and
-  keeps every cell square
-- [x] Portrait courses stay upright with seats on their sides; landscape courses select top/bottom
-  seating through the same dimension-driven layout policy
-- [x] Every claimed position shows visual Life, damage, and power-state tracks
-- [x] Program execution animates on the table before private controllers advance to the next turn
-- [x] A powered-down private controller can choose whether to remain shut down without a Program hand
+- [x] Course configuration belongs to a headerless, fixed, non-scrolling tabletop viewport
+
+## Joined players surround the fully visible configured course
+
+![Joined players surround the fully visible configured course](./screenshots/001-configured-tabletop-course-desktop.png)
+
+**Verifications:**
+
+- [x] Each scanned phone occupies the physical position encoded by its QR link
+- [x] The course fills its center viewport with square, fully visible cells
+- [x] Claimed positions show public Life, damage, and power tracks
+- [x] Private phones receive Program decks without course controls
+
+## The tabletop reveals both Programs during staged register playback
+
+![The tabletop reveals both Programs during staged register playback](./screenshots/002-animated-program-execution-desktop.png)
+
+**Verifications:**
+
+- [x] All ten Program cards are face up while register playback remains visible
+
+## A private controller handles its next-turn power choice without a Program hand
+
+![A private controller handles its next-turn power choice without a Program hand](./screenshots/003-private-power-down-choice-desktop.png)
+
+**Verifications:**
+
+- [x] A powered-down controller can remain shut down or return active without exposing a hand
