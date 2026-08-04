@@ -21,6 +21,7 @@ The shared display creates a fresh room, exposes eight position-specific QR join
 - [x] The course fills its center viewport with square, fully visible cells
 - [x] Claimed positions show public Life, damage, and power tracks
 - [x] Private phones receive Program decks without course controls
+- [x] Private Program controllers fill the phone viewport and support touch dragging without scrolling
 
 ## The tabletop reveals both Programs during staged register playback
 
