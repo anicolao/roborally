@@ -1,8 +1,13 @@
-# 012 — All Option cards
+# Inspect all 26 executable Option cards
 
-The product renders the complete versioned Avalon Hill 2005 Option catalog from
-the same manifest used by the reducer. The browser scenario scrolls through and
-checks all 26 names, classes, timings, and implementation summaries. The
-matching pure fixture table executes every active card behavior plus explicit
-non-activation cases, while scenario 011 proves real face-up ownership and
-finite multiplayer choices.
+The in-product 2005 catalog is generated from the same versioned manifest used by the reducer. Every card exposes its timing class and concise behavior; exhaustive pure fixtures execute each active effect and explicit non-activation cases.
+
+## The reviewed 2005 Option deck is complete and inspectable
+
+![The reviewed 2005 Option deck is complete and inspectable](./screenshots/000-complete-executable-option-catalog-desktop.png)
+
+**Verifications:**
+
+- [x] Exactly 26 uniquely identified card behaviors are rendered
+- [x] The edition-specific Crab Legs and Dual Processor cards are present
+- [x] Cards from a different Option inventory are absent

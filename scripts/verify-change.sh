@@ -9,6 +9,9 @@ echo "Checking staged and unstaged patches..."
 git diff --cached --check
 git diff --check
 
+echo "Checking E2E screenshot-step conventions..."
+bun run check:e2e-steps
+
 echo "Running static checks..."
 bun run check
 bun run check:workflow

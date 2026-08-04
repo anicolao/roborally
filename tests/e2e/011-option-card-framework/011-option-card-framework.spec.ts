@@ -174,6 +174,7 @@ test('face-up Options use immutable Dock-order decisions', async (
         }
       ]
     });
+    steps.generateDocs();
   } finally {
     await guestContext.close();
   }

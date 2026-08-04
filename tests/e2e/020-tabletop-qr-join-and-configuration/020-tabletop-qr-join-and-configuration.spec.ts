@@ -4,6 +4,7 @@ import {
   enableSyntheticPlaybackClock,
   finishSyntheticPlayback
 } from '../helpers/playback-clock';
+import { TestStepHelper } from '../helpers/test-step-helper';
 
 async function expectFixedViewport(page: import('@playwright/test').Page) {
   const geometry = await page.evaluate(() => {
@@ -104,6 +105,11 @@ test('the tabletop owns configuration and seat QR codes open private controllers
   const secondContext = await browser.newContext();
   const firstPhone = await firstContext.newPage();
   const secondPhone = await secondContext.newPage();
+  const steps = new TestStepHelper(table, testInfo);
+  steps.setMetadata(
+    'Tabletop QR joining and configuration',
+    'The shared display creates a fresh room, exposes eight position-specific QR joins, owns race configuration, renders the course and public player state, and animates Program execution while phones retain private choices.'
+  );
 
   try {
     await enableSyntheticPlaybackClock(table);
@@ -123,6 +129,29 @@ test('the tabletop owns configuration and seat QR codes open private controllers
       .getAttribute('href');
     expect(positionSevenUrl).toContain(`/hand/?room=${roomCode}&seat=7`);
     expect(positionTwoUrl).toContain(`/hand/?room=${roomCode}&seat=2`);
+
+    await steps.step('open-table-qr-configuration', {
+      description: 'A fresh tabletop exposes eight QR positions and owns configuration',
+      status: 'skip',
+      verifications: [
+        {
+          spec: 'Eight open positions expose seat-specific QR join links',
+          check: async () => {
+            await expect(table.getByRole('img', { name: /QR code to join position/ })).toHaveCount(8);
+            expect(positionSevenUrl).toContain(`/hand/?room=${roomCode}&seat=7`);
+            expect(positionTwoUrl).toContain(`/hand/?room=${roomCode}&seat=2`);
+          }
+        },
+        {
+          spec: 'Course configuration belongs to a headerless, fixed, non-scrolling tabletop viewport',
+          check: async () => {
+            await expect(table.getByLabel('Tabletop race configuration')).toBeVisible();
+            await expect(table.locator('header, footer')).toHaveCount(0);
+            await expectFixedViewport(table);
+          }
+        }
+      ]
+    });
 
     await firstPhone.goto(`${positionSevenUrl}&e2eIdentity=ADA`);
     await expect(firstPhone.getByRole('heading', { name: 'D07' })).toBeVisible();
@@ -205,6 +234,49 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expect(firstPhone.getByLabel('Course')).toHaveCount(0);
     await expect(secondPhone.getByLabel('Course')).toHaveCount(0);
 
+    await steps.step('configured-tabletop-course', {
+      description: 'Joined players surround the fully visible configured course',
+      status: 'skip',
+      verifications: [
+        {
+          spec: 'Each scanned phone occupies the physical position encoded by its QR link',
+          check: async () => {
+            await expect(table.locator('[data-seat="7"]')).toContainText('Ada');
+            await expect(table.locator('[data-seat="2"]')).toContainText('Grace');
+          }
+        },
+        {
+          spec: 'The course fills its center viewport with square, fully visible cells',
+          check: async () => {
+            await expect(courseBoard).toBeVisible();
+            await expect(sharedTable).toHaveAttribute('data-course-layout', 'side-seats');
+            await expect(courseBoard).toHaveAttribute('data-tabletop-orientation', 'natural');
+            expect(Math.abs(cellBounds!.width - cellBounds!.height)).toBeLessThanOrEqual(1);
+            await expect(table.getByLabel('Board view controls')).toHaveCount(0);
+            await expect(table.getByText('Course text equivalent')).toHaveCount(0);
+            await expectFixedViewport(table);
+          }
+        },
+        {
+          spec: 'Claimed positions show public Life, damage, and power tracks',
+          check: async () => {
+            await expect(adaSeat.locator('.life-track i.remaining')).toHaveCount(3);
+            await expect(adaSeat.locator('.damage-track i.available')).toHaveCount(10);
+            await expect(adaSeat.locator('.power-state')).toContainText('ACTIVE');
+          }
+        },
+        {
+          spec: 'Private phones receive Program decks without course controls',
+          check: async () => {
+            await expect(firstPhone.getByRole('heading', { name: 'Program deck' })).toBeVisible();
+            await expect(secondPhone.getByRole('heading', { name: 'Program deck' })).toBeVisible();
+            await expect(firstPhone.getByLabel('Course')).toHaveCount(0);
+            await expect(secondPhone.getByLabel('Course')).toHaveCount(0);
+          }
+        }
+      ]
+    });
+
     await submitVisibleProgram(firstPhone);
     await submitVisibleProgram(secondPhone);
 
@@ -225,6 +297,21 @@ test('the tabletop owns configuration and seat QR codes open private controllers
       await advanceSyntheticPlayback([table]);
     }
     await expect(table.locator('.program-card.revealed')).toHaveCount(10);
+    await steps.step('animated-program-execution', {
+      description: 'The tabletop reveals both Programs during staged register playback',
+      status: 'skip',
+      verifications: [
+        {
+          spec: 'All ten Program cards are face up while register playback remains visible',
+          check: async () => {
+            await expect(table.locator('.program-card.revealed')).toHaveCount(10);
+            await expect(table.getByTestId('tabletop-register-playback')).toBeVisible();
+            await expect(firstPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toHaveCount(0);
+            await expect(secondPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toHaveCount(0);
+          }
+        }
+      ]
+    });
     await finishSyntheticPlayback([table]);
     await completePrivateResolutionChoices([firstPhone, secondPhone]);
     await expect.poll(() => table.locator('.damage-track i.taken').count()).toBeGreaterThan(0);
@@ -280,6 +367,22 @@ test('the tabletop owns configuration and seat QR codes open private controllers
       shutdownPhone.getByRole('button', { name: 'READY · WATCH THE TABLE' })
     ).toHaveCount(0);
 
+    await steps.step('private-power-down-choice', {
+      description: 'A private controller handles its next-turn power choice without a Program hand',
+      status: 'skip',
+      verifications: [
+        {
+          spec: 'A powered-down controller can remain shut down or return active without exposing a hand',
+          check: async () => {
+            await expect(shutdownPhone.getByRole('heading', { name: 'Next-turn power' })).toBeVisible();
+            await expect(shutdownPhone.getByRole('button', { name: 'POWER DOWN' })).toBeEnabled();
+            await expect(shutdownPhone.getByRole('button', { name: 'STAY ACTIVE' })).toBeEnabled();
+            await expect(shutdownPhone.getByRole('heading', { name: 'Program deck' })).toHaveCount(0);
+          }
+        }
+      ]
+    });
+
     await shutdownPhone.getByRole('button', { name: 'STAY ACTIVE' }).click();
     if (activePhoneNeedsPowerChoice && !activePhoneResponded) {
       const nextIndex = await phoneWithPowerChoice(phones);
@@ -287,6 +390,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
       await activePhone.getByRole('button', { name: 'STAY ACTIVE' }).click();
     }
     await expect(table.locator('p.sr-only')).toContainText('Turn 3 ·');
+    steps.generateDocs();
   } finally {
     await firstContext.close();
     await secondContext.close();
