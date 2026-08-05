@@ -698,6 +698,86 @@ describe('priority Program movement', () => {
     expect(blockedTarget.damage).toBe(0);
   });
 
+  it('uses Ramming Gear damage before a blocked push and the shared damage choice', () => {
+    const config = riskyExchangeConfig('RAMMING-GEAR');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'rammer', name: 'Rammer', robotId: 'axle' },
+        { uid: 'target', name: 'Target', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const robots = () => [
+      raceRobot({
+        uid: 'rammer',
+        name: 'Rammer',
+        x: 4,
+        y: 5,
+        facing: 'east',
+        options: [{ cardId: 'ramming-gear', spent: 0, storedProgramCardId: null }]
+      }),
+      raceRobot({
+        uid: 'target',
+        name: 'Target',
+        x: 5,
+        y: 5,
+        options: [{ cardId: 'rear-laser', spent: 0, storedProgramCardId: null }]
+      })
+    ];
+
+    const awaiting = robots();
+    const pending = applyProgramCard(
+      awaiting,
+      'rammer',
+      card('move-1'),
+      1,
+      [],
+      undefined,
+      compilePlayableCourse('risky-exchange'),
+      {},
+      programming
+    );
+    expect(pending).toMatchObject({
+      uid: 'target',
+      timing: 'damage',
+      heading: 'Ramming Gear damage incoming'
+    });
+    expect(awaiting[1]).toMatchObject({ x: 5, y: 5, damage: 0 });
+
+    const resolved = robots();
+    const trace: ResolutionTraceEntry[] = [];
+    const decisionId = 'r1-program-rammer-ramming-gear-step-1-target';
+    expect(
+      applyProgramCard(
+        resolved,
+        'rammer',
+        card('move-1'),
+        1,
+        trace,
+        undefined,
+        compilePlayableCourse('risky-exchange'),
+        {
+          [decisionId]: {
+            decisionId,
+            uid: 'target',
+            choiceId: 'take-damage'
+          }
+        },
+        programming
+      )
+    ).toBeNull();
+    expect(resolved[0]).toMatchObject({ x: 4, y: 5 });
+    expect(resolved[1]).toMatchObject({ x: 5, y: 5, damage: 1 });
+    expect(trace).toContainEqual(
+      expect.objectContaining({
+        kind: 'option-effect',
+        text: "Rammer's ramming gear hit Target for one damage."
+      })
+    );
+    expect(trace).toContainEqual(expect.objectContaining({ kind: 'push-blocked-wall' }));
+  });
+
   it('takes board and robot targets from one snapshot and locks damage registers', () => {
     const config = riskyExchangeConfig('LASER-LOCKS');
     const setup = deriveRaceSetup(
