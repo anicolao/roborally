@@ -370,6 +370,7 @@ function destroyRobot(
 interface TranslationResult {
   moved: boolean;
   actorDestroyed: boolean;
+  pendingOptionDecision?: PendingOptionDecision;
 }
 
 function translateOneCell(
@@ -381,7 +382,10 @@ function translateOneCell(
   card: ProgramCard | null,
   trace: ResolutionTraceEntry[],
   source: 'program' | 'pusher' = 'program',
-  course: CompiledCourse = defaultCourse
+  course: CompiledCourse = defaultCourse,
+  programming?: ProgrammingState,
+  optionDeck?: OptionDeckState,
+  optionDecisions: Readonly<Record<string, OptionDecision>> = {}
 ): TranslationResult {
   const chain: RaceRobotPosition[] = [actor];
   let cursor = actor;
@@ -409,6 +413,36 @@ function translateOneCell(
     const [dx, dy] = steps[direction];
     const occupant = activeRobotAt(robots, cursor.x + dx, cursor.y + dy);
     if (!occupant) break;
+    if (
+      chain.length === 1 &&
+      source === 'program' &&
+      programming &&
+      actor.options.some(({ cardId }) => cardId === 'ramming-gear')
+    ) {
+      const pendingOptionDecision = resolveOptionDamage(
+        robots,
+        occupant,
+        register,
+        trace,
+        programming,
+        optionDeck,
+        optionDecisions,
+        `r${register}-program-${actor.uid}-ramming-gear-step-${stepNumber}-${occupant.uid}`,
+        'Ramming Gear damage'
+      );
+      if (pendingOptionDecision) {
+        return { moved: false, actorDestroyed: false, pendingOptionDecision };
+      }
+      addTrace(
+        trace,
+        register,
+        actor.uid,
+        card,
+        'option-effect',
+        `${actor.name}'s ramming gear hit ${occupant.name} for one damage.`
+      );
+      if (occupant.status !== 'active') continue;
+    }
     chain.push(occupant);
     cursor = occupant;
   }
@@ -453,7 +487,9 @@ export function applyProgramCard(
   trace: ResolutionTraceEntry[],
   optionPlan?: OptionTurnPlan,
   course: CompiledCourse = defaultCourse,
-  optionDecisions: Readonly<Record<string, OptionDecision>> = {}
+  optionDecisions: Readonly<Record<string, OptionDecision>> = {},
+  programming?: ProgrammingState,
+  optionDeck?: OptionDeckState
 ): PendingOptionDecision | null {
   const robot = robots.find(({ uid }) => uid === actorUid);
   if (!robot || robot.status !== 'active' || robot.poweredDown) return null;
@@ -687,8 +723,12 @@ export function applyProgramCard(
       card,
       trace,
       'program',
-      course
+      course,
+      programming,
+      optionDeck,
+      optionDecisions
     );
+    if (result.pendingOptionDecision) return result.pendingOptionDecision;
     if (!result.moved || result.actorDestroyed) return null;
   }
   if (rotationAfterMovement) {
@@ -1080,6 +1120,81 @@ function dealOneDamage(
   }
 }
 
+function resolveOptionDamage(
+  robots: RaceRobotPosition[],
+  target: RaceRobotPosition,
+  register: number,
+  trace: ResolutionTraceEntry[],
+  programming: ProgrammingState,
+  optionDeck: OptionDeckState | undefined,
+  optionDecisions: Readonly<Record<string, OptionDecision>>,
+  decisionId: string,
+  sourceLabel: string
+): PendingOptionDecision | null {
+  if (target.options.some(({ cardId }) => cardId === 'ablative-coat')) {
+    dealOneDamage(robots, target, register, trace, programming, optionDeck);
+    return null;
+  }
+  const choice = optionDecisions[decisionId];
+  const eligibleCardIds = target.options.map(({ cardId }) => cardId);
+  const validChoice =
+    choice?.uid === target.uid &&
+    (choice.choiceId === 'take-damage' ||
+      (choice.choiceId.startsWith('discard:') &&
+        eligibleCardIds.includes(choice.choiceId.slice('discard:'.length) as OptionCardId)));
+  if (eligibleCardIds.length > 0 && !validChoice) {
+    addTrace(
+      trace,
+      register,
+      target.uid,
+      null,
+      'damage-choice-required',
+      `${target.name} must choose whether to take damage or discard an Option from ${sourceLabel}.`
+    );
+    return {
+      decisionId,
+      uid: target.uid,
+      cardId: null,
+      timing: 'damage',
+      register: register as RegisterNumber,
+      heading: `${sourceLabel} incoming`,
+      prompt: 'Choose now: discard one Option, or take the damage.',
+      tabletopPrompt: `Check your controller: ${sourceLabel.toLowerCase()}`,
+      choices: [
+        ...eligibleCardIds.map((cardId) => ({
+          id: `discard:${cardId}`,
+          label: `Discard ${OPTION_CARDS_BY_ID.get(cardId)?.name ?? cardId.replaceAll('-', ' ')} to prevent this damage`,
+          description: 'Destroy this Option to prevent one damage.',
+          cardId
+        })),
+        {
+          id: 'take-damage',
+          label: 'Take this damage',
+          description: 'Keep every Option and receive one damage.'
+        }
+      ]
+    };
+  }
+  const selectedCardId =
+    validChoice &&
+    choice.choiceId.startsWith('discard:') &&
+    eligibleCardIds.includes(choice.choiceId.slice('discard:'.length) as OptionCardId)
+      ? (choice.choiceId.slice('discard:'.length) as OptionCardId)
+      : null;
+  if (choice?.choiceId === 'take-damage') {
+    addTrace(
+      trace,
+      register,
+      target.uid,
+      null,
+      'damage-choice-resolved',
+      `${target.name} chose not to discard an Option from ${sourceLabel}.`
+    );
+  }
+  dealOneDamage(robots, target, register, trace, programming, optionDeck, selectedCardId);
+  return null;
+}
+
 export function resolveLaserSnapshot(
   robots: RaceRobotPosition[],
   register: number,
@@ -1260,33 +1375,19 @@ export function resolveLaserSnapshot(
         });
         continue;
       }
-      if (target.options.some(({ cardId }) => cardId === 'ablative-coat')) {
-        const damageTraceStart = trace.length;
-        dealOneDamage(robots, target, register, trace, programming, optionDeck);
-        damageSteps.push({
-          robots: cloneRaceRobots(robots),
-          trace: trace.slice(damageTraceStart)
-        });
-        continue;
-      }
-      const choice = optionDecisions[decisionId];
-      const eligibleCardIds = target.options.map(({ cardId }) => cardId);
-      const validChoice =
-        choice?.uid === target.uid &&
-        (choice.choiceId === 'take-damage' ||
-          (choice.choiceId.startsWith('discard:') &&
-            eligibleCardIds.includes(choice.choiceId.slice('discard:'.length) as OptionCardId)));
       const damageTraceStart = trace.length;
-      if (eligibleCardIds.length > 0 && !validChoice) {
-        addTrace(
-          trace,
-          register,
-          target.uid,
-          null,
-          'damage-choice-required',
-          `${target.name} must choose whether to take damage or discard an Option ` +
-            `(damage ${point} of ${hit.damage}).`
-        );
+      const pendingOptionDecision = resolveOptionDamage(
+        robots,
+        target,
+        register,
+        trace,
+        programming,
+        optionDeck,
+        optionDecisions,
+        decisionId,
+        `Laser damage ${point} of ${hit.damage}`
+      );
+      if (pendingOptionDecision) {
         damageSteps.push({
           robots: cloneRaceRobots(robots),
           trace: trace.slice(damageTraceStart)
@@ -1295,60 +1396,9 @@ export function resolveLaserSnapshot(
           laserTrace,
           laserBeams: orderedHits.flatMap(({ beam }) => (beam ? [beam] : [])),
           damageSteps,
-          pendingOptionDecision: {
-            decisionId,
-            uid: target.uid,
-            cardId: null,
-            timing: 'damage',
-            register: register as RegisterNumber,
-            heading: 'Laser damage incoming',
-            prompt:
-              `Choose now for damage ${point} of ${hit.damage}: ` +
-              'discard one Option, or take the damage.',
-            tabletopPrompt:
-              `Check your controller: take damage or discard an Option ` +
-              `(${point}/${hit.damage})`,
-            choices: [
-              ...eligibleCardIds.map((cardId) => ({
-                id: `discard:${cardId}`,
-                label: `Discard ${OPTION_CARDS_BY_ID.get(cardId)?.name ?? cardId.replaceAll('-', ' ')} to prevent this damage`,
-                description: 'Destroy this Option to prevent one damage.',
-                cardId
-              })),
-              {
-                id: 'take-damage',
-                label: 'Take this damage',
-                description: 'Keep every Option and receive one damage.'
-              }
-            ]
-          }
+          pendingOptionDecision
         };
       }
-      const selectedCardId =
-        validChoice &&
-        choice.choiceId.startsWith('discard:') &&
-        eligibleCardIds.includes(choice.choiceId.slice('discard:'.length) as OptionCardId)
-          ? (choice.choiceId.slice('discard:'.length) as OptionCardId)
-          : null;
-      if (choice?.choiceId === 'take-damage') {
-        addTrace(
-          trace,
-          register,
-          target.uid,
-          null,
-          'damage-choice-resolved',
-          `${target.name} chose not to discard an Option for damage ${point} of ${hit.damage}.`
-        );
-      }
-      dealOneDamage(
-        robots,
-        target,
-        register,
-        trace,
-        programming,
-        optionDeck,
-        selectedCardId
-      );
       damageSteps.push({
         robots: cloneRaceRobots(robots),
         trace: trace.slice(damageTraceStart)
@@ -1850,7 +1900,9 @@ export function resolveProgrammedTurn(
         trace,
         optionPlanFor(optionPlans, entry.uid),
         course,
-        optionDecisions
+        optionDecisions,
+        programming,
+        optionDeck
       );
       if (trace.length === cardTraceStart) continue;
       playback.frames.push({

@@ -164,6 +164,10 @@ export function deriveRaceSetup(
           ? index === 0
             ? { x: 3, y: 8 }
             : { x: 1, y: 8 }
+          : config.courseId === 'option-lab' && config.seed.startsWith('OPTION-RAM-')
+            ? index === 0
+              ? { x: 1, y: 8 }
+              : { x: 2, y: 8 }
           : config.courseId === 'option-lab' &&
               config.seed.startsWith('OPTION-FLAG-') &&
               index === 0

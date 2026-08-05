@@ -109,12 +109,18 @@ function optionSeed(
   guestRequiredAction?: ProgramAction | readonly ProgramAction[],
   hostMustBeDockOne = false,
   guestOptionId?: OptionCardId,
-  layout: "dock" | "flag" | "shield" = "dock",
+  layout: "dock" | "flag" | "ram" | "shield" = "dock",
   requireStationaryTurns = false,
 ) {
   for (let index = 0; index < 50_000; index += 1) {
     const fixturePrefix =
-      layout === "flag" ? "FLAG-" : layout === "shield" ? "SHIELD-" : "";
+      layout === "flag"
+        ? "FLAG-"
+        : layout === "ram"
+          ? "RAM-"
+          : layout === "shield"
+            ? "SHIELD-"
+            : "";
     const seed = `OPTION-${fixturePrefix}${cardId}-${index}`;
     const config = raceConfig("option-lab", seed);
     const setup = deriveRaceSetup(players, config);
@@ -166,6 +172,9 @@ function optionSeed(
       continue;
     }
     if (!hasActions(guest, guestRequiredAction)) {
+      continue;
+    }
+    if (layout === "ram" && !findStationarySequence(playerActions(guest))) {
       continue;
     }
     if (requireStationaryTurns) {
@@ -270,7 +279,7 @@ async function createOptionRace(
   guestRequiredAction?: ProgramAction | readonly ProgramAction[],
   hostMustBeDockOne = false,
   guestOptionId?: OptionCardId,
-  layout: "dock" | "flag" | "shield" = "dock",
+  layout: "dock" | "flag" | "ram" | "shield" = "dock",
   initialHostPowerDown = false,
   requireStationaryTurns = false,
 ) {
@@ -818,6 +827,43 @@ test("Power-Down Shield prevents one hit from each direction per register", asyn
     await expect(guest.locator(".full-resolution")).toContainText(
       "Ada's power-down shield prevented one damage arriving from the west.",
     );
+  } finally {
+    await guestContext.close();
+  }
+});
+
+test("Ramming Gear damages the robot it pushes", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "ramming-gear",
+    ["rotate-right", "move-1"],
+    undefined,
+    true,
+    undefined,
+    "ram",
+  );
+  try {
+    await chooseProgram(host, ["rotate-right", "move-1"]);
+    await chooseStationaryProgram(guest);
+    await takeDamageUntilTurnCompletes(host, guest);
+
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada's ramming gear hit Grace for one damage.",
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      "Ada's ramming gear hit Grace for one damage.",
+    );
+    await expect(
+      host
+        .getByRole("list", { name: "Robot Life and damage state" })
+        .getByRole("listitem")
+        .filter({ hasText: "Grace" }),
+    ).toContainText(/(?:2|3|4|5|6|7|8|9) Damage/);
   } finally {
     await guestContext.close();
   }
