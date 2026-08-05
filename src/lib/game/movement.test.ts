@@ -988,37 +988,8 @@ describe('priority Program movement', () => {
     expect(finalRobots[1].options).toEqual([]);
   });
 
-  it('applies reviewed movement and factory-rotation Option hooks', () => {
-    const mover = raceRobot({
-      uid: 'mover',
-      name: 'Mover',
-      x: 6,
-      y: 10,
-      options: [{ cardId: 'fourth-gear', spent: 0, storedProgramCardId: null }]
-    });
+  it('applies reviewed factory-rotation Option hooks', () => {
     const trace: ResolutionTraceEntry[] = [];
-    applyProgramCard(
-      [mover],
-      mover.uid,
-      card('move-3'),
-      1,
-      trace,
-      {
-        kind: 'option-plan',
-        activations: [
-          {
-            cardId: 'fourth-gear',
-            register: 1,
-            mode: 'activate',
-            targetUid: null,
-            targetOptionId: null
-          }
-        ]
-      }
-    );
-    expect(mover).toMatchObject({ x: 6, y: 6 });
-    expect(trace).toContainEqual(expect.objectContaining({ kind: 'option-effect' }));
-
     const stable = raceRobot({
       uid: 'stable',
       name: 'Stable',
@@ -1100,6 +1071,61 @@ describe('priority Program movement', () => {
     expect(stoppedMover).toMatchObject({ x: 6, y: 10 });
     expect(trace).toContainEqual(
       expect.objectContaining({ kind: 'option-effect', text: expect.stringContaining('zero spaces') })
+    );
+  });
+
+  it('pauses Fourth Gear at Move 3 execution and replays the persisted choice', () => {
+    const createMover = () =>
+      raceRobot({
+        uid: 'mover',
+        name: 'Mover',
+        x: 6,
+        y: 10,
+        facing: 'north',
+        options: [{ cardId: 'fourth-gear', spent: 0, storedProgramCardId: null }]
+      });
+    const pendingMover = createMover();
+    const pending = applyProgramCard(
+      [pendingMover],
+      pendingMover.uid,
+      card('move-3'),
+      2,
+      []
+    );
+    expect(pending).toMatchObject({
+      decisionId: 'r2-program-mover-fourth-gear',
+      uid: 'mover',
+      cardId: 'fourth-gear',
+      timing: 'program-movement'
+    });
+    expect(pendingMover).toMatchObject({ x: 6, y: 10 });
+
+    const acceleratedMover = createMover();
+    const trace: ResolutionTraceEntry[] = [];
+    expect(
+      applyProgramCard(
+        [acceleratedMover],
+        acceleratedMover.uid,
+        card('move-3'),
+        2,
+        trace,
+        undefined,
+        undefined,
+        {
+          'r2-program-mover-fourth-gear': {
+            decisionId: 'r2-program-mover-fourth-gear',
+            uid: 'mover',
+            choiceId: 'use'
+          }
+        }
+      )
+    ).toBeNull();
+    expect(acceleratedMover).toMatchObject({ x: 6, y: 6 });
+    expect(trace).toContainEqual(
+      expect.objectContaining({
+        kind: 'option-effect',
+        text: expect.stringContaining('four spaces')
+      })
     );
   });
 

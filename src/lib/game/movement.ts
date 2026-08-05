@@ -542,7 +542,58 @@ export function applyProgramCard(
       );
     }
   }
-  for (const cardId of ['fourth-gear', 'reverse-gears'] as const) {
+  if (
+    card.action === 'move-3' &&
+    robot.options.some(({ cardId }) => cardId === 'fourth-gear')
+  ) {
+    const decisionId = `r${register}-program-${robot.uid}-fourth-gear`;
+    const decision = optionDecisions[decisionId];
+    if (!decision || decision.uid !== robot.uid || !['use', 'decline'].includes(decision.choiceId)) {
+      addTrace(
+        trace,
+        register,
+        robot.uid,
+        card,
+        'option-decision-required',
+        `${robot.name} must decide whether to use fourth gear for this Move 3.`
+      );
+      return {
+        decisionId,
+        uid: robot.uid,
+        cardId: 'fourth-gear',
+        timing: 'program-movement',
+        register: register as RegisterNumber,
+        heading: 'Use Fourth Gear?',
+        prompt: `${robot.name} is about to execute Move 3. It may move four spaces instead.`,
+        tabletopPrompt: 'Use Fourth Gear or execute Move 3 normally',
+        choices: [
+          {
+            id: 'use',
+            label: 'Use Fourth Gear',
+            description: 'Move four spaces at this card’s printed priority.',
+            cardId: 'fourth-gear'
+          },
+          {
+            id: 'decline',
+            label: 'Move normally',
+            description: 'Execute Move 3 normally.'
+          }
+        ]
+      };
+    }
+    if (decision.choiceId === 'use') {
+      signedDistance = 4;
+      addTrace(
+        trace,
+        register,
+        robot.uid,
+        card,
+        'option-effect',
+        `${robot.name} used fourth gear and will move four spaces.`
+      );
+    }
+  }
+  for (const cardId of ['reverse-gears'] as const) {
     const activation = optionPlan?.activations.find(
       (candidate) =>
         candidate.cardId === cardId &&
