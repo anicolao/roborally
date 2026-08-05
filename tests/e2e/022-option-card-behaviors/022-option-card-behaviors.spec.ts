@@ -578,3 +578,41 @@ test("Mechanical Arm touches an adjacent flag through an open edge", async ({
     await guestContext.close();
   }
 });
+
+test("Superior Archive Copy removes the next re-entry damage", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "superior-archive-copy",
+    ["u-turn", "move-2"],
+    undefined,
+    true,
+  );
+  try {
+    await chooseProgram(host, ["u-turn", "move-2"]);
+    await chooseProgram(guest);
+
+    const optionLoss = host.getByLabel("Destroyed robot Option loss");
+    await expect(optionLoss).toBeVisible();
+    await optionLoss
+      .getByRole("button", { name: "Discard Superior Archive Copy" })
+      .click();
+
+    const reentry = host.getByLabel("Re-entry cell and facing");
+    await expect(reentry).toBeVisible();
+    await reentry.selectOption({ index: 1 });
+    await host.getByRole("button", { name: "Confirm re-entry" }).click();
+    await expect(host.locator(".full-resolution")).toContainText(
+      /Ada re-entered .* with 0 damage\./,
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      /Ada re-entered .* with 0 damage\./,
+    );
+  } finally {
+    await guestContext.close();
+  }
+});
