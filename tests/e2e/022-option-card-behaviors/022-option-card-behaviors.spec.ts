@@ -956,3 +956,48 @@ test("High-Power Laser asks at an obstruction and passes through a robot", async
     await guestContext.close();
   }
 });
+
+test("Pressor Beam replaces the main laser with a one-space push", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "pressor-beam",
+    "rotate-right",
+    undefined,
+    true,
+    undefined,
+    "ram",
+  );
+  try {
+    await chooseProgram(host, "rotate-right");
+    await chooseStationaryProgram(guest);
+
+    const decision = host.getByLabel("Option decision");
+    await expect(decision).toContainText("Use Pressor Beam?");
+    await expect(guest.getByLabel("Option decision")).toContainText(
+      "Waiting for Ada",
+    );
+    await decision
+      .getByRole("button", { name: "Push with Pressor Beam" })
+      .click();
+
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada's pressor beam pushed Grace one space east.",
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      "Grace was pushed east by an Option weapon",
+    );
+    await expect(
+      host
+        .getByRole("list", { name: "Robot Life and damage state" })
+        .getByRole("listitem")
+        .filter({ hasText: "Grace" }),
+    ).toContainText("0 Damage");
+  } finally {
+    await guestContext.close();
+  }
+});
