@@ -109,7 +109,8 @@ export const OPTION_CARDS = Object.freeze([
     timing: ['programming', 'before-register'],
     optional: true,
     payload: 1,
-    summary: 'Stores one unused Program for a declared register substitution this turn.'
+    summary:
+      'Store one unused Program after programming. Before revealing any register that turn, swap it for your programmed card there. Discard the replaced card, or the stored card if unused.'
   },
   {
     id: 'crab-legs',
