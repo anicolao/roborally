@@ -1957,6 +1957,80 @@ describe('priority Program movement', () => {
     );
   });
 
+  it('stores an unused movement card on Flywheel for the next hand', () => {
+    const config = riskyExchangeConfig('FLYWHEEL-RUNTIME');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'flywheel', name: 'Flywheel', robotId: 'axle' },
+        { uid: 'other', name: 'Other', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const rotations = PROGRAM_CARDS.filter(({ action }) => action === 'rotate-right').slice(
+      0,
+      10
+    );
+    for (const [playerIndex, player] of programming.players.entries()) {
+      player.registers.forEach((candidate, index) => {
+        candidate.cardId = rotations[playerIndex * 5 + index].id;
+      });
+      player.submitted = true;
+    }
+    const storedCard = card('move-3');
+    programming.players.find(({ uid }) => uid === 'flywheel')!.unusedCardIds = [
+      storedCard.id
+    ];
+    programming.phase = 'programmed';
+    const robots = createRaceRobotPositions(setup);
+    robots.find(({ uid }) => uid === 'flywheel')!.options.push({
+      cardId: 'flywheel',
+      spent: 0,
+      storedProgramCardId: null
+    });
+    const pending = resolveProgrammedTurn(programming, setup, robots)!;
+    expect(pending.pendingOptionDecision).toMatchObject({
+      decisionId: 'turn-1-flywheel-store-flywheel',
+      timing: 'programming'
+    });
+    const decisionId = pending.pendingOptionDecision!.decisionId;
+    const resolved = resolveProgrammedTurn(
+      programming,
+      setup,
+      robots,
+      undefined,
+      {},
+      {
+        [decisionId]: {
+          decisionId,
+          uid: 'flywheel',
+          choiceId: `store:${storedCard.id}`
+        }
+      }
+    )!;
+    expect(
+      resolved.robots
+        .find(({ uid }) => uid === 'flywheel')
+        ?.options.find(({ cardId }) => cardId === 'flywheel')
+    ).toMatchObject({ storedProgramCardId: storedCard.id });
+
+    const next = createProgrammingState(
+      setup,
+      config,
+      {},
+      {},
+      2,
+      new Set(setup.players.map(({ uid }) => uid)),
+      {},
+      { flywheel: storedCard.id }
+    );
+    expect(next.players.find(({ uid }) => uid === 'flywheel')?.hand).toContain(
+      storedCard.id
+    );
+    expect(next.players.find(({ uid }) => uid === 'flywheel')?.hand).toHaveLength(10);
+    expect(next.drawPile).not.toContain(storedCard.id);
+  });
+
   it('applies armor, laser, circuit-breaker, and archive-copy hooks', () => {
     const config = riskyExchangeConfig('OPTION-HOOKS');
     const setup = deriveRaceSetup(

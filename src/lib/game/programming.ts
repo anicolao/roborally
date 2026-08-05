@@ -75,7 +75,8 @@ export function createProgrammingState(
   > = {},
   turnNumber = 1,
   eligibleUids: ReadonlySet<string> = new Set(setup.players.map(({ uid }) => uid)),
-  optionIdsByUid: Readonly<Record<string, readonly OptionCardId[]>> = {}
+  optionIdsByUid: Readonly<Record<string, readonly OptionCardId[]>> = {},
+  storedProgramCardIdsByUid: Readonly<Record<string, ProgramCard['id'] | null>> = {}
 ): ProgrammingState {
   if (!Number.isInteger(turnNumber) || turnNumber < 1) {
     throw new Error('Turn number must be a positive integer.');
@@ -86,7 +87,14 @@ export function createProgrammingState(
   if (new Set(lockedCardIds).size !== lockedCardIds.length) {
     throw new Error('A locked Program card cannot occupy more than one register.');
   }
-  const deck = shuffledProgramDeck(config, new Set(lockedCardIds), turnNumber);
+  const storedCardIds = Object.values(storedProgramCardIdsByUid).filter(
+    (cardId): cardId is ProgramCard['id'] => cardId !== null
+  );
+  const deck = shuffledProgramDeck(
+    config,
+    new Set([...lockedCardIds, ...storedCardIds]),
+    turnNumber
+  );
   const players = setup.players.filter(({ uid }) => eligibleUids.has(uid)).map(({ uid }) => {
     const damage = damageByUid[uid] ?? setup.startingDamage;
     const locked = lockedRegistersByUid[uid] ?? {};
@@ -129,6 +137,10 @@ export function createProgrammingState(
       if (!cardId) throw new Error('The shared Program deck cannot satisfy the deal.');
       player.hand.push(cardId);
     }
+  }
+  for (const player of players) {
+    const storedCardId = storedProgramCardIdsByUid[player.uid];
+    if (storedCardId) player.hand.push(storedCardId);
   }
 
   return {

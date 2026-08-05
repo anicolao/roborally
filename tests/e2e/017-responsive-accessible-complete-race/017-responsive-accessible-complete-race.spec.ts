@@ -92,7 +92,22 @@ async function closeResolutionInterrupts(host: Page, guest: Page, turn: number) 
     for (const page of [host, guest]) {
       const takeDamage = page.getByRole('button', { name: 'Take this damage' });
       if (await takeDamage.isVisible()) {
+        const decisionId = await page.getByLabel('Damage prevention choice').getAttribute('data-decision-id');
         await takeDamage.click();
+        if (decisionId) {
+          await expect(page.locator(`[data-decision-id="${decisionId}"]`)).toHaveCount(0);
+        }
+        await finishSyntheticPlayback([host, guest]);
+        break;
+      }
+      const optionDecision = page.getByLabel('Option decision');
+      const optionChoice = optionDecision.getByRole('button').last();
+      if (await optionChoice.isVisible()) {
+        const decisionId = await optionDecision.getAttribute('data-decision-id');
+        await optionChoice.click();
+        if (decisionId) {
+          await expect(page.locator(`[data-decision-id="${decisionId}"]`)).toHaveCount(0);
+        }
         await finishSyntheticPlayback([host, guest]);
         break;
       }
@@ -116,6 +131,12 @@ async function closeResolutionInterrupts(host: Page, guest: Page, turn: number) 
         await expect(completed).toBeVisible({ timeout: 30_000 });
         return;
       }
+    }
+    if (await host.evaluate(() =>
+      (window.__roborallyE2ePlaybackClock?.pending?.() ?? 0) > 0
+    )) {
+      await finishSyntheticPlayback([host, guest]);
+      continue;
     }
     await completed.waitFor({ state: 'visible', timeout: 250 }).catch(() => {});
   }
