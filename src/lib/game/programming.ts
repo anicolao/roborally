@@ -15,6 +15,8 @@ export interface ProgrammingPlayer {
   uid: string;
   damage: number;
   hand: ProgramCard['id'][];
+  /** Dealt cards not placed in registers; Options may consume these during execution. */
+  unusedCardIds: ProgramCard['id'][];
   registers: ProgramRegister[];
   /** Cards selected in the private, editable draft before submission. */
   draftCardIds: ProgramCard['id'][];
@@ -92,6 +94,7 @@ export function createProgrammingState(
       uid,
       damage,
       hand: [] as ProgramCard['id'][],
+      unusedCardIds: [] as ProgramCard['id'][],
       registers: Array.from({ length: REGISTER_COUNT }, (_, index) => {
         const cardId = locked[(index + 1) as 1 | 2 | 3 | 4 | 5] ?? null;
         return { cardId, locked: cardId !== null };
@@ -147,6 +150,7 @@ function cloneState(state: ProgrammingState): ProgrammingState {
     players: state.players.map((player) => ({
       ...player,
       hand: [...player.hand],
+      unusedCardIds: [...player.unusedCardIds],
       registers: player.registers.map((register) => ({ ...register })),
       draftCardIds: [...player.draftCardIds],
       draftSlots: draftSlotsForPlayer(player)
@@ -256,9 +260,8 @@ function placeProgram(
   for (const register of player.registers) {
     if (!register.locked) register.cardId = cardIds[cardIndex++];
   }
-  state.currentTurnDiscard.push(
-    ...player.hand.filter((cardId) => !cardIds.includes(cardId))
-  );
+  player.unusedCardIds = player.hand.filter((cardId) => !cardIds.includes(cardId));
+  state.currentTurnDiscard.push(...player.unusedCardIds);
   player.hand = [];
   player.draftCardIds = [];
   player.draftSlots = Array.from({ length: REGISTER_COUNT }, () => null);

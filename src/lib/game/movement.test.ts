@@ -1771,6 +1771,64 @@ describe('priority Program movement', () => {
     );
   });
 
+  it('pairs an unused Rotate card with Move 1 for Crab Legs', () => {
+    const config = riskyExchangeConfig('CRAB-LEGS-RUNTIME');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'crab', name: 'Crab', robotId: 'axle' },
+        { uid: 'other', name: 'Other', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const rotateLeft = card('rotate-left');
+    programming.players.find(({ uid }) => uid === 'crab')!.unusedCardIds = [
+      rotateLeft.id
+    ];
+    const createCrab = () =>
+      raceRobot({
+        uid: 'crab',
+        name: 'Crab',
+        x: 3,
+        y: 8,
+        facing: 'north',
+        options: [{ cardId: 'crab-legs', spent: 0, storedProgramCardId: null }]
+      });
+    const pending = applyProgramCard(
+      [createCrab()],
+      'crab',
+      card('move-1'),
+      1,
+      [],
+      undefined,
+      undefined,
+      {},
+      programming
+    );
+    expect(pending).toMatchObject({ cardId: 'crab-legs', uid: 'crab' });
+
+    const crab = createCrab();
+    const decisionId = 'r1-program-crab-crab-legs';
+    applyProgramCard(
+      [crab],
+      'crab',
+      card('move-1'),
+      1,
+      [],
+      undefined,
+      undefined,
+      {
+        [decisionId]: {
+          decisionId,
+          uid: 'crab',
+          choiceId: `pair:${rotateLeft.id}`
+        }
+      },
+      programming
+    );
+    expect(crab).toMatchObject({ x: 2, y: 8, facing: 'north' });
+  });
+
   it('applies armor, laser, circuit-breaker, and archive-copy hooks', () => {
     const config = riskyExchangeConfig('OPTION-HOOKS');
     const setup = deriveRaceSetup(
