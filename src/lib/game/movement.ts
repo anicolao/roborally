@@ -2,7 +2,7 @@ import type { BoardCell, BoardElement, Direction } from './course-manifest';
 import type { CompiledCourse } from './course-geometry';
 import { compilePlayableCourse } from './playable-courses';
 import { PROGRAM_CARDS, type ProgramAction, type ProgramCard } from './program-manifest';
-import type { OptionCardId } from './option-manifest';
+import { OPTION_CARDS_BY_ID, type OptionCardId } from './option-manifest';
 import {
   cloneOptionDeck,
   createOptionDeck,
@@ -71,6 +71,8 @@ export type ResolutionTraceKind =
   | 'gear'
   | 'board-laser'
   | 'robot-laser'
+  | 'option-decision-required'
+  | 'option-decision-resolved'
   | 'damage-choice-required'
   | 'damage-choice-resolved'
   | 'damage'
@@ -105,21 +107,29 @@ export interface RobotLaserBeam {
   beamCount: 1 | 2;
 }
 
-export interface DamagePreventionChoice {
+export interface OptionDecision {
+  decisionId: string;
+  uid: string;
+  choiceId: string;
+}
+
+export interface OptionDecisionChoice {
+  id: string;
+  label: string;
+  description: string;
+  cardId?: OptionCardId;
+}
+
+export interface PendingOptionDecision {
   decisionId: string;
   uid: string;
   cardId: OptionCardId | null;
-}
-
-export interface PendingDamageChoice {
-  decisionId: string;
-  uid: string;
+  timing: 'damage' | 'program-movement';
   register: RegisterNumber;
-  sourceUid: string | null;
-  sourceKind: 'board-laser' | 'robot-laser';
-  damagePoint: number;
-  damageTotal: number;
-  eligibleCardIds: OptionCardId[];
+  heading: string;
+  prompt: string;
+  tabletopPrompt: string;
+  choices: OptionDecisionChoice[];
 }
 
 export interface ProgramPlaybackFrame {
@@ -155,7 +165,7 @@ export interface ProgramResolution {
   courseId?: PlayableCourseId;
   turnNumber: number;
   phase:
-    | 'awaiting-damage'
+    | 'awaiting-option-decision'
     | 'awaiting-option'
     | 'awaiting-reentry'
     | 'turn-complete'
@@ -164,7 +174,7 @@ export interface ProgramResolution {
   trace: ResolutionTraceEntry[];
   optionDeck: OptionDeckState;
   nextOptionChoiceUid: string | null;
-  pendingDamageChoice?: PendingDamageChoice | null;
+  pendingOptionDecision?: PendingOptionDecision | null;
   nextReentryUid: string | null;
   winnerUids: string[];
   runnersUpUids: string[];
@@ -442,10 +452,11 @@ export function applyProgramCard(
   register: number,
   trace: ResolutionTraceEntry[],
   optionPlan?: OptionTurnPlan,
-  course: CompiledCourse = defaultCourse
-) {
+  course: CompiledCourse = defaultCourse,
+  optionDecisions: Readonly<Record<string, OptionDecision>> = {}
+): PendingOptionDecision | null {
   const robot = robots.find(({ uid }) => uid === actorUid);
-  if (!robot || robot.status !== 'active' || robot.poweredDown) return;
+  if (!robot || robot.status !== 'active' || robot.poweredDown) return null;
   addTrace(
     trace,
     register,
@@ -474,13 +485,64 @@ export function applyProgramCard(
       'rotate',
       `${robot.name} rotated from ${before} to ${robot.facing}.`
     );
-    return;
+    return null;
   }
 
   let signedDistance = movementDistance(card.action);
   let direction = signedDistance < 0 ? opposite[robot.facing] : robot.facing;
   let rotationAfterMovement: -1 | 1 | 2 | undefined;
-  for (const cardId of ['brakes', 'fourth-gear', 'reverse-gears'] as const) {
+  if (
+    card.action === 'move-1' &&
+    robot.options.some(({ cardId }) => cardId === 'brakes')
+  ) {
+    const decisionId = `r${register}-program-${robot.uid}-brakes`;
+    const decision = optionDecisions[decisionId];
+    if (!decision || decision.uid !== robot.uid || !['use', 'decline'].includes(decision.choiceId)) {
+      addTrace(
+        trace,
+        register,
+        robot.uid,
+        card,
+        'option-decision-required',
+        `${robot.name} must decide whether to use brakes for this Move 1.`
+      );
+      return {
+        decisionId,
+        uid: robot.uid,
+        cardId: 'brakes',
+        timing: 'program-movement',
+        register: register as RegisterNumber,
+        heading: 'Use Brakes?',
+        prompt: `${robot.name} is about to execute Move 1. It may move zero spaces instead.`,
+        tabletopPrompt: 'Use Brakes or execute Move 1 normally',
+        choices: [
+          {
+            id: 'use',
+            label: 'Use Brakes',
+            description: 'Move zero spaces at this card’s printed priority.',
+            cardId: 'brakes'
+          },
+          {
+            id: 'decline',
+            label: 'Move normally',
+            description: 'Execute Move 1 normally.'
+          }
+        ]
+      };
+    }
+    if (decision.choiceId === 'use') {
+      signedDistance = 0;
+      addTrace(
+        trace,
+        register,
+        robot.uid,
+        card,
+        'option-effect',
+        `${robot.name} used brakes and moved zero spaces.`
+      );
+    }
+  }
+  for (const cardId of ['fourth-gear', 'reverse-gears'] as const) {
     const activation = optionPlan?.activations.find(
       (candidate) =>
         candidate.cardId === cardId &&
@@ -545,7 +607,7 @@ export function applyProgramCard(
       'program',
       course
     );
-    if (!result.moved || result.actorDestroyed) return;
+    if (!result.moved || result.actorDestroyed) return null;
   }
   if (rotationAfterMovement) {
     const before = robot.facing;
@@ -559,6 +621,7 @@ export function applyProgramCard(
       `${robot.name}'s dual processor rotated from ${before} to ${robot.facing}.`
     );
   }
+  return null;
 }
 
 interface ConveyorIntent {
@@ -862,7 +925,7 @@ interface LaserSnapshotResult {
   laserTrace: ResolutionTraceEntry[];
   laserBeams: RobotLaserBeam[];
   damageSteps: LaserDamageStep[];
-  pendingDamageChoice: PendingDamageChoice | null;
+  pendingOptionDecision: PendingOptionDecision | null;
 }
 
 function cloneRaceRobots(source: readonly RaceRobotPosition[]): RaceRobotPosition[] {
@@ -935,7 +998,7 @@ export function resolveLaserSnapshot(
   programming: ProgrammingState,
   cells: readonly BoardCell[] = defaultCourseCells,
   optionDeck?: OptionDeckState,
-  damageChoices: Readonly<Record<string, DamagePreventionChoice>> = {},
+  optionDecisions: Readonly<Record<string, OptionDecision>> = {},
   optionPlans: Readonly<Record<string, OptionTurnPlan>> = {},
   course: CompiledCourse = defaultCourse
 ): LaserSnapshotResult {
@@ -1082,11 +1145,13 @@ export function resolveLaserSnapshot(
       if (target.status !== 'active') break;
       damageOrdinal += 1;
       const decisionId = `r${register}-damage-${String(damageOrdinal).padStart(2, '0')}-${target.uid}`;
-      const choice = damageChoices[decisionId];
+      const choice = optionDecisions[decisionId];
       const eligibleCardIds = target.options.map(({ cardId }) => cardId);
       const validChoice =
         choice?.uid === target.uid &&
-        (choice.cardId === null || eligibleCardIds.includes(choice.cardId));
+        (choice.choiceId === 'take-damage' ||
+          (choice.choiceId.startsWith('discard:') &&
+            eligibleCardIds.includes(choice.choiceId.slice('discard:'.length) as OptionCardId)));
       const damageTraceStart = trace.length;
       if (eligibleCardIds.length > 0 && !validChoice) {
         addTrace(
@@ -1106,25 +1171,42 @@ export function resolveLaserSnapshot(
           laserTrace,
           laserBeams: orderedHits.flatMap(({ beam }) => (beam ? [beam] : [])),
           damageSteps,
-          pendingDamageChoice: {
+          pendingOptionDecision: {
             decisionId,
             uid: target.uid,
+            cardId: null,
+            timing: 'damage',
             register: register as RegisterNumber,
-            sourceUid: hit.sourceUid,
-            sourceKind: hit.kind,
-            damagePoint: point,
-            damageTotal: hit.damage,
-            eligibleCardIds
+            heading: 'Laser damage incoming',
+            prompt:
+              `Choose now for damage ${point} of ${hit.damage}: ` +
+              'discard one Option, or take the damage.',
+            tabletopPrompt:
+              `Check your controller: take damage or discard an Option ` +
+              `(${point}/${hit.damage})`,
+            choices: [
+              ...eligibleCardIds.map((cardId) => ({
+                id: `discard:${cardId}`,
+                label: `Discard ${OPTION_CARDS_BY_ID.get(cardId)?.name ?? cardId.replaceAll('-', ' ')} to prevent this damage`,
+                description: 'Destroy this Option to prevent one damage.',
+                cardId
+              })),
+              {
+                id: 'take-damage',
+                label: 'Take this damage',
+                description: 'Keep every Option and receive one damage.'
+              }
+            ]
           }
         };
       }
       const selectedCardId =
         validChoice &&
-        choice.cardId !== null &&
-        eligibleCardIds.includes(choice.cardId)
-          ? choice.cardId
+        choice.choiceId.startsWith('discard:') &&
+        eligibleCardIds.includes(choice.choiceId.slice('discard:'.length) as OptionCardId)
+          ? (choice.choiceId.slice('discard:'.length) as OptionCardId)
           : null;
-      if (choice && selectedCardId === null) {
+      if (choice?.choiceId === 'take-damage') {
         addTrace(
           trace,
           register,
@@ -1153,7 +1235,7 @@ export function resolveLaserSnapshot(
     laserTrace,
     laserBeams: orderedHits.flatMap(({ beam }) => (beam ? [beam] : [])),
     damageSteps,
-    pendingDamageChoice: null
+    pendingOptionDecision: null
   };
 }
 
@@ -1601,7 +1683,7 @@ export function resolveProgrammedTurn(
   initialRobots = createRaceRobotPositions(setup),
   initialOptionDeck?: OptionDeckState,
   optionPlans: Readonly<Record<string, OptionTurnPlan>> = {},
-  damageChoices: Readonly<Record<string, DamagePreventionChoice>> = {}
+  optionDecisions: Readonly<Record<string, OptionDecision>> = {}
 ): ProgramResolution | null {
   if (programming.phase !== 'programmed') return null;
   const course = compilePlayableCourse(setup.courseId);
@@ -1636,14 +1718,15 @@ export function resolveProgrammedTurn(
       .sort((left, right) => right.card.priority - left.card.priority);
     for (const entry of queue) {
       const cardTraceStart = trace.length;
-      applyProgramCard(
+      const pendingOptionDecision = applyProgramCard(
         robots,
         entry.uid,
         entry.card,
         register,
         trace,
         optionPlanFor(optionPlans, entry.uid),
-        course
+        course,
+        optionDecisions
       );
       if (trace.length === cardTraceStart) continue;
       playback.frames.push({
@@ -1654,6 +1737,26 @@ export function resolveProgrammedTurn(
         robots: cloneRaceRobots(robots),
         trace: trace.slice(cardTraceStart)
       });
+      if (pendingOptionDecision) {
+        return {
+          courseId: setup.courseId,
+          turnNumber: programming.turnNumber,
+          phase: 'awaiting-option-decision',
+          robots,
+          trace,
+          optionDeck,
+          nextOptionChoiceUid: null,
+          pendingOptionDecision,
+          nextReentryUid: null,
+          winnerUids: [],
+          runnersUpUids: [],
+          summary: null,
+          playback,
+          initialOptionDeck: cloneOptionDeck(
+            initialOptionDeck ?? createOptionDeck(`standalone-turn-${programming.turnNumber}`)
+          )
+        };
+      }
     }
 
     const expressTraceStart = trace.length;
@@ -1708,7 +1811,7 @@ export function resolveProgrammedTurn(
       programming,
       courseCells,
       optionDeck,
-      damageChoices,
+      optionDecisions,
       optionPlans,
       course
     );
@@ -1734,16 +1837,16 @@ export function resolveProgrammedTurn(
         laserBeams: laserResult.laserBeams
       });
     }
-    if (laserResult.pendingDamageChoice) {
+    if (laserResult.pendingOptionDecision) {
       return {
         courseId: setup.courseId,
         turnNumber: programming.turnNumber,
-        phase: 'awaiting-damage',
+        phase: 'awaiting-option-decision',
         robots,
         trace,
         optionDeck,
         nextOptionChoiceUid: null,
-        pendingDamageChoice: laserResult.pendingDamageChoice,
+        pendingOptionDecision: laserResult.pendingOptionDecision,
         nextReentryUid: null,
         winnerUids: [],
         runnersUpUids: [],
@@ -1788,7 +1891,7 @@ export function resolveProgrammedTurn(
         trace,
         optionDeck,
         nextOptionChoiceUid: null,
-        pendingDamageChoice: null,
+        pendingOptionDecision: null,
         nextReentryUid: null,
         winnerUids,
         runnersUpUids,
@@ -1819,7 +1922,7 @@ export function resolveProgrammedTurn(
     trace,
     optionDeck,
     nextOptionChoiceUid: null,
-    pendingDamageChoice: null,
+    pendingOptionDecision: null,
     nextReentryUid: null,
     winnerUids: [],
     runnersUpUids: [],

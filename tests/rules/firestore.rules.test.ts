@@ -387,7 +387,7 @@ describe('append-only game stream rules', () => {
     );
   });
 
-  it('allows only the prompted owner to append a shaped damage-prevention choice', async () => {
+  it('allows only the prompted owner to append a shaped Option decision', async () => {
     const hostDb = environment.authenticatedContext('host').firestore();
     await assertSucceeds(
       setDoc(doc(hostDb, 'games/room/events/host-000001'), {
@@ -397,10 +397,10 @@ describe('append-only game stream rules', () => {
           uid: 'host',
           turnId: 'turn-004',
           choice: {
-            kind: 'damage-prevention',
+            kind: 'option-decision',
             decisionId: 'r3-damage-01-host',
             uid: 'host',
-            cardId: null
+            choiceId: 'take-damage'
           }
         }
       })
@@ -415,10 +415,10 @@ describe('append-only game stream rules', () => {
           uid: 'guest',
           turnId: 'turn-004',
           choice: {
-            kind: 'damage-prevention',
+            kind: 'option-decision',
             decisionId: 'r3-damage-01-host',
             uid: 'host',
-            cardId: 'brakes'
+            choiceId: 'discard:brakes'
           }
         }
       })

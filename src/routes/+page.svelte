@@ -245,9 +245,9 @@
   $: optionLossRobot = roomState.resolution?.robots.find(
     ({ uid }) => uid === roomState.resolution?.nextOptionChoiceUid
   );
-  $: pendingDamageChoice = roomState.resolution?.pendingDamageChoice ?? null;
-  $: pendingDamageRobot = roomState.resolution?.robots.find(
-    ({ uid }) => uid === pendingDamageChoice?.uid
+  $: pendingOptionDecision = roomState.resolution?.pendingOptionDecision ?? null;
+  $: pendingOptionRobot = roomState.resolution?.robots.find(
+    ({ uid }) => uid === pendingOptionDecision?.uid
   );
   $: normalizedName = normalizePlayerName(playerName);
   $: canSubmit =
@@ -322,7 +322,7 @@
       playbackStage = null;
       playbackActorUid = null;
       playbackCardId = null;
-      if (!roomState.resolution?.pendingDamageChoice) {
+      if (!roomState.resolution?.pendingOptionDecision) {
         playbackRobots = undefined;
         playbackLaserBeams = [];
       }
@@ -640,8 +640,8 @@
       const courseId =
         import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' &&
         selectedCourseId === 'risky-exchange' &&
-        e2eCourseOverride === 'risky-exchange-a'
-          ? 'risky-exchange-a'
+        (e2eCourseOverride === 'risky-exchange-a' || e2eCourseOverride === 'option-lab')
+          ? e2eCourseOverride
           : selectedCourseId;
       await roomService.configureRace(services.db, services.user, roomCode, {
         config: raceConfig(courseId, setupSeed.trim() || 'RALLY-2005', setupLives)
@@ -837,8 +837,8 @@
     }
   }
 
-  async function answerDamagePrevention(cardId: OptionCardId | null) {
-    if (!services || !roomService || !activeProgramming || !pendingDamageChoice) return;
+  async function answerOptionDecision(choiceId: string) {
+    if (!services || !roomService || !activeProgramming || !pendingOptionDecision) return;
     pending = true;
     try {
       await roomService.chooseEffect(
@@ -846,16 +846,16 @@
         services.user,
         roomCode,
         {
-          kind: 'damage-prevention',
-          decisionId: pendingDamageChoice.decisionId,
+          kind: 'option-decision',
+          decisionId: pendingOptionDecision.decisionId,
           uid: services.user.uid,
-          cardId
+          choiceId
         },
         activeProgramming.turnId
       );
     } catch (error) {
       console.error(error);
-      formError = 'The damage prevention choice could not be written.';
+      formError = 'The Option decision could not be written.';
     } finally {
       pending = false;
     }
@@ -1188,8 +1188,8 @@
                         ? 'complete'
                       : roomState.resolution.phase === 'race-finished'
                           ? 'finished'
-                          : roomState.resolution.phase === 'awaiting-damage'
-                            ? `waiting for ${pendingDamageRobot?.name ?? 'damage choice'}`
+                          : roomState.resolution.phase === 'awaiting-option-decision'
+                            ? `waiting for ${pendingOptionRobot?.name ?? 'Option decision'}`
                             : 'awaiting re-entry'}
                   · {visibleResolutionTrace.length} microsteps
                 </h2>
@@ -1240,44 +1240,65 @@
                     : 'The configured board manifest supplies every active element.'}
                   Damage 9 repeats all five locked registers.
                 </p>
-                {#if !playbackIsActive && pendingDamageChoice && pendingDamageRobot}
+                {#if !playbackIsActive && pendingOptionDecision && pendingOptionRobot}
                   <section
                     class="damage-choice"
-                    aria-label="Damage prevention choice"
-                    data-decision-id={pendingDamageChoice.decisionId}
+                    aria-label={pendingOptionDecision.timing === 'damage'
+                      ? 'Damage prevention choice'
+                      : 'Option decision'}
+                    data-decision-id={pendingOptionDecision.decisionId}
                   >
-                    {#if pendingDamageChoice.uid === currentPlayer.uid}
-                      <strong>Laser damage incoming</strong>
-                      <p>
-                        Choose now for damage {pendingDamageChoice.damagePoint} of
-                        {pendingDamageChoice.damageTotal}: discard one Option, or take the damage.
-                      </p>
+                    {#if pendingOptionDecision.uid === currentPlayer.uid}
+                      <strong>{pendingOptionDecision.heading}</strong>
+                      <p>{pendingOptionDecision.prompt}</p>
                       <div class="option-card-grid">
-                        {#each pendingDamageRobot.options.filter(({ cardId }) => pendingDamageChoice?.eligibleCardIds.includes(cardId)) as option}
-                          {@const card = OPTION_CARDS_BY_ID.get(option.cardId)}
+                        {#each pendingOptionDecision.choices.filter((choice) => choice.cardId) as choice}
+                          {@const card = choice.cardId ? OPTION_CARDS_BY_ID.get(choice.cardId) : null}
                           {#if card}
                             <button
                               type="button"
                               class="option-card-choice"
-                              aria-label={`Discard ${card.name} to prevent this damage`}
+                              aria-label={choice.label}
+                              title={choice.description}
                               disabled={pending}
-                              onclick={() => answerDamagePrevention(option.cardId)}
+                              onclick={() => answerOptionDecision(choice.id)}
                             >
                               <OptionCardFace {card} variant="thumbnail" />
+                              {#if pendingOptionDecision.timing !== 'damage'}
+                                <span>{choice.label}</span>
+                              {/if}
                             </button>
                           {/if}
                         {/each}
+                        {#if pendingOptionDecision.timing !== 'damage'}
+                          {#each pendingOptionDecision.choices.filter((choice) => !choice.cardId) as choice}
+                            <button
+                              type="button"
+                              class="take-damage"
+                              title={choice.description}
+                              disabled={pending}
+                              onclick={() => answerOptionDecision(choice.id)}
+                            >{choice.label}</button>
+                          {/each}
+                        {/if}
                       </div>
-                      <button
-                        type="button"
-                        class="take-damage"
-                        disabled={pending}
-                        onclick={() => answerDamagePrevention(null)}
-                      >Take this damage</button>
+                      {#if pendingOptionDecision.timing === 'damage'}
+                        {@const takeDamage = pendingOptionDecision.choices.find(({ id }) => id === 'take-damage')}
+                        {#if takeDamage}
+                          <button
+                            type="button"
+                            class="take-damage"
+                            title={takeDamage.description}
+                            disabled={pending}
+                            onclick={() => answerOptionDecision(takeDamage.id)}
+                          >{takeDamage.label}</button>
+                        {/if}
+                      {/if}
                     {:else}
-                      <strong>Waiting for {pendingDamageRobot.name}</strong>
+                      <strong>Waiting for {pendingOptionRobot.name}</strong>
                       <p>
-                        {pendingDamageRobot.name} is resolving laser damage in original Dock order.
+                        {pendingOptionRobot.name} is resolving {pendingOptionDecision.heading.toLowerCase()}
+                        in original Dock order.
                       </p>
                     {/if}
                   </section>
@@ -2541,6 +2562,15 @@
   button.option-card-choice:hover,
   button.option-card-choice:focus-visible { border-color: #ffcf4b; }
   button.option-card-choice :global(.option-card) { filter: none; }
+  button.option-card-choice > span {
+    display: block;
+    padding: 8px 5px;
+    color: #101718;
+    background: #d2ff37;
+    font: 700 15px 'Space Mono', monospace;
+    text-align: center;
+    text-transform: uppercase;
+  }
   .power-control {
     display: grid;
     gap: 3px;

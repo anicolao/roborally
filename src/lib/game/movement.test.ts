@@ -900,7 +900,7 @@ describe('priority Program movement', () => {
         'r1-damage-01-target': {
           decisionId: 'r1-damage-01-target',
           uid: 'target',
-          cardId: 'brakes'
+          choiceId: 'discard:brakes'
         }
       }
     );
@@ -947,7 +947,7 @@ describe('priority Program movement', () => {
     const firstRobots = robots();
     const first = resolveLaserSnapshot(firstRobots, 1, [], programming, []);
     expect(first.laserBeams).toHaveLength(2);
-    expect(first.pendingDamageChoice).toMatchObject({
+    expect(first.pendingOptionDecision).toMatchObject({
       decisionId: 'r1-damage-01-dock-1',
       uid: 'dock-1'
     });
@@ -959,10 +959,10 @@ describe('priority Program movement', () => {
       'r1-damage-01-dock-1': {
         decisionId: 'r1-damage-01-dock-1',
         uid: 'dock-1',
-        cardId: null
+        choiceId: 'take-damage'
       }
     });
-    expect(second.pendingDamageChoice).toMatchObject({
+    expect(second.pendingOptionDecision).toMatchObject({
       decisionId: 'r1-damage-02-dock-2',
       uid: 'dock-2'
     });
@@ -974,15 +974,15 @@ describe('priority Program movement', () => {
       'r1-damage-01-dock-1': {
         decisionId: 'r1-damage-01-dock-1',
         uid: 'dock-1',
-        cardId: null
+        choiceId: 'take-damage'
       },
       'r1-damage-02-dock-2': {
         decisionId: 'r1-damage-02-dock-2',
         uid: 'dock-2',
-        cardId: 'brakes'
+        choiceId: 'discard:brakes'
       }
     });
-    expect(final.pendingDamageChoice).toBeNull();
+    expect(final.pendingOptionDecision).toBeNull();
     expect(finalRobots[0].damage).toBe(1);
     expect(finalRobots[1].damage).toBe(0);
     expect(finalRobots[1].options).toEqual([]);
@@ -1051,6 +1051,58 @@ describe('priority Program movement', () => {
     expect(stable.facing).toBe('north');
   });
 
+  it('pauses Brakes at Move 1 execution and replays the persisted choice', () => {
+    const createMover = () =>
+      raceRobot({
+        uid: 'braker',
+        name: 'Braker',
+        x: 6,
+        y: 10,
+        facing: 'north',
+        options: [{ cardId: 'brakes', spent: 0, storedProgramCardId: null }]
+      });
+    const pendingMover = createMover();
+    const pending = applyProgramCard(
+      [pendingMover],
+      pendingMover.uid,
+      card('move-1'),
+      2,
+      []
+    );
+    expect(pending).toMatchObject({
+      decisionId: 'r2-program-braker-brakes',
+      uid: 'braker',
+      cardId: 'brakes',
+      timing: 'program-movement'
+    });
+    expect(pendingMover).toMatchObject({ x: 6, y: 10 });
+
+    const stoppedMover = createMover();
+    const trace: ResolutionTraceEntry[] = [];
+    expect(
+      applyProgramCard(
+        [stoppedMover],
+        stoppedMover.uid,
+        card('move-1'),
+        2,
+        trace,
+        undefined,
+        undefined,
+        {
+          'r2-program-braker-brakes': {
+            decisionId: 'r2-program-braker-brakes',
+            uid: 'braker',
+            choiceId: 'use'
+          }
+        }
+      )
+    ).toBeNull();
+    expect(stoppedMover).toMatchObject({ x: 6, y: 10 });
+    expect(trace).toContainEqual(
+      expect.objectContaining({ kind: 'option-effect', text: expect.stringContaining('zero spaces') })
+    );
+  });
+
   it('applies armor, laser, circuit-breaker, and archive-copy hooks', () => {
     const config = riskyExchangeConfig('OPTION-HOOKS');
     const setup = deriveRaceSetup(
@@ -1091,7 +1143,7 @@ describe('priority Program movement', () => {
         'r1-damage-01-target': {
           decisionId: 'r1-damage-01-target',
           uid: 'target',
-          cardId: null
+          choiceId: 'take-damage'
         }
       }
     );

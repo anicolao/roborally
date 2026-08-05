@@ -428,11 +428,10 @@ Resolution pauses until the authorized player chooses a legal combination.
 
 The 2005 edition does **not** use virtual robots.
 
-The current implementation applies these rules to Program movement, including
+The implementation applies these rules to Program movement, including
 transactional push chains, pits, course edges, Life loss, elimination, and
-ordered re-entry. Until the reviewed Option manifest lands, every destruction
-still records the mandatory Option-loss decision point and deterministically
-continues because no Option can yet be owned.
+ordered re-entry. Destruction pauses for the owner to select the required
+Option loss before re-entry.
 
 ## Option cards
 
@@ -440,9 +439,8 @@ The 26 Option cards are public once drawn. Their printed text can modify
 movement, weapons, damage, timing, or other rules and overrides this summary on
 a conflict.
 
-The rulebook does not provide a text inventory for all cards. The Option-card
-feature must therefore remain disabled until the physical 2005 deck has been
-transcribed into a reviewed manifest recording:
+The physical 2005 deck has been transcribed into a reviewed, versioned
+26-card manifest recording:
 
 - stable card ID and exact count;
 - public name and rules text;
@@ -454,6 +452,13 @@ transcribed into a reviewed manifest recording:
 
 No card behavior may be inferred from a card with the same name in another
 edition.
+
+Optional run-time effects use one persisted decision protocol. The reducer
+generates the exact legal choices at the printed timing window, pauses, and
+accepts only the prompted owner's selected choice ID. Every client then replays
+the immutable turn-start state with that choice. Damage prevention, movement
+choices such as Brakes, weapons, and later register interrupts therefore use
+the same Dock-ordered mechanism rather than precommitted turn plans.
 
 ## Published courses
 

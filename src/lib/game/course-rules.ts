@@ -50,6 +50,7 @@ function requireCourse(courseId: string): PublishedCourseManifest {
 }
 
 export interface ScenarioResolutionRules {
+  startingOptions: number;
   repair: {
     awardOptions: boolean;
     singleOptions: number;
@@ -70,7 +71,12 @@ export function scenarioResolutionRules(course: PublishedCourseManifest): Scenar
     (rule): rule is Extract<CourseSpecialRule, { kind: 'repair-sites-draw-options' }> =>
       rule.kind === 'repair-sites-draw-options'
   );
+  const startingOptions = course.specialRules.find(
+    (rule): rule is Extract<CourseSpecialRule, { kind: 'starting-options' }> =>
+      rule.kind === 'starting-options'
+  );
   return {
+    startingOptions: startingOptions?.count ?? 0,
     repair: {
       awardOptions: repairRule !== undefined,
       singleOptions: repairRule?.single ?? 0,

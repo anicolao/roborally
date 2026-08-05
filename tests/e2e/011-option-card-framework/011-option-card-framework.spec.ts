@@ -165,7 +165,6 @@ test('face-up Options remain available for execution-time decisions', async (
     steps.setPage(table);
     await steps.step('tabletop-identifies-damage-decision', {
       description: 'The shared tabletop keeps the successful beam visible and names the prompted player',
-      status: 'skip',
       verifications: [
         {
           spec: 'The tabletop prominently identifies Ada as the current responder',

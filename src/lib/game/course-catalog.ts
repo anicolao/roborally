@@ -819,4 +819,13 @@ if (riskyExchangeDockA) {
         : placement
     )
   });
+  PUBLISHED_COURSES_BY_ID.set('option-lab', {
+    ...riskyExchangeDockA,
+    id: 'option-lab',
+    name: 'Option Lab',
+    specialRules: [
+      ...riskyExchangeDockA.specialRules,
+      { kind: 'starting-options', count: 1 }
+    ]
+  });
 }

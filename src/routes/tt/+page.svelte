@@ -96,8 +96,8 @@
                 ? 'Damage decision'
             : '';
   $: presentedRobots = playbackRobots ?? state.resolution?.robots;
-  $: pendingDamageRobot = state.resolution?.robots.find(
-    ({ uid }) => uid === state.resolution?.pendingDamageChoice?.uid
+  $: pendingOptionRobot = state.resolution?.robots.find(
+    ({ uid }) => uid === state.resolution?.pendingOptionDecision?.uid
   );
   $: latestPlaybackEntry = playbackTrace.at(-1);
   $: isTableHost = services?.user.uid === state.hostUid;
@@ -240,7 +240,7 @@
       playbackStage = null;
       playbackActorUid = null;
       playbackCardId = null;
-      if (!state.resolution?.pendingDamageChoice) {
+      if (!state.resolution?.pendingOptionDecision) {
         playbackRobots = undefined;
         playbackLaserBeams = [];
       }
@@ -353,7 +353,12 @@
 <svelte:head><title>Robo Rally · Tabletop</title></svelte:head>
 
 <main class="tabletop" data-e2e-tabletop data-room-code={roomCode}>
-  <p class="sr-only" aria-live="polite">{roomCode ? `${roomCode}. ${status}` : status}</p>
+  <p
+    class="sr-only"
+    role="status"
+    aria-live="polite"
+    data-status={error ? 'error' : roomCode && state.gameId ? 'synced' : 'connecting'}
+  >{roomCode ? `${roomCode}. ${status}` : status}</p>
   {#if error}<p class="table-error" role="alert">{error}</p>{/if}
 
   {#if playbackPhase === 'countdown'}
@@ -379,20 +384,19 @@
     </div>
   {/if}
 
-  {#if !playbackIsActive && state.resolution?.pendingDamageChoice && pendingDamageRobot}
+  {#if !playbackIsActive && state.resolution?.pendingOptionDecision && pendingOptionRobot}
     <div
       class="damage-prompt"
       role="status"
       aria-live="assertive"
       data-testid="tabletop-damage-prompt"
-      data-decision-id={state.resolution.pendingDamageChoice.decisionId}
+      data-decision-id={state.resolution.pendingOptionDecision.decisionId}
     >
-      <small>DAMAGE DECISION · ORIGINAL DOCK ORDER</small>
-      <strong>{pendingDamageRobot.name}</strong>
-      <span>
-        Check your controller: take damage or discard an Option
-        ({state.resolution.pendingDamageChoice.damagePoint}/{state.resolution.pendingDamageChoice.damageTotal})
-      </span>
+      <small>{state.resolution.pendingOptionDecision.timing === 'damage'
+        ? 'DAMAGE DECISION'
+        : 'OPTION DECISION'} · ORIGINAL DOCK ORDER</small>
+      <strong>{pendingOptionRobot.name}</strong>
+      <span>{state.resolution.pendingOptionDecision.tabletopPrompt}</span>
     </div>
   {/if}
 

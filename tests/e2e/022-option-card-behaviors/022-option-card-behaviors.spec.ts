@@ -1,0 +1,224 @@
+import {
+  expect,
+  test,
+  type Browser,
+  type BrowserContext,
+  type Page,
+  type TestInfo,
+} from "@playwright/test";
+import {
+  OPTION_CARDS_BY_ID,
+  type OptionCardId,
+} from "../../../src/lib/game/option-manifest";
+import { createOptionDeck, drawOption } from "../../../src/lib/game/options";
+import {
+  PROGRAM_CARDS,
+  type ProgramAction,
+} from "../../../src/lib/game/program-manifest";
+import { createProgrammingState } from "../../../src/lib/game/programming";
+import { deriveRaceSetup, raceConfig } from "../../../src/lib/game/setup";
+import { stayActiveInDockOrder } from "../helpers/game-actions";
+import { TestStepHelper } from "../helpers/test-step-helper";
+
+const players = [
+  { uid: "host", name: "Ada", robotId: "axle" },
+  { uid: "guest", name: "Grace", robotId: "bit" },
+] as const;
+
+const passiveGuestOptions = new Set<OptionCardId>([
+  "ablative-coat",
+  "circuit-breaker",
+  "double-barrel-laser",
+  "extra-memory",
+  "mechanical-arm",
+  "power-down-shield",
+  "ramming-gear",
+  "rear-laser",
+  "superior-archive-copy",
+]);
+
+function optionSeed(cardId: OptionCardId, requiredAction?: ProgramAction) {
+  for (let index = 0; index < 50_000; index += 1) {
+    const seed = `OPTION-${cardId}-${index}`;
+    const config = raceConfig("option-lab", seed);
+    const setup = deriveRaceSetup(players, config);
+    const deck = createOptionDeck(seed);
+    const optionIdsByUid: Record<string, OptionCardId[]> = {};
+    for (const player of setup.players) {
+      const option = drawOption(deck);
+      optionIdsByUid[player.uid] = option ? [option.cardId] : [];
+    }
+    if (optionIdsByUid.host?.[0] !== cardId) continue;
+    if (!passiveGuestOptions.has(optionIdsByUid.guest?.[0])) continue;
+    const programming = createProgrammingState(
+      setup,
+      config,
+      {},
+      {},
+      1,
+      new Set(setup.players.map(({ uid }) => uid)),
+      optionIdsByUid,
+    );
+    const host = programming.players.find(({ uid }) => uid === "host");
+    if (
+      requiredAction &&
+      !host?.hand.some(
+        (cardId) =>
+          PROGRAM_CARDS.find(({ id }) => id === cardId)?.action ===
+          requiredAction,
+      )
+    ) {
+      continue;
+    }
+    return seed;
+  }
+  throw new Error(`Could not find a deterministic ${cardId} Option seed.`);
+}
+
+async function chooseProgram(page: Page, firstAction?: ProgramAction) {
+  const hand = page.getByLabel("Your Program hand").getByRole("button");
+  if (firstAction) {
+    await page
+      .getByLabel("Your Program hand")
+      .getByRole("button", { name: new RegExp(`^${firstAction} priority`) })
+      .first()
+      .click();
+  }
+  const submit = page.getByRole("button", { name: "Submit immutable program" });
+  for (
+    let index = 0;
+    index < (await hand.count()) && !(await submit.isEnabled());
+    index += 1
+  ) {
+    const card = hand.nth(index);
+    if ((await card.getAttribute("aria-pressed")) !== "true")
+      await card.click();
+  }
+  await expect(submit).toBeEnabled();
+  await submit.click();
+}
+
+async function createOptionRace(
+  browser: Browser,
+  host: Page,
+  testInfo: TestInfo,
+  cardId: OptionCardId,
+  requiredAction?: ProgramAction,
+) {
+  const cardOrdinal = [...OPTION_CARDS_BY_ID.keys()].indexOf(cardId) + 1;
+  const roomCode = `O${testInfo.project.name === "phone" ? "P" : "D"}${String(cardOrdinal).padStart(2, "0")}22`;
+  const guestContext: BrowserContext = await browser.newContext();
+  const guest = await guestContext.newPage();
+  await host.goto(
+    `/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=option-lab`,
+  );
+  await expect(host.getByRole("status")).toHaveText("Firebase emulator ready");
+  await host.getByRole("button", { name: "Create race" }).click();
+  await host.getByLabel("Racer name").fill("Ada");
+  await host.getByRole("button", { name: "Axle" }).click();
+  await host.getByRole("button", { name: "Create and claim seat" }).click();
+
+  await guest.goto(`/?room=${roomCode}&e2eIdentity=GUEST`);
+  await expect(guest.getByRole("status")).toHaveAttribute(
+    "data-status",
+    "synced",
+  );
+  await guest.getByLabel("Racer name").fill("Grace");
+  await guest.getByRole("button", { name: "Bit" }).click();
+  await guest.getByRole("button", { name: "Claim seat" }).click();
+
+  await host.getByLabel("Setup seed").fill(optionSeed(cardId, requiredAction));
+  await host.getByRole("button", { name: "Configure Risky Exchange" }).click();
+  await guest.getByRole("button", { name: "Ready for race" }).click();
+  await host.getByRole("button", { name: "Ready for race" }).click();
+  await host.getByRole("button", { name: "Open programming console" }).click();
+  await guest.getByRole("button", { name: "Open programming console" }).click();
+  await stayActiveInDockOrder([host, guest]);
+  return { guest, guestContext };
+}
+
+test("Brakes asks at Move 1 execution and may move zero spaces", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "brakes",
+    "move-1",
+  );
+  const steps = new TestStepHelper(host, testInfo);
+  steps.setMetadata(
+    "Brakes execution decision",
+    "A robot that owns Brakes reaches its actual Move 1 timing window before choosing whether to move zero spaces. The immutable choice is replayed for both clients.",
+  );
+  try {
+    await chooseProgram(host, "move-1");
+    await chooseProgram(guest);
+
+    const decision = host.getByLabel("Option decision");
+    await expect(decision).toBeVisible();
+    await steps.step("brakes-runtime-choice", {
+      description: "Brakes pauses the printed Move 1 at its execution priority",
+      verifications: [
+        {
+          spec: "The owning player can use Brakes or execute Move 1 normally",
+          check: async () => {
+            await expect(decision).toContainText("Use Brakes?");
+            await expect(
+              decision.getByRole("button", { name: "Use Brakes" }),
+            ).toBeVisible();
+            await expect(
+              decision.getByRole("button", { name: "Move normally" }),
+            ).toBeVisible();
+          },
+        },
+        {
+          spec: "The observer sees the Dock-ordered responder",
+          check: async () => {
+            await expect(guest.getByLabel("Option decision")).toContainText(
+              "Waiting for Ada",
+            );
+          },
+        },
+      ],
+    });
+
+    await decision.getByRole("button", { name: "Use Brakes" }).click();
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada used brakes and moved zero spaces.",
+    );
+    await steps.step("brakes-zero-movement", {
+      description:
+        "The persisted activation resolves as Move 0 without consuming Brakes",
+      verifications: [
+        {
+          spec: "Both clients replay the zero-space movement",
+          check: async () => {
+            await expect(guest.locator(".full-resolution")).toContainText(
+              "Ada used brakes and moved zero spaces.",
+            );
+          },
+        },
+        {
+          spec: "Brakes remains owned after use",
+          check: async () => {
+            await expect(
+              host
+                .getByRole("list", { name: "Robot Life and damage state" })
+                .getByRole("listitem")
+                .filter({ hasText: "Ada" })
+                .locator(
+                  `[data-card-id="${OPTION_CARDS_BY_ID.get("brakes")?.id}"]`,
+                ),
+            ).toHaveCount(1);
+          },
+        },
+      ],
+    });
+    steps.generateDocs();
+  } finally {
+    await guestContext.close();
+  }
+});

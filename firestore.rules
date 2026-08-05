@@ -60,6 +60,7 @@ service cloud.firestore {
             && request.resource.data.payload.config.courseId in [
               'risky-exchange',
               'risky-exchange-a',
+              'option-lab',
               'factory-rejects',
               'option-world'
             ]
@@ -126,13 +127,10 @@ service cloud.firestore {
               )
               ||
               (
-                request.resource.data.payload.choice.kind == 'damage-prevention'
+                request.resource.data.payload.choice.kind == 'option-decision'
                 && request.resource.data.payload.choice.uid == request.auth.uid
                 && request.resource.data.payload.choice.decisionId is string
-                && (
-                  request.resource.data.payload.choice.cardId == null
-                  || request.resource.data.payload.choice.cardId is string
-                )
+                && request.resource.data.payload.choice.choiceId is string
               )
             )
           )

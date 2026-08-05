@@ -4,6 +4,7 @@ import { compilePublishedCourse, type CompiledCourse } from './course-geometry';
 export type PlayableCourseId =
   | 'risky-exchange'
   | 'risky-exchange-a'
+  | 'option-lab'
   | 'factory-rejects'
   | 'option-world';
 
@@ -55,9 +56,26 @@ const testRiskyExchangeDockA: PublishedCourseManifest = Object.freeze({
   ])
 });
 
+/**
+ * Emulator-only rules course for focused Option behavior tests. It deliberately
+ * reuses reviewed Risky Exchange geometry while granting one deterministic
+ * starting Option, so browser tests exercise the real room/reducer/UI path
+ * without playing several setup turns merely to draw a named card.
+ */
+const optionLab: PublishedCourseManifest = Object.freeze({
+  ...testRiskyExchangeDockA,
+  id: 'option-lab',
+  name: 'Option Lab',
+  specialRules: Object.freeze([
+    ...testRiskyExchangeDockA.specialRules,
+    { kind: 'starting-options' as const, count: 1 as const }
+  ])
+});
+
 export const PLAYABLE_COURSES_BY_ID = new Map<PlayableCourseId, PublishedCourseManifest>([
   ['risky-exchange', legacyRiskyExchange],
   ['risky-exchange-a', testRiskyExchangeDockA],
+  ['option-lab', optionLab],
   ['factory-rejects', requireCatalogCourse('factory-rejects')],
   ['option-world', requireCatalogCourse('option-world')]
 ]);

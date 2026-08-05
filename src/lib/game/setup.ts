@@ -70,11 +70,11 @@ export function raceConfig(
     programManifestVersion: PROGRAM_MANIFEST_VERSION,
     optionManifestVersion: OPTION_MANIFEST_VERSION,
     boardManifestVersion:
-      courseId === 'risky-exchange' || courseId === 'risky-exchange-a'
+      courseId === 'risky-exchange' || courseId === 'risky-exchange-a' || courseId === 'option-lab'
         ? BOARD_MANIFEST_VERSION
         : COMPLETE_BOARD_MANIFEST_VERSION,
     courseManifestVersion:
-      courseId === 'risky-exchange' || courseId === 'risky-exchange-a'
+      courseId === 'risky-exchange' || courseId === 'risky-exchange-a' || courseId === 'option-lab'
         ? COURSE_MANIFEST_VERSION
         : COMPLETE_COURSE_MANIFEST_VERSION,
     courseId,
