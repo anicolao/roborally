@@ -1041,7 +1041,7 @@ function dealOneDamage(
     return;
   }
   const ablative = target.options.find(({ cardId }) => cardId === 'ablative-coat');
-  if (ablative && optionDeck) {
+  if (ablative) {
     const effect = applyOptionEffect('ablative-coat', {
       payloadSpent: ablative.spent
     });
@@ -1054,7 +1054,13 @@ function dealOneDamage(
       'option-damage-prevented',
       `${target.name}'s ablative coat absorbed one damage (${ablative.spent}/3).`
     );
-    if (effect.discard) discardOwnedOption(target.options, optionDeck, 'ablative-coat');
+    if (effect.discard) {
+      if (optionDeck) {
+        discardOwnedOption(target.options, optionDeck, 'ablative-coat');
+      } else {
+        target.options.splice(target.options.indexOf(ablative), 1);
+      }
+    }
     return;
   }
   target.damage += 1;
@@ -1227,6 +1233,15 @@ export function resolveLaserSnapshot(
       if (target.status !== 'active') break;
       damageOrdinal += 1;
       const decisionId = `r${register}-damage-${String(damageOrdinal).padStart(2, '0')}-${target.uid}`;
+      if (target.options.some(({ cardId }) => cardId === 'ablative-coat')) {
+        const damageTraceStart = trace.length;
+        dealOneDamage(robots, target, register, trace, programming, optionDeck);
+        damageSteps.push({
+          robots: cloneRaceRobots(robots),
+          trace: trace.slice(damageTraceStart)
+        });
+        continue;
+      }
       const choice = optionDecisions[decisionId];
       const eligibleCardIds = target.options.map(({ cardId }) => cardId);
       const validChoice =
