@@ -1271,6 +1271,66 @@ describe('priority Program movement', () => {
     });
   });
 
+  it('applies all three mandatory Ablative Coat absorptions before offering choices', () => {
+    const config = riskyExchangeConfig('ABLATIVE-COAT');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'shooter', name: 'Shooter', robotId: 'axle' },
+        { uid: 'target', name: 'Target', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const shooter = raceRobot({
+      uid: 'shooter',
+      name: 'Shooter',
+      x: 1,
+      y: 6,
+      facing: 'east'
+    });
+    const target = raceRobot({
+      uid: 'target',
+      name: 'Target',
+      x: 3,
+      y: 6,
+      options: [
+        { cardId: 'ablative-coat', spent: 0, storedProgramCardId: null },
+        { cardId: 'brakes', spent: 0, storedProgramCardId: null }
+      ]
+    });
+    const optionDeck = createOptionDeck('ABLATIVE-COAT');
+    const trace: ResolutionTraceEntry[] = [];
+
+    for (let register = 1; register <= 3; register += 1) {
+      const result = resolveLaserSnapshot(
+        [shooter, target],
+        register,
+        trace,
+        programming,
+        [],
+        optionDeck
+      );
+      expect(result.pendingOptionDecision).toBeNull();
+      expect(target.damage).toBe(0);
+    }
+    expect(target.options.map(({ cardId }) => cardId)).toEqual(['brakes']);
+    expect(optionDeck.discardPile).toContain('ablative-coat');
+    expect(trace.filter(({ text }) => text.includes('ablative coat absorbed'))).toHaveLength(3);
+
+    const fourth = resolveLaserSnapshot(
+      [shooter, target],
+      4,
+      trace,
+      programming,
+      [],
+      optionDeck
+    );
+    expect(fourth.pendingOptionDecision).toMatchObject({
+      uid: 'target',
+      timing: 'damage'
+    });
+  });
+
   it('requires named Option loss before the destroyed robot may re-enter', () => {
     const destroyed = raceRobot({
       uid: 'owner',
