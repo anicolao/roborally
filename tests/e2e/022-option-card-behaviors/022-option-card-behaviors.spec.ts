@@ -265,3 +265,45 @@ test("Fourth Gear asks at Move 3 execution and may move four spaces", async ({
     await guestContext.close();
   }
 });
+
+test("Reverse Gears asks at Back Up execution and may move two spaces", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "reverse-gears",
+    "back-up",
+  );
+  try {
+    await chooseProgram(host, "back-up");
+    await chooseProgram(guest);
+
+    const decision = host.getByLabel("Option decision");
+    await expect(decision).toContainText("Use Reverse Gears?");
+    await expect(
+      decision.getByRole("button", { name: "Use Reverse Gears" }),
+    ).toBeVisible();
+    await expect(
+      decision.getByRole("button", { name: "Move normally" }),
+    ).toBeVisible();
+    await expect(guest.getByLabel("Option decision")).toContainText(
+      "Waiting for Ada",
+    );
+
+    await decision.getByRole("button", { name: "Use Reverse Gears" }).click();
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada used reverse gears and will move backward two spaces.",
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      "Ada used reverse gears and will move backward two spaces.",
+    );
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada was destroyed off course",
+    );
+  } finally {
+    await guestContext.close();
+  }
+});

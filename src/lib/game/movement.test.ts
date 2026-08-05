@@ -1129,6 +1129,61 @@ describe('priority Program movement', () => {
     );
   });
 
+  it('pauses Reverse Gears at Back Up execution and replays the persisted choice', () => {
+    const createMover = () =>
+      raceRobot({
+        uid: 'reverser',
+        name: 'Reverser',
+        x: 6,
+        y: 6,
+        facing: 'north',
+        options: [{ cardId: 'reverse-gears', spent: 0, storedProgramCardId: null }]
+      });
+    const pendingMover = createMover();
+    const pending = applyProgramCard(
+      [pendingMover],
+      pendingMover.uid,
+      card('back-up'),
+      3,
+      []
+    );
+    expect(pending).toMatchObject({
+      decisionId: 'r3-program-reverser-reverse-gears',
+      uid: 'reverser',
+      cardId: 'reverse-gears',
+      timing: 'program-movement'
+    });
+    expect(pendingMover).toMatchObject({ x: 6, y: 6 });
+
+    const acceleratedMover = createMover();
+    const trace: ResolutionTraceEntry[] = [];
+    expect(
+      applyProgramCard(
+        [acceleratedMover],
+        acceleratedMover.uid,
+        card('back-up'),
+        3,
+        trace,
+        undefined,
+        undefined,
+        {
+          'r3-program-reverser-reverse-gears': {
+            decisionId: 'r3-program-reverser-reverse-gears',
+            uid: 'reverser',
+            choiceId: 'use'
+          }
+        }
+      )
+    ).toBeNull();
+    expect(acceleratedMover).toMatchObject({ x: 6, y: 8 });
+    expect(trace).toContainEqual(
+      expect.objectContaining({
+        kind: 'option-effect',
+        text: expect.stringContaining('backward two spaces')
+      })
+    );
+  });
+
   it('applies armor, laser, circuit-breaker, and archive-copy hooks', () => {
     const config = riskyExchangeConfig('OPTION-HOOKS');
     const setup = deriveRaceSetup(
