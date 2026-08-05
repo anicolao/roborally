@@ -698,6 +698,52 @@ describe('priority Program movement', () => {
     expect(blockedTarget.damage).toBe(0);
   });
 
+  it('asks for High-Power Laser when the main beam meets an obstruction', () => {
+    const config = riskyExchangeConfig('HIGH-POWER-LASER');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'shooter', name: 'Shooter', robotId: 'axle' },
+        { uid: 'near', name: 'Near', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const robots = () => [
+      raceRobot({
+        uid: 'shooter',
+        name: 'Shooter',
+        x: 1,
+        y: 6,
+        facing: 'east',
+        options: [{ cardId: 'high-power-laser', spent: 0, storedProgramCardId: null }]
+      }),
+      raceRobot({ uid: 'near', name: 'Near', x: 3, y: 6 }),
+      raceRobot({ uid: 'far', name: 'Far', x: 5, y: 6 })
+    ];
+
+    const awaiting = robots();
+    const pending = resolveLaserSnapshot(awaiting, 1, [], programming, []);
+    expect(pending.pendingOptionDecision).toMatchObject({
+      decisionId: 'r1-laser-shooter-high-power-laser',
+      uid: 'shooter',
+      timing: 'robot-lasers'
+    });
+    expect(awaiting.slice(1).map(({ damage }) => damage)).toEqual([0, 0]);
+
+    const fired = robots();
+    const decisionId = pending.pendingOptionDecision!.decisionId;
+    const resolved = resolveLaserSnapshot(fired, 1, [], programming, [], undefined, {
+      [decisionId]: {
+        decisionId,
+        uid: 'shooter',
+        choiceId: 'use'
+      }
+    });
+    expect(resolved.pendingOptionDecision).toBeNull();
+    expect(fired.slice(1).map(({ damage }) => damage)).toEqual([1, 1]);
+    expect(resolved.laserBeams).toHaveLength(2);
+  });
+
   it('uses Ramming Gear damage before a blocked push and the shared damage choice', () => {
     const config = riskyExchangeConfig('RAMMING-GEAR');
     const setup = deriveRaceSetup(
