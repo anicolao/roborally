@@ -779,6 +779,80 @@ export function applyProgramCard(
       }
     }
   }
+  const crabUsed = optionDecisions[
+    `r${register}-program-${robot.uid}-crab-legs`
+  ]?.choiceId.startsWith('pair:') ?? false;
+  if (
+    !crabUsed &&
+    signedDistance !== 0 &&
+    robot.options.some(({ cardId }) => cardId === 'dual-processor') &&
+    availableRotations.length > 0
+  ) {
+    const decisionId = `r${register}-program-${robot.uid}-dual-processor`;
+    const decision = optionDecisions[decisionId];
+    const validChoiceIds = new Set([
+      'decline',
+      ...availableRotations.map(({ id }) => `pair:${id}`)
+    ]);
+    if (
+      !decision ||
+      decision.uid !== robot.uid ||
+      !validChoiceIds.has(decision.choiceId)
+    ) {
+      addTrace(
+        trace,
+        register,
+        robot.uid,
+        card,
+        'option-decision-required',
+        `${robot.name} must decide whether to pair movement with Dual Processor.`
+      );
+      return {
+        decisionId,
+        uid: robot.uid,
+        cardId: 'dual-processor',
+        timing: 'program-movement',
+        register: register as RegisterNumber,
+        heading: 'Use Dual Processor?',
+        prompt: 'Pair an unused Rotate card, shorten movement, then rotate?',
+        tabletopPrompt: 'Use Dual Processor for this movement',
+        choices: [
+          ...availableRotations.map((pairedCard) => ({
+            id: `pair:${pairedCard.id}`,
+            label: `Pair ${pairedCard.action}`,
+            description: `Pair the unused ${pairedCard.action} ${pairedCard.priority} card.`,
+            cardId: 'dual-processor' as const
+          })),
+          {
+            id: 'decline',
+            label: 'Move normally',
+            description: 'Keep the unused Rotate card and execute movement normally.'
+          }
+        ]
+      };
+    }
+    if (decision.choiceId.startsWith('pair:')) {
+      const pairedCard = availableRotations.find(
+        ({ id }) => `pair:${id}` === decision.choiceId
+      )!;
+      const effect = applyOptionEffect('dual-processor', {
+        action: card.action,
+        pairedAction: pairedCard.action
+      });
+      if (effect.active && effect.movementDistance !== undefined) {
+        signedDistance = effect.movementDistance;
+        rotationAfterMovement = effect.rotationAfterMovement;
+        addTrace(
+          trace,
+          register,
+          robot.uid,
+          card,
+          'option-effect',
+          `${robot.name} paired ${pairedCard.action} with Dual Processor.`
+        );
+      }
+    }
+  }
   for (let step = 1; step <= Math.abs(signedDistance); step += 1) {
     const result = translateOneCell(
       robots,

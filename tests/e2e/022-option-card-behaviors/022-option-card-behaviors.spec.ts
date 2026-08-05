@@ -186,6 +186,15 @@ function optionSeed(
         continue;
       }
     }
+    if (cardId === "dual-processor") {
+      const actions = playerActions(host);
+      if (
+        !actions.some((action) => stationaryActions.has(action)) ||
+        actions.filter((action) => !stationaryActions.has(action)).length < 5
+      ) {
+        continue;
+      }
+    }
     if (!hasActions(guest, guestRequiredAction)) {
       continue;
     }
@@ -1266,6 +1275,38 @@ test("Crab Legs pairs an unused Rotate card with Move 1", async ({
     );
     await expect(guest.locator(".full-resolution")).toContainText(
       /Ada paired rotate-(?:left|right) with Crab Legs and sidestepped/,
+    );
+  } finally {
+    await guestContext.close();
+  }
+});
+
+test("Dual Processor pairs an unused Rotate card with movement", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "dual-processor",
+    "move-3",
+  );
+  try {
+    await chooseProgram(host, "move-3", true);
+    await chooseProgram(guest);
+
+    const decision = host.getByLabel("Option decision");
+    await expect(decision).toContainText("Use Dual Processor?");
+    const pair = decision.getByRole("button", { name: /^Pair / }).first();
+    await expect(pair).toBeVisible();
+    await pair.click();
+
+    await expect(host.locator(".full-resolution")).toContainText(
+      /Ada paired (?:rotate-left|rotate-right|u-turn) with Dual Processor./,
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      /Ada paired (?:rotate-left|rotate-right|u-turn) with Dual Processor./,
     );
   } finally {
     await guestContext.close();
