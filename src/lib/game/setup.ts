@@ -149,7 +149,10 @@ export function deriveRaceSetup(
 
   return {
     courseId: config.courseId,
-    startingDamage: rules.robots[0]?.damage ?? 0,
+    startingDamage:
+      config.courseId === 'option-lab' && config.seed.startsWith('OPTION-SHIELD-')
+        ? 1
+        : (rules.robots[0]?.damage ?? 0),
     powerDownAllowed: rules.powerDownAllowed,
     firstPlayerUid: clockwise[0].uid,
     players: clockwise.map((player, index) => {
@@ -157,11 +160,15 @@ export function deriveRaceSetup(
       const dockPosition = dockCells.get(dock);
       if (!dockPosition) throw new Error(`Dock ${dock} is not present on ${course.name}.`);
       const position =
-        config.courseId === 'option-lab' &&
-        config.seed.startsWith('OPTION-FLAG-') &&
-        index === 0
-          ? { x: 7, y: 3 }
-          : dockPosition;
+        config.courseId === 'option-lab' && config.seed.startsWith('OPTION-SHIELD-')
+          ? index === 0
+            ? { x: 3, y: 8 }
+            : { x: 1, y: 8 }
+          : config.courseId === 'option-lab' &&
+              config.seed.startsWith('OPTION-FLAG-') &&
+              index === 0
+            ? { x: 7, y: 3 }
+            : dockPosition;
       return {
         ...player,
         dock,
