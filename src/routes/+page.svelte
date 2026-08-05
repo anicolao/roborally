@@ -94,7 +94,6 @@
   let selectedReentryChoice = '';
   let reentryPoweredDown = false;
   let effectDraftDirty = false;
-  let selectedOptionPreventionIds: OptionCardId[] = [];
   let playbackPhase: PlaybackPhase = 'idle';
   let playbackCountdown = 3;
   let playbackRegister: number | null = null;
@@ -103,10 +102,13 @@
   let playbackCardId: ProgramCard['id'] | null = null;
   let playbackRobots: RaceRobotPosition[] | undefined;
   let playbackTrace: ProgramPlayback['frames'][number]['trace'] = [];
+  let playbackLaserBeams: ProgramPlayback['frames'][number]['laserBeams'] = [];
   let playbackFrameIndex = 0;
   let playbackFrameCount = 0;
   let playbackProductionDurationMs = 2_000;
   let playbackKey = '';
+  let scheduledPlaybackFrames = 0;
+  let queuedPlayback: ProgramPlayback | undefined;
   // Keep emulator playback quick, but long enough for Playwright and the browser
   // to observe each independently rendered movement stage.
   let playbackTimeScale = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' ? 0.1 : 1;
@@ -206,7 +208,11 @@
         : playbackStage === 'pushers'
           ? 'Pushers'
           : playbackStage === 'gears'
-            ? 'Gears · lasers · flags'
+            ? 'Gears'
+            : playbackStage === 'lasers'
+              ? 'Robot and board lasers'
+              : playbackStage === 'laser-damage'
+                ? 'Damage decision'
             : '';
   $: presentedResolutionRobots = playbackRobots ?? roomState.resolution?.robots;
   $: visibleResolutionTrace = playbackIsActive
@@ -239,11 +245,10 @@
   $: optionLossRobot = roomState.resolution?.robots.find(
     ({ uid }) => uid === roomState.resolution?.nextOptionChoiceUid
   );
-  $: optionPlanRobot =
-    currentPlayer && activeProgramming
-      ? (roomState.resolution?.robots.find(({ uid }) => uid === currentPlayer.uid) ??
-        undefined)
-      : undefined;
+  $: pendingDamageChoice = roomState.resolution?.pendingDamageChoice ?? null;
+  $: pendingDamageRobot = roomState.resolution?.robots.find(
+    ({ uid }) => uid === pendingDamageChoice?.uid
+  );
   $: normalizedName = normalizePlayerName(playerName);
   $: canSubmit =
     !!normalizedName &&
@@ -266,9 +271,12 @@
     playbackCardId = null;
     playbackRobots = undefined;
     playbackTrace = [];
+    playbackLaserBeams = [];
     playbackFrameIndex = 0;
     playbackFrameCount = 0;
     playbackProductionDurationMs = PRODUCTION_PROGRAM_CARD_MS;
+    scheduledPlaybackFrames = 0;
+    queuedPlayback = undefined;
   }
 
   function schedulePlayback(callback: () => void, delay: number) {
@@ -280,20 +288,12 @@
     return PRODUCTION_FACTORY_STAGE_MS;
   }
 
-  function startProgramPlayback(key: string, playback: ProgramPlayback) {
-    resetProgramPlayback();
-    playbackKey = key;
-    playbackPhase = 'countdown';
-    playbackCountdown = 3;
-    playbackRobots = playback.initialRobots;
+  function schedulePlaybackFrames(playback: ProgramPlayback, fromIndex: number, initialDelay: number) {
+    let frameStart = initialDelay;
     playbackFrameCount = playback.frames.length;
-
-    schedulePlayback(() => (playbackCountdown = 2), countdownStepMs);
-    schedulePlayback(() => (playbackCountdown = 1), countdownStepMs * 2);
-
-    const countdownDuration = countdownStepMs * 3;
-    let frameStart = countdownDuration;
+    scheduledPlaybackFrames = playback.frames.length;
     for (const [index, frame] of playback.frames.entries()) {
+      if (index < fromIndex) continue;
       const productionDuration = productionDurationForFrame(frame);
       schedulePlayback(() => {
         playbackPhase = 'register';
@@ -303,20 +303,49 @@
         playbackCardId = frame.cardId;
         playbackRobots = frame.robots;
         playbackTrace = frame.trace;
+        playbackLaserBeams = frame.laserBeams ?? [];
         playbackFrameIndex = index + 1;
         playbackProductionDurationMs = productionDuration;
       }, frameStart);
       frameStart += Math.round(productionDuration * playbackTimeScale);
     }
     schedulePlayback(() => {
+      if (queuedPlayback && queuedPlayback.frames.length > scheduledPlaybackFrames) {
+        const continuation = queuedPlayback;
+        queuedPlayback = undefined;
+        clearPlaybackTimers();
+        schedulePlaybackFrames(continuation, scheduledPlaybackFrames, 0);
+        return;
+      }
       playbackPhase = 'complete';
       playbackRegister = null;
       playbackStage = null;
       playbackActorUid = null;
       playbackCardId = null;
-      playbackRobots = undefined;
+      if (!roomState.resolution?.pendingDamageChoice) {
+        playbackRobots = undefined;
+        playbackLaserBeams = [];
+      }
       playbackTrace = [];
     }, frameStart);
+  }
+
+  function startProgramPlayback(key: string, playback: ProgramPlayback) {
+    resetProgramPlayback();
+    playbackKey = key;
+    playbackPhase = 'countdown';
+    playbackCountdown = 3;
+    playbackRobots = playback.initialRobots;
+
+    schedulePlayback(() => (playbackCountdown = 2), countdownStepMs);
+    schedulePlayback(() => (playbackCountdown = 1), countdownStepMs * 2);
+    schedulePlaybackFrames(playback, 0, countdownStepMs * 3);
+  }
+
+  function continueProgramPlayback(playback: ProgramPlayback) {
+    const fromIndex = scheduledPlaybackFrames;
+    clearPlaybackTimers();
+    schedulePlaybackFrames(playback, fromIndex, 0);
   }
 
   $: {
@@ -330,6 +359,13 @@
       nextPlaybackKey !== playbackKey
     ) {
       startProgramPlayback(nextPlaybackKey, resolution.playback);
+    } else if (
+      resolution?.playback.frames.length &&
+      nextPlaybackKey === playbackKey &&
+      resolution.playback.frames.length > scheduledPlaybackFrames
+    ) {
+      if (playbackIsActive) queuedPlayback = resolution.playback;
+      else continueProgramPlayback(resolution.playback);
     }
   }
 
@@ -374,7 +410,6 @@
     programDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
     programDraftDirty = false;
     programDraftWriteQueue = Promise.resolve();
-    selectedOptionPreventionIds = [];
     selectedReentryChoice = '';
     reentryPoweredDown = false;
     effectDraftDirty = false;
@@ -408,15 +443,11 @@
               turnId === `turn-${String(nextState.resolution?.turnNumber ?? 0).padStart(3, '0')}`)
         );
         if (effectDraft && (!effectDraftDirty ||
-          (effectDraft.draft.kind === 'option-plan' &&
-            JSON.stringify(effectDraft.draft.preventDamageWith) === JSON.stringify(selectedOptionPreventionIds)) ||
           (effectDraft.draft.kind === 'reentry' &&
             ((effectDraft.draft.x === null && selectedReentryChoice === '') ||
               selectedReentryChoice === `${effectDraft.draft.x},${effectDraft.draft.y},${effectDraft.draft.facing}`) &&
             effectDraft.draft.poweredDown === reentryPoweredDown))) {
-          if (effectDraft.draft.kind === 'option-plan') {
-            selectedOptionPreventionIds = [...effectDraft.draft.preventDamageWith];
-          } else if (effectDraft.draft.kind === 'reentry') {
+          if (effectDraft.draft.kind === 'reentry') {
             selectedReentryChoice =
               effectDraft.draft.x !== null &&
               effectDraft.draft.y !== null &&
@@ -779,30 +810,6 @@
     }
   }
 
-  function toggleOptionPrevention(cardId: OptionCardId) {
-    selectedOptionPreventionIds = selectedOptionPreventionIds.includes(cardId)
-      ? selectedOptionPreventionIds.filter((id) => id !== cardId)
-      : [...selectedOptionPreventionIds, cardId];
-    effectDraftDirty = true;
-    void persistOptionDraft();
-  }
-
-  async function persistOptionDraft() {
-    if (!services || !roomService || !activeProgramming) return;
-    try {
-      await roomService.updateEffectDraft(
-        services.db,
-        services.user,
-        roomCode,
-        activeProgramming.turnId,
-        { kind: 'option-plan', preventDamageWith: selectedOptionPreventionIds, activations: [] }
-      );
-    } catch (error) {
-      console.error(error);
-      formError = 'The Option draft could not be written.';
-    }
-  }
-
   async function persistReentryDraft() {
     if (!services || !roomService || !roomState.resolution) return;
     const [x, y, facing] = selectedReentryChoice.split(',');
@@ -830,8 +837,8 @@
     }
   }
 
-  async function submitOptionPlan() {
-    if (!services || !roomService || !activeProgramming) return;
+  async function answerDamagePrevention(cardId: OptionCardId | null) {
+    if (!services || !roomService || !activeProgramming || !pendingDamageChoice) return;
     pending = true;
     try {
       await roomService.chooseEffect(
@@ -839,17 +846,16 @@
         services.user,
         roomCode,
         {
-          kind: 'option-plan',
-          preventDamageWith: selectedOptionPreventionIds,
-          activations: []
+          kind: 'damage-prevention',
+          decisionId: pendingDamageChoice.decisionId,
+          uid: services.user.uid,
+          cardId
         },
         activeProgramming.turnId
       );
-      selectedOptionPreventionIds = [];
-      effectDraftDirty = false;
     } catch (error) {
       console.error(error);
-      formError = 'The ordered Option plan could not be written.';
+      formError = 'The damage prevention choice could not be written.';
     } finally {
       pending = false;
     }
@@ -992,6 +998,7 @@
         currentPlayerUid={currentPlayer.uid}
         animateRobots={playbackIsActive}
         transitionDurationMs={playbackTransitionMs}
+        laserBeams={playbackLaserBeams}
       />
       <aside
         class:resolution-active={!!roomState.resolution}
@@ -1160,42 +1167,6 @@
                 {/if}
               {/each}
             </ul>
-            {#if roomState.pendingOptionUid}
-              <section class="option-plan" aria-label="Ordered Option decision window">
-                {#if roomState.pendingOptionUid === currentPlayer.uid && optionPlanRobot}
-                  <strong>Commit Option choices in original Dock order</strong>
-                  <p>
-                    Select cards in the order they should be discarded to prevent one damage each.
-                    Unselected cards are retained.
-                  </p>
-                  <div class="option-card-grid">
-                    {#each optionPlanRobot.options as option}
-                      {@const card = OPTION_CARDS_BY_ID.get(option.cardId)}
-                      {#if card}
-                        <button
-                          type="button"
-                          class="option-card-choice"
-                          class:selected={selectedOptionPreventionIds.includes(option.cardId)}
-                          aria-label={`Use ${card.name} to prevent one damage`}
-                          aria-pressed={selectedOptionPreventionIds.includes(option.cardId)}
-                          onclick={() => toggleOptionPrevention(option.cardId)}
-                        >
-                          <OptionCardFace {card} variant="compact-copy" />
-                        </button>
-                      {/if}
-                    {/each}
-                  </div>
-                  <button type="button" disabled={pending} onclick={submitOptionPlan}>
-                    Commit finite Option plan
-                  </button>
-                {:else}
-                  {@const pendingOptionPlayer = roomState.players.find(
-                    ({ uid }) => uid === roomState.pendingOptionUid
-                  )}
-                  <span>Waiting for {pendingOptionPlayer?.name} in original Dock order</span>
-                {/if}
-              </section>
-            {/if}
             {#if activeProgramming.deadlinePlayerUid}
               {@const timedPlayer = roomState.players.find(({ uid }) => uid === activeProgramming.deadlinePlayerUid)}
               <div class="deadline" role="timer">
@@ -1215,9 +1186,11 @@
                       ? `register ${playbackRegister} · ${playbackStageLabel}`
                       : roomState.resolution.phase === 'turn-complete'
                         ? 'complete'
-                        : roomState.resolution.phase === 'race-finished'
+                      : roomState.resolution.phase === 'race-finished'
                           ? 'finished'
-                          : 'awaiting re-entry'}
+                          : roomState.resolution.phase === 'awaiting-damage'
+                            ? `waiting for ${pendingDamageRobot?.name ?? 'damage choice'}`
+                            : 'awaiting re-entry'}
                   · {visibleResolutionTrace.length} microsteps
                 </h2>
                 <ul class="robot-state" aria-label="Robot Life and damage state">
@@ -1267,6 +1240,48 @@
                     : 'The configured board manifest supplies every active element.'}
                   Damage 9 repeats all five locked registers.
                 </p>
+                {#if !playbackIsActive && pendingDamageChoice && pendingDamageRobot}
+                  <section
+                    class="damage-choice"
+                    aria-label="Damage prevention choice"
+                    data-decision-id={pendingDamageChoice.decisionId}
+                  >
+                    {#if pendingDamageChoice.uid === currentPlayer.uid}
+                      <strong>Laser damage incoming</strong>
+                      <p>
+                        Choose now for damage {pendingDamageChoice.damagePoint} of
+                        {pendingDamageChoice.damageTotal}: discard one Option, or take the damage.
+                      </p>
+                      <div class="option-card-grid">
+                        {#each pendingDamageRobot.options.filter(({ cardId }) => pendingDamageChoice?.eligibleCardIds.includes(cardId)) as option}
+                          {@const card = OPTION_CARDS_BY_ID.get(option.cardId)}
+                          {#if card}
+                            <button
+                              type="button"
+                              class="option-card-choice"
+                              aria-label={`Discard ${card.name} to prevent this damage`}
+                              disabled={pending}
+                              onclick={() => answerDamagePrevention(option.cardId)}
+                            >
+                              <OptionCardFace {card} variant="thumbnail" />
+                            </button>
+                          {/if}
+                        {/each}
+                      </div>
+                      <button
+                        type="button"
+                        class="take-damage"
+                        disabled={pending}
+                        onclick={() => answerDamagePrevention(null)}
+                      >Take this damage</button>
+                    {:else}
+                      <strong>Waiting for {pendingDamageRobot.name}</strong>
+                      <p>
+                        {pendingDamageRobot.name} is resolving laser damage in original Dock order.
+                      </p>
+                    {/if}
+                  </section>
+                {/if}
                 {#if !playbackIsActive && optionLossRobot}
                   {#if optionLossRobot.uid === currentPlayer?.uid}
                     <div class="option-loss-choice" aria-label="Destroyed robot Option loss">
@@ -2478,7 +2493,7 @@
   .option-catalog:not([open]) ol { display: none; }
   .option-catalog li { min-width: 0; }
   .option-catalog li :global(.option-card) { filter: none; }
-  .option-plan,
+  .damage-choice,
   .option-loss-choice {
     display: grid;
     gap: 6px;
@@ -2487,7 +2502,26 @@
     color: #91a09f;
     font: 14px 'Space Mono', monospace;
   }
-  .option-plan p { margin: 0; }
+  .damage-choice p { margin: 0; }
+  .damage-choice {
+    position: fixed;
+    z-index: 60;
+    top: 50%;
+    left: 50%;
+    width: min(90vw, 720px);
+    max-height: 90vh;
+    overflow: auto;
+    padding: 18px;
+    border: 3px solid #ff4a4a;
+    background: #090d0ef5;
+    box-shadow: 0 0 55px #ff202055, 0 22px 70px #000;
+    transform: translate(-50%, -50%);
+  }
+  .damage-choice > strong { color: #ffcf4b; }
+  .damage-choice .take-damage { border-color: #ff4a4a; }
+  .damage-choice .option-card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 200px));
+  }
   .option-card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -2506,11 +2540,6 @@
   }
   button.option-card-choice:hover,
   button.option-card-choice:focus-visible { border-color: #ffcf4b; }
-  button.option-card-choice.selected {
-    border-color: #d2ff37;
-    box-shadow: 0 0 0 2px #d2ff37;
-    transform: translateY(-2px);
-  }
   button.option-card-choice :global(.option-card) { filter: none; }
   .power-control {
     display: grid;

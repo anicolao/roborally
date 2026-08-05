@@ -51,11 +51,7 @@ async function chooseFirstProgram(page: Page) {
   await page.getByRole('button', { name: 'Submit immutable program' }).click();
 }
 
-async function commitEmptyOptionPlan(page: Page) {
-  await page.getByRole('button', { name: 'Commit finite Option plan' }).click();
-}
-
-test('face-up Options use immutable Dock-order decisions', async (
+test('face-up Options remain available for execution-time decisions', async (
   { browser, page: host },
   testInfo
 ) => {
@@ -80,8 +76,8 @@ test('face-up Options use immutable Dock-order decisions', async (
 
     const steps = new TestStepHelper(host, testInfo);
     steps.setMetadata(
-      'Draw and commit face-up Options',
-      'Two ordinary clients reach the crossed repair site on successive turns, draw from one deterministic Option deck, and then close the shared decision barrier in original Dock order.'
+      'Draw and retain face-up Options',
+      'Two ordinary clients reach the crossed repair site on successive turns, draw from one deterministic Option deck, and retain those cards until an actual execution-time choice occurs.'
     );
 
     await host.getByLabel('Setup seed').fill('OPTION-11');
@@ -101,8 +97,7 @@ test('face-up Options use immutable Dock-order decisions', async (
       await chooseProgram(host, programs.host);
       await chooseProgram(guest, programs.guest);
       if (turn >= 3) {
-        await expect(host.getByLabel('Ordered Option decision window')).toBeVisible();
-        await commitEmptyOptionPlan(host);
+        await expect(host.getByLabel('Ordered Option decision window')).toHaveCount(0);
       }
       await expect(host.getByRole('heading', { name: `Turn ${turn} complete` })).toBeVisible();
     }
@@ -136,48 +131,88 @@ test('face-up Options use immutable Dock-order decisions', async (
     await host.getByRole('button', { name: 'Begin Turn 5' }).click();
     await guest.getByRole('button', { name: 'Begin Turn 5' }).click();
     await stayActiveInDockOrder([host, guest]);
+    const table = await host.context().newPage();
+    await table.goto(`/tt/?room=${roomCode}`);
     await chooseFirstProgram(host);
     await chooseFirstProgram(guest);
 
-    await expect(host.getByLabel('Ordered Option decision window')).toContainText(
-      'Commit Option choices'
-    );
-    await expect(
-      host.getByLabel('Ordered Option decision window').locator('[data-card-id]').first()
-    ).toBeVisible();
-    await expect(guest.getByLabel('Ordered Option decision window')).toContainText(
-      'Waiting for Ada'
-    );
-    await commitEmptyOptionPlan(host);
-    await expect(host.getByLabel('Ordered Option decision window')).toContainText(
-      'Waiting for Grace'
-    );
-    await expect(guest.getByLabel('Ordered Option decision window')).toContainText(
-      'Commit Option choices'
-    );
-    await commitEmptyOptionPlan(guest);
-    await expect(host.getByRole('heading', { name: 'Turn 5 complete' })).toBeVisible();
-
-    await steps.step('concurrent-options-close-in-dock-order', {
-      description: 'Two simultaneous owners close a replay-safe finite barrier in original Dock order',
+    const damageChoice = host.getByLabel('Damage prevention choice');
+    await expect(damageChoice).toBeVisible({ timeout: 45_000 });
+    const tableDamagePrompt = table.getByTestId('tabletop-damage-prompt');
+    await expect(tableDamagePrompt).toBeVisible({ timeout: 45_000 });
+    await steps.step('damage-choice-at-impact', {
+      description: 'Laser damage pauses execution and prompts the affected player at impact time',
       verifications: [
         {
-          spec: 'Both clients converge only after Ada then Grace commit',
+          spec: 'Ada sees the exact pending damage point and her owned Options',
+          check: async () => {
+            await expect(damageChoice).toContainText('damage 1 of 1');
+            await expect(
+              damageChoice.getByRole('button', { name: /Discard .* to prevent this damage/ }).first()
+            ).toBeVisible();
+          }
+        },
+        {
+          spec: 'Grace sees that Ada is the player currently being prompted',
+          check: async () => {
+            await expect(guest.getByLabel('Damage prevention choice')).toContainText(
+              'Waiting for Ada'
+            );
+          }
+        }
+      ]
+    });
+    steps.setPage(table);
+    await steps.step('tabletop-identifies-damage-decision', {
+      description: 'The shared tabletop keeps the successful beam visible and names the prompted player',
+      status: 'skip',
+      verifications: [
+        {
+          spec: 'The tabletop prominently identifies Ada as the current responder',
+          check: async () => {
+            await expect(tableDamagePrompt).toContainText('Ada');
+            await expect(tableDamagePrompt).toContainText('ORIGINAL DOCK ORDER');
+          }
+        },
+        {
+          spec: 'The successful robot laser remains visible beneath the decision prompt',
+          check: async () => {
+            await expect(table.locator('[data-laser-source]')).not.toHaveCount(0);
+          }
+        }
+      ]
+    });
+    steps.setPage(host);
+    await damageChoice
+      .getByRole('button', { name: /Discard .* to prevent this damage/ })
+      .first()
+      .click();
+    await expect(host.getByRole('heading', { name: 'Turn 5 complete' })).toBeVisible();
+
+    await steps.step('options-wait-for-execution-time-use', {
+      description: 'Owning Options no longer creates an up-front planning barrier',
+      verifications: [
+        {
+          spec: 'Both clients converge without precommitting future Option use',
           check: async () => {
             await expect(guest.getByRole('heading', { name: 'Turn 5 complete' })).toBeVisible();
             await expect(host.getByLabel('Ordered Option decision window')).toHaveCount(0);
           }
         },
         {
-          spec: 'Unspent graphical Options remain face up after a pass',
+          spec: 'Graphical Options remain face up until their actual timing window',
           check: async () => {
             const robots = host.getByRole('list', { name: 'Robot Life and damage state' });
-            await expect(robots.locator('[data-card-id]')).toHaveCount(2);
+            await expect(robots.locator('[data-card-id]')).toHaveCount(1);
+            await expect(host.locator('.full-resolution')).toContainText(
+              'to prevent one damage'
+            );
           }
         }
       ]
     });
     steps.generateDocs();
+    await table.close();
   } finally {
     await guestContext.close();
   }

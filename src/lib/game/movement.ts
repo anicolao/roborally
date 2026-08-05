@@ -71,6 +71,8 @@ export type ResolutionTraceKind =
   | 'gear'
   | 'board-laser'
   | 'robot-laser'
+  | 'damage-choice-required'
+  | 'damage-choice-resolved'
   | 'damage'
   | 'option-damage-prevented'
   | 'option-effect'
@@ -92,13 +94,49 @@ export interface ResolutionTraceEntry {
   text: string;
 }
 
+export interface RobotLaserBeam {
+  id: string;
+  sourceUid: string;
+  targetUid: string;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  beamCount: 1 | 2;
+}
+
+export interface DamagePreventionChoice {
+  decisionId: string;
+  uid: string;
+  cardId: OptionCardId | null;
+}
+
+export interface PendingDamageChoice {
+  decisionId: string;
+  uid: string;
+  register: RegisterNumber;
+  sourceUid: string | null;
+  sourceKind: 'board-laser' | 'robot-laser';
+  damagePoint: number;
+  damageTotal: number;
+  eligibleCardIds: OptionCardId[];
+}
+
 export interface ProgramPlaybackFrame {
   register: RegisterNumber;
-  stage: 'program-card' | 'express-conveyors' | 'conveyors' | 'pushers' | 'gears';
+  stage:
+    | 'program-card'
+    | 'express-conveyors'
+    | 'conveyors'
+    | 'pushers'
+    | 'gears'
+    | 'lasers'
+    | 'laser-damage';
   actorUid: string | null;
   cardId: ProgramCard['id'] | null;
   robots: RaceRobotPosition[];
   trace: ResolutionTraceEntry[];
+  laserBeams?: RobotLaserBeam[];
 }
 
 export interface ProgramPlayback {
@@ -116,16 +154,24 @@ export interface ReentryChoice {
 export interface ProgramResolution {
   courseId?: PlayableCourseId;
   turnNumber: number;
-  phase: 'awaiting-option' | 'awaiting-reentry' | 'turn-complete' | 'race-finished';
+  phase:
+    | 'awaiting-damage'
+    | 'awaiting-option'
+    | 'awaiting-reentry'
+    | 'turn-complete'
+    | 'race-finished';
   robots: RaceRobotPosition[];
   trace: ResolutionTraceEntry[];
   optionDeck: OptionDeckState;
   nextOptionChoiceUid: string | null;
+  pendingDamageChoice?: PendingDamageChoice | null;
   nextReentryUid: string | null;
   winnerUids: string[];
   runnersUpUids: string[];
   summary: RaceSummary | null;
   playback: ProgramPlayback;
+  /** Immutable turn-start deck used when persisted execution choices replay the turn. */
+  initialOptionDeck?: OptionDeckState;
 }
 
 export interface RaceSummary {
@@ -803,6 +849,30 @@ interface LaserHit {
   sourceUid: string | null;
   targetUid: string;
   kind: 'board-laser' | 'robot-laser';
+  damage: 1 | 2 | 3;
+  beam?: RobotLaserBeam;
+}
+
+interface LaserDamageStep {
+  robots: RaceRobotPosition[];
+  trace: ResolutionTraceEntry[];
+}
+
+interface LaserSnapshotResult {
+  laserTrace: ResolutionTraceEntry[];
+  laserBeams: RobotLaserBeam[];
+  damageSteps: LaserDamageStep[];
+  pendingDamageChoice: PendingDamageChoice | null;
+}
+
+function cloneRaceRobots(source: readonly RaceRobotPosition[]): RaceRobotPosition[] {
+  return source.map((robot) => ({
+    ...robot,
+    archive: { ...robot.archive },
+    options: robot.options.map((option) => ({ ...option })),
+    lockedRegisters: robot.lockedRegisters.map((locked) => ({ ...locked })),
+    touchedFlags: [...robot.touchedFlags]
+  }));
 }
 
 function dealOneDamage(
@@ -812,9 +882,8 @@ function dealOneDamage(
   trace: ResolutionTraceEntry[],
   programming: ProgrammingState,
   optionDeck?: OptionDeckState,
-  preventionQueues: Record<string, OptionCardId[]> = {}
+  cardId: OptionCardId | null = null
 ) {
-  const cardId = preventionQueues[target.uid]?.shift();
   if (cardId && optionDeck && discardOwnedOption(target.options, optionDeck, cardId)) {
     addTrace(
       trace,
@@ -866,12 +935,13 @@ export function resolveLaserSnapshot(
   programming: ProgrammingState,
   cells: readonly BoardCell[] = defaultCourseCells,
   optionDeck?: OptionDeckState,
-  preventionQueues?: Record<string, OptionCardId[]>,
+  damageChoices: Readonly<Record<string, DamagePreventionChoice>> = {},
   optionPlans: Readonly<Record<string, OptionTurnPlan>> = {},
   course: CompiledCourse = defaultCourse
-) {
+): LaserSnapshotResult {
   const activeSnapshot = robots.filter(({ status }) => status === 'active');
   const hits: LaserHit[] = [];
+  const traceStart = trace.length;
 
   const laserSegments = cells.flatMap((cell) =>
     cell.elements
@@ -905,9 +975,12 @@ export function resolveLaserSnapshot(
     while (segmentAt(cursorX, cursorY, laser.direction, laser.beamCount)) {
       const target = activeRobotAt(activeSnapshot, cursorX, cursorY);
       if (target) {
-        for (let beam = 0; beam < laser.beamCount; beam += 1) {
-          hits.push({ sourceUid: null, targetUid: target.uid, kind: 'board-laser' });
-        }
+        hits.push({
+          sourceUid: null,
+          targetUid: target.uid,
+          kind: 'board-laser',
+          damage: laser.beamCount
+        });
         break;
       }
       if (movementBlockedByWall(cursorX, cursorY, laser.direction, course)) break;
@@ -950,45 +1023,138 @@ export function resolveLaserSnapshot(
         if (!courseContains(cursorX, cursorY, course)) break;
         const target = activeRobotAt(activeSnapshot, cursorX, cursorY, shooter.uid);
         if (!target) continue;
-        for (let beam = 0; beam < beamDamage; beam += 1) {
-          hits.push({
+        hits.push({
+          sourceUid: shooter.uid,
+          targetUid: target.uid,
+          kind: 'robot-laser',
+          damage: beamDamage,
+          beam: {
+            id: `r${register}-${shooter.uid}-${target.uid}-${firingDirection}`,
             sourceUid: shooter.uid,
             targetUid: target.uid,
-            kind: 'robot-laser'
-          });
-        }
+            fromX: shooter.x,
+            fromY: shooter.y,
+            toX: target.x,
+            toY: target.y,
+            beamCount: beamDamage
+          }
+        });
         if (passBudget === 0) break;
         passBudget -= 1;
       }
     }
   }
 
-  for (const hit of hits) {
+  const orderedHits = hits
+    .map((hit, index) => ({ hit, index }))
+    .sort((left, right) => {
+      const leftDock = robots.findIndex(({ uid }) => uid === left.hit.targetUid);
+      const rightDock = robots.findIndex(({ uid }) => uid === right.hit.targetUid);
+      return leftDock - rightDock || left.index - right.index;
+    })
+    .map(({ hit }) => hit);
+  for (const hit of orderedHits) {
     const target = robots.find(({ uid }) => uid === hit.targetUid);
     if (!target || target.status !== 'active') continue;
     const shooter = hit.sourceUid
       ? robots.find(({ uid }) => uid === hit.sourceUid)
       : undefined;
-    addTrace(
-      trace,
-      register,
-      hit.sourceUid ?? target.uid,
-      null,
-      hit.kind,
-      hit.kind === 'board-laser'
-        ? `A board laser hit ${target.name} at (${target.x},${target.y}).`
-        : `${shooter?.name ?? 'A robot'} fired through clear line of sight and hit ${target.name}.`
-    );
-    dealOneDamage(
-      robots,
-      target,
-      register,
-      trace,
-      programming,
-      optionDeck,
-      preventionQueues
-    );
+    for (let beam = 0; beam < hit.damage; beam += 1) {
+      addTrace(
+        trace,
+        register,
+        hit.sourceUid ?? target.uid,
+        null,
+        hit.kind,
+        hit.kind === 'board-laser'
+          ? `A board laser hit ${target.name} at (${target.x},${target.y}).`
+          : `${shooter?.name ?? 'A robot'} fired through clear line of sight and hit ${target.name}.`
+      );
+    }
   }
+  const laserTrace = trace.slice(traceStart);
+  const damageSteps: LaserDamageStep[] = [];
+  let damageOrdinal = 0;
+  for (const hit of orderedHits) {
+    const target = robots.find(({ uid }) => uid === hit.targetUid);
+    if (!target || target.status !== 'active') continue;
+    for (let point = 1; point <= hit.damage; point += 1) {
+      if (target.status !== 'active') break;
+      damageOrdinal += 1;
+      const decisionId = `r${register}-damage-${String(damageOrdinal).padStart(2, '0')}-${target.uid}`;
+      const choice = damageChoices[decisionId];
+      const eligibleCardIds = target.options.map(({ cardId }) => cardId);
+      const validChoice =
+        choice?.uid === target.uid &&
+        (choice.cardId === null || eligibleCardIds.includes(choice.cardId));
+      const damageTraceStart = trace.length;
+      if (eligibleCardIds.length > 0 && !validChoice) {
+        addTrace(
+          trace,
+          register,
+          target.uid,
+          null,
+          'damage-choice-required',
+          `${target.name} must choose whether to take damage or discard an Option ` +
+            `(damage ${point} of ${hit.damage}).`
+        );
+        damageSteps.push({
+          robots: cloneRaceRobots(robots),
+          trace: trace.slice(damageTraceStart)
+        });
+        return {
+          laserTrace,
+          laserBeams: orderedHits.flatMap(({ beam }) => (beam ? [beam] : [])),
+          damageSteps,
+          pendingDamageChoice: {
+            decisionId,
+            uid: target.uid,
+            register: register as RegisterNumber,
+            sourceUid: hit.sourceUid,
+            sourceKind: hit.kind,
+            damagePoint: point,
+            damageTotal: hit.damage,
+            eligibleCardIds
+          }
+        };
+      }
+      const selectedCardId =
+        validChoice &&
+        choice.cardId !== null &&
+        eligibleCardIds.includes(choice.cardId)
+          ? choice.cardId
+          : null;
+      if (choice && selectedCardId === null) {
+        addTrace(
+          trace,
+          register,
+          target.uid,
+          null,
+          'damage-choice-resolved',
+          `${target.name} chose not to discard an Option for damage ${point} of ${hit.damage}.`
+        );
+      }
+      dealOneDamage(
+        robots,
+        target,
+        register,
+        trace,
+        programming,
+        optionDeck,
+        selectedCardId
+      );
+      damageSteps.push({
+        robots: cloneRaceRobots(robots),
+        trace: trace.slice(damageTraceStart)
+      });
+    }
+  }
+  return {
+    laserTrace,
+    laserBeams: orderedHits.flatMap(({ beam }) => (beam ? [beam] : [])),
+    damageSteps,
+    pendingDamageChoice: null
+  };
 }
 
 export function resolveFlagsAndArchives(
@@ -1434,7 +1600,8 @@ export function resolveProgrammedTurn(
   setup: RaceSetup,
   initialRobots = createRaceRobotPositions(setup),
   initialOptionDeck?: OptionDeckState,
-  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {}
+  optionPlans: Readonly<Record<string, OptionTurnPlan>> = {},
+  damageChoices: Readonly<Record<string, DamagePreventionChoice>> = {}
 ): ProgramResolution | null {
   if (programming.phase !== 'programmed') return null;
   const course = compilePlayableCourse(setup.courseId);
@@ -1452,24 +1619,10 @@ export function resolveProgrammedTurn(
     initialOptionDeck ?? createOptionDeck(`standalone-turn-${programming.turnNumber}`)
   );
   const trace: ResolutionTraceEntry[] = [];
-  const cloneRobots = (source: readonly RaceRobotPosition[]) =>
-    source.map((robot) => ({
-      ...robot,
-      archive: { ...robot.archive },
-      options: robot.options.map((option) => ({ ...option })),
-      lockedRegisters: robot.lockedRegisters.map((locked) => ({ ...locked })),
-      touchedFlags: [...robot.touchedFlags]
-    }));
   const playback: ProgramPlayback = {
-    initialRobots: cloneRobots(robots),
+    initialRobots: cloneRaceRobots(robots),
     frames: []
   };
-  const preventionQueues = Object.fromEntries(
-    robots.map(({ uid }) => [
-      uid,
-      [...optionPlanFor(optionPlans, uid).preventDamageWith]
-    ])
-  );
   const cards = new Map(PROGRAM_CARDS.map((card) => [card.id, card]));
 
   for (let register = 1; register <= 5; register += 1) {
@@ -1498,7 +1651,7 @@ export function resolveProgrammedTurn(
         stage: 'program-card',
         actorUid: entry.uid,
         cardId: entry.card.id,
-        robots: cloneRobots(robots),
+        robots: cloneRaceRobots(robots),
         trace: trace.slice(cardTraceStart)
       });
     }
@@ -1510,7 +1663,7 @@ export function resolveProgrammedTurn(
       stage: 'express-conveyors',
       actorUid: null,
       cardId: null,
-      robots: cloneRobots(robots),
+      robots: cloneRaceRobots(robots),
       trace: trace.slice(expressTraceStart)
     });
 
@@ -1521,7 +1674,7 @@ export function resolveProgrammedTurn(
       stage: 'conveyors',
       actorUid: null,
       cardId: null,
-      robots: cloneRobots(robots),
+      robots: cloneRaceRobots(robots),
       trace: trace.slice(conveyorTraceStart)
     });
 
@@ -1532,23 +1685,75 @@ export function resolveProgrammedTurn(
       stage: 'pushers',
       actorUid: null,
       cardId: null,
-      robots: cloneRobots(robots),
+      robots: cloneRaceRobots(robots),
       trace: trace.slice(pusherTraceStart)
     });
 
     const gearTraceStart = trace.length;
     resolveGears(robots, register, trace, courseCells, optionPlans);
-    resolveLaserSnapshot(
+    playback.frames.push({
+      register: register as RegisterNumber,
+      stage: 'gears',
+      actorUid: null,
+      cardId: null,
+      robots: cloneRaceRobots(robots),
+      trace: trace.slice(gearTraceStart)
+    });
+
+    const laserRobots = cloneRaceRobots(robots);
+    const laserResult = resolveLaserSnapshot(
       robots,
       register,
       trace,
       programming,
       courseCells,
       optionDeck,
-      preventionQueues,
+      damageChoices,
       optionPlans,
       course
     );
+    if (laserResult.laserTrace.length > 0) {
+      playback.frames.push({
+        register: register as RegisterNumber,
+        stage: 'lasers',
+        actorUid: null,
+        cardId: null,
+        robots: laserRobots,
+        trace: laserResult.laserTrace,
+        laserBeams: laserResult.laserBeams
+      });
+    }
+    for (const step of laserResult.damageSteps) {
+      playback.frames.push({
+        register: register as RegisterNumber,
+        stage: 'laser-damage',
+        actorUid: step.trace.at(-1)?.actorUid ?? null,
+        cardId: null,
+        robots: step.robots,
+        trace: step.trace,
+        laserBeams: laserResult.laserBeams
+      });
+    }
+    if (laserResult.pendingDamageChoice) {
+      return {
+        courseId: setup.courseId,
+        turnNumber: programming.turnNumber,
+        phase: 'awaiting-damage',
+        robots,
+        trace,
+        optionDeck,
+        nextOptionChoiceUid: null,
+        pendingDamageChoice: laserResult.pendingDamageChoice,
+        nextReentryUid: null,
+        winnerUids: [],
+        runnersUpUids: [],
+        summary: null,
+        playback,
+        initialOptionDeck: cloneOptionDeck(
+          initialOptionDeck ?? createOptionDeck(`standalone-turn-${programming.turnNumber}`)
+        )
+      };
+    }
     const finishers = resolveFlagsAndArchives(
       robots,
       register,
@@ -1575,14 +1780,6 @@ export function resolveProgrammedTurn(
           ? `${winnerNames[0]} touched the final Flag in order and won the race.`
           : `${winnerNames.join(' and ')} touched the final Flag simultaneously and tied for the win.`
       );
-      playback.frames.push({
-        register: register as RegisterNumber,
-        stage: 'gears',
-        actorUid: null,
-        cardId: null,
-        robots: cloneRobots(robots),
-        trace: trace.slice(gearTraceStart)
-      });
       return {
         courseId: setup.courseId,
         turnNumber: programming.turnNumber,
@@ -1591,21 +1788,17 @@ export function resolveProgrammedTurn(
         trace,
         optionDeck,
         nextOptionChoiceUid: null,
+        pendingDamageChoice: null,
         nextReentryUid: null,
         winnerUids,
         runnersUpUids,
         summary: createRaceSummary(robots, winnerUids, runnersUpUids),
-        playback
+        playback,
+        initialOptionDeck: cloneOptionDeck(
+          initialOptionDeck ?? createOptionDeck(`standalone-turn-${programming.turnNumber}`)
+        )
       };
     }
-    playback.frames.push({
-      register: register as RegisterNumber,
-      stage: 'gears',
-      actorUid: null,
-      cardId: null,
-      robots: cloneRobots(robots),
-      trace: trace.slice(gearTraceStart)
-    });
   }
 
   resolveRepairCleanup(
@@ -1626,11 +1819,15 @@ export function resolveProgrammedTurn(
     trace,
     optionDeck,
     nextOptionChoiceUid: null,
+    pendingDamageChoice: null,
     nextReentryUid: null,
     winnerUids: [],
     runnersUpUids: [],
     summary: null,
-    playback
+    playback,
+    initialOptionDeck: cloneOptionDeck(
+      initialOptionDeck ?? createOptionDeck(`standalone-turn-${programming.turnNumber}`)
+    )
   };
   updateResolutionPhase(resolution);
   const next = nextDestroyedRobot(robots);

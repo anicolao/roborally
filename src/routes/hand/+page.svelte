@@ -43,7 +43,6 @@
   let draftWriteQueue: Promise<void> = Promise.resolve();
   let selectedReentryChoice = '';
   let reentryPoweredDown = false;
-  let selectedOptionPreventionIds: OptionCardId[] = [];
   let requestedTurnNumber = 1;
   let status = 'Connecting to the tabletop…';
   let error = '';
@@ -75,10 +74,10 @@
   $: optionLossRobot = state.resolution?.robots.find(
     (candidate) => candidate.uid === state.resolution?.nextOptionChoiceUid
   );
-  $: optionPlanRobot = player
-    ? state.resolution?.robots.find((candidate) => candidate.uid === player.uid)
-    : undefined;
-  $: canChooseOptionPlan = !!player && state.pendingOptionUid === player.uid && !!activeProgramming;
+  $: pendingDamageChoice = state.resolution?.pendingDamageChoice ?? null;
+  $: pendingDamageRobot = state.resolution?.robots.find(
+    (candidate) => candidate.uid === pendingDamageChoice?.uid
+  );
 
   onMount(async () => {
     const params = new URLSearchParams(location.search);
@@ -130,13 +129,15 @@
               ? `${effectDraft.draft.x},${effectDraft.draft.y},${effectDraft.draft.facing}`
               : '';
           reentryPoweredDown = effectDraft.draft.poweredDown;
-        } else if (effectDraft?.draft.kind === 'option-plan') {
-          selectedOptionPreventionIds = [...effectDraft.draft.preventDamageWith];
         }
         const programmingIsAhead =
           !!nextActiveProgramming &&
           (!next.resolution || nextActiveProgramming.turnNumber > next.resolution.turnNumber);
-        status = programmingIsAhead
+        status = pendingDamageChoice?.uid === uid
+          ? 'Choose whether to prevent the incoming damage.'
+          : pendingDamageChoice
+            ? `Waiting for ${pendingDamageRobot?.name ?? 'the next robot'} to resolve damage.`
+          : programmingIsAhead
           ? `Choose five registers privately for turn ${nextActiveProgramming.turnNumber}.`
           : next.resolution
             ? 'Watch the shared tabletop for execution.'
@@ -240,26 +241,8 @@
     }
   }
 
-  function toggleOptionPrevention(cardId: OptionCardId) {
-    selectedOptionPreventionIds = selectedOptionPreventionIds.includes(cardId)
-      ? selectedOptionPreventionIds.filter((id) => id !== cardId)
-      : [...selectedOptionPreventionIds, cardId];
-    if (services && activeProgramming) {
-      void RoomService.updateEffectDraft(
-        services.db,
-        services.user,
-        roomCode,
-        activeProgramming.turnId,
-        { kind: 'option-plan', preventDamageWith: selectedOptionPreventionIds, activations: [] }
-      ).catch((nextError) => {
-        console.error(nextError);
-        error = 'Your Option draft could not be written.';
-      });
-    }
-  }
-
-  async function submitOptionPlan() {
-    if (!services || !activeProgramming || !canChooseOptionPlan || pending) return;
+  async function answerDamagePrevention(cardId: OptionCardId | null) {
+    if (!services || !activeProgramming || !pendingDamageChoice || pending) return;
     pending = true;
     error = '';
     try {
@@ -267,13 +250,17 @@
         services.db,
         services.user,
         roomCode,
-        { kind: 'option-plan', preventDamageWith: selectedOptionPreventionIds, activations: [] },
+        {
+          kind: 'damage-prevention',
+          decisionId: pendingDamageChoice.decisionId,
+          uid: services.user.uid,
+          cardId
+        },
         activeProgramming.turnId
       );
-      selectedOptionPreventionIds = [];
     } catch (nextError) {
       console.error(nextError);
-      error = 'Your Option plan could not be written.';
+      error = 'Your damage prevention choice could not be written.';
     } finally {
       pending = false;
     }
@@ -420,7 +407,42 @@
         <button onclick={beginNextTurn}>BEGIN TURN {state.nextProgramming.turnNumber}</button>
       </section>
     {:else if programming}
-      {#if optionLossRobot?.uid === player.uid}
+      {#if pendingDamageChoice?.uid === player.uid && pendingDamageRobot}
+        <section
+          class="effect-control damage-choice"
+          aria-label="Damage prevention choice"
+          data-decision-id={pendingDamageChoice.decisionId}
+        >
+          <h2>Laser damage incoming</h2>
+          <p>
+            Damage {pendingDamageChoice.damagePoint} of {pendingDamageChoice.damageTotal} is about
+            to hit {pendingDamageRobot.name}. Choose now: discard one Option or take the damage.
+          </p>
+          <div class="option-card-grid">
+            {#each pendingDamageRobot.options.filter(({ cardId }) => pendingDamageChoice?.eligibleCardIds.includes(cardId)) as option}
+              {@const card = OPTION_CARDS_BY_ID.get(option.cardId)}
+              {#if card}
+                <button
+                  class="option-card-choice"
+                  aria-label={`Discard ${card.name} to prevent this damage`}
+                  onclick={() => answerDamagePrevention(option.cardId)}
+                  disabled={pending}
+                >
+                  <OptionCardFace {card} variant="thumbnail" />
+                </button>
+              {/if}
+            {/each}
+          </div>
+          <button class="take-damage" onclick={() => answerDamagePrevention(null)} disabled={pending}>
+            TAKE THIS DAMAGE
+          </button>
+        </section>
+      {:else if pendingDamageChoice}
+        <section class="effect-control damage-wait" aria-label="Damage decision status">
+          <h2>Damage decision</h2>
+          <p>Waiting for {pendingDamageRobot?.name ?? 'the next player'} in original Dock order.</p>
+        </section>
+      {:else if optionLossRobot?.uid === player.uid}
         <section class="effect-control" aria-label="Destroyed robot Option loss">
           <h2>Discard one Option</h2>
           <p>Your destroyed robot must discard one Option before it can re-enter.</p>
@@ -462,28 +484,6 @@
             </label>
           {/if}
           <button onclick={submitReentryChoice} disabled={pending || !selectedReentryChoice}>CONFIRM RE-ENTRY</button>
-        </section>
-      {:else if canChooseOptionPlan && optionPlanRobot}
-        <section class="effect-control" aria-label="Turn Option plan">
-          <h2>Commit Option choices</h2>
-          <p>Select Options to discard in order to prevent one damage each. Unselected cards are retained.</p>
-          <div class="option-card-grid">
-            {#each optionPlanRobot.options as option}
-              {@const card = OPTION_CARDS_BY_ID.get(option.cardId)}
-              {#if card}
-                <button
-                  class="option-card-choice"
-                  class:selected={selectedOptionPreventionIds.includes(option.cardId)}
-                  aria-label={`Use ${card.name} to prevent one damage`}
-                  aria-pressed={selectedOptionPreventionIds.includes(option.cardId)}
-                  onclick={() => toggleOptionPrevention(option.cardId)}
-                >
-                  <OptionCardFace {card} variant="compact-copy" />
-                </button>
-              {/if}
-            {/each}
-          </div>
-          <button onclick={submitOptionPlan} disabled={pending}>COMMIT OPTION PLAN</button>
         </section>
       {/if}
       <section class="private-programming">
@@ -657,9 +657,11 @@
   .effect-control select { min-height: 52px; padding: 8px 10px; border: 1px solid #657577; color: #eef4ee; background: #141c1d; font-size: 18px; }
   .effect-control > div { display: grid; gap: 8px; margin-bottom: 10px; }
   .effect-control > button { width: 100%; }
-  .effect-control button.selected { color: #111; background: #ffcf4b; border-color: #ffcf4b; }
   .effect-control > .option-card-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .effect-control.damage-choice > .option-card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   }
   button.option-card-choice {
     display: block;
@@ -673,11 +675,6 @@
   }
   button.option-card-choice:hover,
   button.option-card-choice:focus-visible { border-color: #ffcf4b; }
-  button.option-card-choice.selected {
-    border-color: #d2ff37;
-    box-shadow: 0 0 0 2px #d2ff37;
-    transform: translateY(-2px);
-  }
   button.option-card-choice :global(.option-card) { filter: none; }
   .effect-control .check-control { display: flex; align-items: center; text-transform: none; }
   .effect-control .check-control input { width: 24px; height: 24px; }

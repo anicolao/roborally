@@ -1,5 +1,10 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { stayActiveInDockOrder } from '../helpers/game-actions';
+import {
+  advanceSyntheticPlayback,
+  enableSyntheticPlaybackClock,
+  finishSyntheticPlayback
+} from '../helpers/playback-clock';
 import { TestStepHelper } from '../helpers/test-step-helper';
 
 async function chooseProgram(page: Page, labels: readonly string[]) {
@@ -17,6 +22,7 @@ async function join(
   robot: string
 ) {
   const page = await context.newPage();
+  await enableSyntheticPlaybackClock(page);
   await page.goto(`/?room=${roomCode}&e2eIdentity=${identity}`);
   await expect(page.getByRole('status')).toHaveAttribute('data-status', 'synced');
   await page.getByLabel('Racer name').fill(name);
@@ -33,6 +39,7 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
   const contexts: BrowserContext[] = [];
 
   try {
+    await enableSyntheticPlaybackClock(host);
     await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a`);
     await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
     await host.getByRole('button', { name: 'Create race' }).click();
@@ -90,6 +97,42 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
       'rotate-left priority 380',
       'rotate-right priority 150'
     ]);
+
+    const registerPlayback = host.getByTestId('register-playback');
+    let robotLasersVisible = false;
+    for (let frame = 0; frame < 100; frame += 1) {
+      await advanceSyntheticPlayback(pages);
+      if (
+        (await registerPlayback.count()) > 0 &&
+        (await registerPlayback.getAttribute('data-stage')) === 'lasers' &&
+        (await host.locator('[data-laser-source]').count()) > 0
+      ) {
+        robotLasersVisible = true;
+        break;
+      }
+    }
+    expect(robotLasersVisible).toBe(true);
+    await steps.step('robot-lasers-grow-to-targets', {
+      description: 'Successful robot lasers grow from each shooter to its visible target',
+      verifications: [
+        {
+          spec: 'The dedicated laser stage renders only target-reaching robot beams',
+          check: async () => {
+            await expect(registerPlayback).toHaveAttribute('data-stage', 'lasers');
+            await expect(host.locator('[data-laser-source]')).not.toHaveCount(0);
+          }
+        },
+        {
+          spec: 'Each rendered beam identifies its source and target for deterministic playback',
+          check: async () => {
+            const beam = host.locator('[data-laser-source]').first();
+            await expect(beam).toHaveAttribute('data-laser-source', /.+/);
+            await expect(beam).toHaveAttribute('data-laser-target', /.+/);
+          }
+        }
+      ]
+    });
+    await finishSyntheticPlayback(pages);
 
     for (const page of pages) {
       await expect(page.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();

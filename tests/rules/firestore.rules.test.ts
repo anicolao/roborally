@@ -387,6 +387,44 @@ describe('append-only game stream rules', () => {
     );
   });
 
+  it('allows only the prompted owner to append a shaped damage-prevention choice', async () => {
+    const hostDb = environment.authenticatedContext('host').firestore();
+    await assertSucceeds(
+      setDoc(doc(hostDb, 'games/room/events/host-000001'), {
+        ...eventData('host'),
+        type: 'effect/chosen',
+        payload: {
+          uid: 'host',
+          turnId: 'turn-004',
+          choice: {
+            kind: 'damage-prevention',
+            decisionId: 'r3-damage-01-host',
+            uid: 'host',
+            cardId: null
+          }
+        }
+      })
+    );
+
+    const guestDb = environment.authenticatedContext('guest').firestore();
+    await assertFails(
+      setDoc(doc(guestDb, 'games/room/events/guest-000001'), {
+        ...eventData('guest'),
+        type: 'effect/chosen',
+        payload: {
+          uid: 'guest',
+          turnId: 'turn-004',
+          choice: {
+            kind: 'damage-prevention',
+            decisionId: 'r3-damage-01-host',
+            uid: 'host',
+            cardId: 'brakes'
+          }
+        }
+      })
+    );
+  });
+
   it('allows the owner to append a finite Option plan', async () => {
     const db = environment.authenticatedContext('robot-a').firestore();
     await assertSucceeds(

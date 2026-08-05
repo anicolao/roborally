@@ -152,7 +152,7 @@ describe('priority Program movement', () => {
         )
       )
     );
-    expect(resolution?.playback.frames).toHaveLength(30);
+    expect(resolution?.playback.frames).toHaveLength(32);
     for (let register = 1; register <= 5; register += 1) {
       const priorities = resolution!.trace
         .filter((entry) => entry.register === register && entry.kind === 'reveal')
@@ -161,7 +161,7 @@ describe('priority Program movement', () => {
       const registerFrames = resolution!.playback.frames.filter(
         (frame) => frame.register === register
       );
-      expect(registerFrames.map(({ stage }) => stage)).toEqual([
+      expect(registerFrames.map(({ stage }) => stage).slice(0, 6)).toEqual([
         'program-card',
         'program-card',
         'express-conveyors',
@@ -169,6 +169,9 @@ describe('priority Program movement', () => {
         'pushers',
         'gears'
       ]);
+      expect(registerFrames.map(({ stage }) => stage).slice(6)).toEqual(
+        registerFrames.length === 6 ? [] : ['lasers', 'laser-damage']
+      );
       expect(
         registerFrames
           .filter(({ stage }) => stage === 'program-card')
@@ -659,9 +662,18 @@ describe('priority Program movement', () => {
     const target = raceRobot({ uid: 'target', name: 'Target', x: 3, y: 6 });
     const behind = raceRobot({ uid: 'behind', name: 'Behind', x: 5, y: 6 });
     const trace: ResolutionTraceEntry[] = [];
-    resolveLaserSnapshot([shooter, target, behind], 1, trace, programming, []);
+    const fired = resolveLaserSnapshot([shooter, target, behind], 1, trace, programming, []);
     expect(target.damage).toBe(1);
     expect(behind.damage).toBe(0);
+    expect(fired.laserBeams).toEqual([
+      expect.objectContaining({
+        sourceUid: 'shooter',
+        targetUid: 'target',
+        fromX: 1,
+        toX: 3,
+        beamCount: 1
+      })
+    ]);
 
     const blockedShooter = raceRobot({
       uid: 'blocked',
@@ -850,7 +862,7 @@ describe('priority Program movement', () => {
     expect(trace).toContainEqual(expect.objectContaining({ kind: 'destroyed-damage' }));
   });
 
-  it('discards exactly one precommitted Option to prevent one damage packet', () => {
+  it('discards an Option chosen at the exact damage point', () => {
     const config = riskyExchangeConfig('OPTION-PREVENTION');
     const setup = deriveRaceSetup(
       [
@@ -884,7 +896,13 @@ describe('priority Program movement', () => {
         }
       ],
       optionDeck,
-      { target: ['brakes'] }
+      {
+        'r1-damage-01-target': {
+          decisionId: 'r1-damage-01-target',
+          uid: 'target',
+          cardId: 'brakes'
+        }
+      }
     );
 
     expect(target.damage).toBe(4);
@@ -893,6 +911,81 @@ describe('priority Program movement', () => {
     expect(trace).toContainEqual(
       expect.objectContaining({ kind: 'option-damage-prevented' })
     );
+  });
+
+  it('pauses simultaneous laser damage for persisted choices in Dock order', () => {
+    const config = riskyExchangeConfig('DOCK-ORDERED-DAMAGE');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'dock-1', name: 'Dock One', robotId: 'axle' },
+        { uid: 'dock-2', name: 'Dock Two', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const robots = () => [
+      raceRobot({
+        uid: 'dock-1',
+        name: 'Dock One',
+        x: 3,
+        y: 6,
+        facing: 'east',
+        options: [{ cardId: 'brakes', spent: 0, storedProgramCardId: null }]
+      }),
+      raceRobot({
+        uid: 'dock-2',
+        name: 'Dock Two',
+        x: 3,
+        y: 8,
+        facing: 'east',
+        options: [{ cardId: 'brakes', spent: 0, storedProgramCardId: null }]
+      }),
+      raceRobot({ uid: 'laser-1', name: 'Laser One', x: 1, y: 6, facing: 'east' }),
+      raceRobot({ uid: 'laser-2', name: 'Laser Two', x: 1, y: 8, facing: 'east' })
+    ];
+
+    const firstRobots = robots();
+    const first = resolveLaserSnapshot(firstRobots, 1, [], programming, []);
+    expect(first.laserBeams).toHaveLength(2);
+    expect(first.pendingDamageChoice).toMatchObject({
+      decisionId: 'r1-damage-01-dock-1',
+      uid: 'dock-1'
+    });
+    expect(firstRobots[0].damage).toBe(0);
+    expect(firstRobots[1].damage).toBe(0);
+
+    const secondRobots = robots();
+    const second = resolveLaserSnapshot(secondRobots, 1, [], programming, [], undefined, {
+      'r1-damage-01-dock-1': {
+        decisionId: 'r1-damage-01-dock-1',
+        uid: 'dock-1',
+        cardId: null
+      }
+    });
+    expect(second.pendingDamageChoice).toMatchObject({
+      decisionId: 'r1-damage-02-dock-2',
+      uid: 'dock-2'
+    });
+    expect(secondRobots[0].damage).toBe(1);
+    expect(secondRobots[1].damage).toBe(0);
+
+    const finalRobots = robots();
+    const final = resolveLaserSnapshot(finalRobots, 1, [], programming, [], createOptionDeck('DOCK-ORDERED-DAMAGE'), {
+      'r1-damage-01-dock-1': {
+        decisionId: 'r1-damage-01-dock-1',
+        uid: 'dock-1',
+        cardId: null
+      },
+      'r1-damage-02-dock-2': {
+        decisionId: 'r1-damage-02-dock-2',
+        uid: 'dock-2',
+        cardId: 'brakes'
+      }
+    });
+    expect(final.pendingDamageChoice).toBeNull();
+    expect(finalRobots[0].damage).toBe(1);
+    expect(finalRobots[1].damage).toBe(0);
+    expect(finalRobots[1].options).toEqual([]);
   });
 
   it('applies reviewed movement and factory-rotation Option hooks', () => {
@@ -912,7 +1005,6 @@ describe('priority Program movement', () => {
       trace,
       {
         kind: 'option-plan',
-        preventDamageWith: [],
         activations: [
           {
             cardId: 'fourth-gear',
@@ -944,7 +1036,6 @@ describe('priority Program movement', () => {
       {
         stable: {
           kind: 'option-plan',
-          preventDamageWith: [],
           activations: [
             {
               cardId: 'gyroscopic-stabilizer',
@@ -995,7 +1086,14 @@ describe('priority Program movement', () => {
       trace,
       programming,
       [],
-      optionDeck
+      optionDeck,
+      {
+        'r1-damage-01-target': {
+          decisionId: 'r1-damage-01-target',
+          uid: 'target',
+          cardId: null
+        }
+      }
     );
     expect(target.damage).toBe(1);
     expect(target.options).toEqual([]);

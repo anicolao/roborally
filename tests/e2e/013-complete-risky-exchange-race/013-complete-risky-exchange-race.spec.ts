@@ -77,19 +77,6 @@ async function chooseProgram(page: Page, labels: Program) {
   await submit.click();
 }
 
-async function commitOptionPlans(host: Page, guest: Page, turn: number) {
-  if (turn < 3) return;
-  if (turn <= 10) {
-    const hostSubmit = host.getByRole('button', { name: 'Commit finite Option plan' });
-    await expect(hostSubmit).toBeVisible();
-    await hostSubmit.click();
-  }
-  if (turn < 5) return;
-  const guestSubmit = guest.getByRole('button', { name: 'Commit finite Option plan' });
-  await expect(guestSubmit).toBeVisible();
-  await guestSubmit.click();
-}
-
 async function closeResolutionInterrupts(host: Page, guest: Page, turn: number) {
   await finishSyntheticPlayback([host, guest]);
   const completed = host.getByRole('heading', {
@@ -104,6 +91,12 @@ async function closeResolutionInterrupts(host: Page, guest: Page, turn: number) 
       return;
     }
     for (const page of [host, guest]) {
+      const takeDamage = page.getByRole('button', { name: 'Take this damage' });
+      if (await takeDamage.isVisible()) {
+        await takeDamage.click();
+        await finishSyntheticPlayback([host, guest]);
+        break;
+      }
       const loss = page
         .getByLabel('Destroyed robot Option loss')
         .getByRole('button')
@@ -181,7 +174,6 @@ test('a production Risky Exchange race uses the complete rules loop', async (
       await stayActiveInDockOrder([host, guest]);
       if (programs.host.length > 0) await chooseProgram(host, programs.host);
       if (programs.guest.length > 0) await chooseProgram(guest, programs.guest);
-      await commitOptionPlans(host, guest, turn);
       await closeResolutionInterrupts(host, guest, turn);
       await expect(
         host.getByRole('heading', {

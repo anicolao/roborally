@@ -520,17 +520,19 @@ focused reducer and room-protocol fixtures.
 - Finish and review the complete 26-card manifest before enabling draws.
 - Add face-up draws/ownership/discards, Dock-order decision windows, one-Option
   damage prevention, Option loss on destruction, and general effect targeting.
-- Specify finite timing windows for any tabletop phrase that depends on live
-  interruption; never use animation duration or network race as a rules clock.
+- Persist each execution-time interruption as an authorized choice event, then
+  replay from the immutable turn-start snapshot; never use animation duration
+  or a network race as a rules clock.
 - Add `011-option-card-framework` with concurrent choices and deterministic
   order.
 
 Scenario 011 plays five ordinary turns in two browser contexts. Both robots
 reach the crossed repair site on successive turns, expose two without-
-replacement draws, then close the next shared Option plan in original Dock
-order. The same slice replaces the transcription placeholder with a versioned
-26-card deck, face-up ownership/discards, immutable finite choices, one-card
-damage prevention, and mandatory destruction loss before re-entry.
+replacement draws, then pause at the exact laser-damage point for the affected
+owner's choice in original Dock order. The same slice replaces the
+transcription placeholder with a versioned 26-card deck, face-up
+ownership/discards, immutable execution-time choices, one-card damage
+prevention, and mandatory destruction loss before re-entry.
 
 ### 12. Every Option card
 

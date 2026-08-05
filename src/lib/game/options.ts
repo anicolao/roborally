@@ -25,7 +25,6 @@ export interface OptionActivation {
 
 export interface OptionTurnPlan {
   kind: 'option-plan';
-  preventDamageWith: OptionCardId[];
   activations: OptionActivation[];
 }
 
@@ -69,12 +68,6 @@ export function validateOptionPlan(
 ): string[] {
   const diagnostics: string[] = [];
   const ownedIds = new Set(owned.map(({ cardId }) => cardId));
-  const prevention = new Set<OptionCardId>();
-  for (const cardId of plan.preventDamageWith) {
-    if (!ownedIds.has(cardId)) diagnostics.push(`prevention-not-owned:${cardId}`);
-    if (prevention.has(cardId)) diagnostics.push(`duplicate-prevention:${cardId}`);
-    prevention.add(cardId);
-  }
   for (const activation of plan.activations) {
     if (!ownedIds.has(activation.cardId)) {
       diagnostics.push(`activation-not-owned:${activation.cardId}`);
@@ -101,7 +94,6 @@ export function optionPlanFor(
   return (
     plans[uid] ?? {
       kind: 'option-plan',
-      preventDamageWith: [],
       activations: []
     }
   );
