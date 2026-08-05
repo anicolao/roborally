@@ -593,26 +593,57 @@ export function applyProgramCard(
       );
     }
   }
-  for (const cardId of ['reverse-gears'] as const) {
-    const activation = optionPlan?.activations.find(
-      (candidate) =>
-        candidate.cardId === cardId &&
-        candidate.register === register &&
-        robot.options.some((option) => option.cardId === cardId)
-    );
-    if (!activation) continue;
-    const effect = applyOptionEffect(cardId, { action: card.action });
-    if (!effect.active || effect.movementDistance === undefined) continue;
-    signedDistance = effect.movementDistance;
-    direction = signedDistance < 0 ? opposite[robot.facing] : robot.facing;
-    addTrace(
-      trace,
-      register,
-      robot.uid,
-      card,
-      'option-effect',
-      `${robot.name} used ${cardId.replaceAll('-', ' ')} for ${Math.abs(signedDistance)} movement.`
-    );
+  if (
+    card.action === 'back-up' &&
+    robot.options.some(({ cardId }) => cardId === 'reverse-gears')
+  ) {
+    const decisionId = `r${register}-program-${robot.uid}-reverse-gears`;
+    const decision = optionDecisions[decisionId];
+    if (!decision || decision.uid !== robot.uid || !['use', 'decline'].includes(decision.choiceId)) {
+      addTrace(
+        trace,
+        register,
+        robot.uid,
+        card,
+        'option-decision-required',
+        `${robot.name} must decide whether to use reverse gears for this Back Up.`
+      );
+      return {
+        decisionId,
+        uid: robot.uid,
+        cardId: 'reverse-gears',
+        timing: 'program-movement',
+        register: register as RegisterNumber,
+        heading: 'Use Reverse Gears?',
+        prompt: `${robot.name} is about to execute Back Up. It may move backward two spaces instead.`,
+        tabletopPrompt: 'Use Reverse Gears or execute Back Up normally',
+        choices: [
+          {
+            id: 'use',
+            label: 'Use Reverse Gears',
+            description: 'Move backward two spaces at this card’s printed priority.',
+            cardId: 'reverse-gears'
+          },
+          {
+            id: 'decline',
+            label: 'Move normally',
+            description: 'Execute Back Up normally.'
+          }
+        ]
+      };
+    }
+    if (decision.choiceId === 'use') {
+      signedDistance = -2;
+      direction = opposite[robot.facing];
+      addTrace(
+        trace,
+        register,
+        robot.uid,
+        card,
+        'option-effect',
+        `${robot.name} used reverse gears and will move backward two spaces.`
+      );
+    }
   }
   const combined = optionPlan?.activations.find(
     (candidate) =>
