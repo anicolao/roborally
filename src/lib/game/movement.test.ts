@@ -1829,6 +1829,49 @@ describe('priority Program movement', () => {
     expect(crab).toMatchObject({ x: 2, y: 8, facing: 'north' });
   });
 
+  it('pairs movement and rotation with Dual Processor', () => {
+    const config = riskyExchangeConfig('DUAL-PROCESSOR-RUNTIME');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'dual', name: 'Dual', robotId: 'axle' },
+        { uid: 'other', name: 'Other', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const rotateRight = card('rotate-right');
+    programming.players.find(({ uid }) => uid === 'dual')!.unusedCardIds = [
+      rotateRight.id
+    ];
+    const dual = raceRobot({
+      uid: 'dual',
+      name: 'Dual',
+      x: 3,
+      y: 8,
+      facing: 'north',
+      options: [{ cardId: 'dual-processor', spent: 0, storedProgramCardId: null }]
+    });
+    const decisionId = 'r1-program-dual-dual-processor';
+    applyProgramCard(
+      [dual],
+      'dual',
+      card('move-3'),
+      1,
+      [],
+      undefined,
+      undefined,
+      {
+        [decisionId]: {
+          decisionId,
+          uid: 'dual',
+          choiceId: `pair:${rotateRight.id}`
+        }
+      },
+      programming
+    );
+    expect(dual).toMatchObject({ x: 3, y: 6, facing: 'east' });
+  });
+
   it('applies armor, laser, circuit-breaker, and archive-copy hooks', () => {
     const config = riskyExchangeConfig('OPTION-HOOKS');
     const setup = deriveRaceSetup(
