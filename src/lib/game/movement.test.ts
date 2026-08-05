@@ -845,6 +845,58 @@ describe('priority Program movement', () => {
     );
   });
 
+  it('uses and discards the fifth Mini Howitzer shot after damage and push', () => {
+    const config = riskyExchangeConfig('MINI-HOWITZER');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'shooter', name: 'Shooter', robotId: 'axle' },
+        { uid: 'target', name: 'Target', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const robots = [
+      raceRobot({
+        uid: 'shooter',
+        name: 'Shooter',
+        x: 1,
+        y: 6,
+        facing: 'east',
+        options: [{ cardId: 'mini-howitzer', spent: 4, storedProgramCardId: null }]
+      }),
+      raceRobot({ uid: 'target', name: 'Target', x: 3, y: 6 })
+    ];
+    const optionDeck = createOptionDeck('MINI-HOWITZER');
+    const decisionId = 'r1-laser-shooter-mini-howitzer';
+    const trace: ResolutionTraceEntry[] = [];
+
+    const resolved = resolveLaserSnapshot(
+      robots,
+      1,
+      trace,
+      programming,
+      [],
+      optionDeck,
+      {
+        [decisionId]: {
+          decisionId,
+          uid: 'shooter',
+          choiceId: 'use'
+        }
+      }
+    );
+    expect(resolved.pendingOptionDecision).toBeNull();
+    expect(robots[0].options).toEqual([]);
+    expect(optionDeck.discardPile).toContain('mini-howitzer');
+    expect(robots[1]).toMatchObject({ x: 4, y: 6, damage: 1 });
+    expect(trace).toContainEqual(
+      expect.objectContaining({
+        kind: 'option-effect',
+        text: "Shooter's mini howitzer expended its fifth shot and was discarded."
+      })
+    );
+  });
+
   it('uses Ramming Gear damage before a blocked push and the shared damage choice', () => {
     const config = riskyExchangeConfig('RAMMING-GEAR');
     const setup = deriveRaceSetup(

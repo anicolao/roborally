@@ -1045,6 +1045,7 @@ interface LaserHit {
   kind: 'board-laser' | 'robot-laser';
   damage: 1 | 2 | 3;
   direction: Direction;
+  pushDirection?: Direction;
   beam?: RobotLaserBeam;
 }
 
@@ -1241,8 +1242,76 @@ export function resolveLaserSnapshot(
 
   for (const shooter of activeSnapshot.filter(
     ({ poweredDown, options }) =>
+      !poweredDown && options.some(({ cardId }) => cardId === 'mini-howitzer')
+  )) {
+    const target = firstRobotInLaserPath(shooter, shooter.facing);
+    if (!target) continue;
+    const decisionId = `r${register}-laser-${shooter.uid}-mini-howitzer`;
+    const decision = optionDecisions[decisionId];
+    if (
+      !decision ||
+      decision.uid !== shooter.uid ||
+      !['use', 'decline'].includes(decision.choiceId)
+    ) {
+      addTrace(
+        trace,
+        register,
+        shooter.uid,
+        null,
+        'option-decision-required',
+        `${shooter.name} must decide whether to replace its main laser with Mini Howitzer.`
+      );
+      return {
+        laserTrace: trace.slice(traceStart),
+        laserBeams: [],
+        damageSteps: [],
+        pendingOptionDecision: {
+          decisionId,
+          uid: shooter.uid,
+          cardId: 'mini-howitzer',
+          timing: 'robot-lasers',
+          register: register as RegisterNumber,
+          heading: 'Use Mini Howitzer?',
+          prompt: `Deal one damage to ${target.name} and push it one space away?`,
+          tabletopPrompt: 'Use Mini Howitzer for this register',
+          choices: [
+            {
+              id: 'use',
+              label: 'Fire Mini Howitzer',
+              description: 'Spend one shot to deal one damage and push one space away.',
+              cardId: 'mini-howitzer'
+            },
+            {
+              id: 'decline',
+              label: 'Fire normally',
+              description: 'Fire the main laser normally.'
+            }
+          ]
+        }
+      };
+    }
+    addTrace(
+      trace,
+      register,
+      shooter.uid,
+      null,
+      'option-decision-resolved',
+      decision.choiceId === 'use'
+        ? `${shooter.name} armed mini howitzer against ${target.name}.`
+        : `${shooter.name} left mini howitzer inactive.`
+    );
+  }
+
+  for (const shooter of activeSnapshot.filter(
+    ({ poweredDown, options }) =>
       !poweredDown && options.some(({ cardId }) => cardId === 'tractor-beam')
   )) {
+    if (
+      optionDecisions[`r${register}-laser-${shooter.uid}-mini-howitzer`]
+        ?.choiceId === 'use'
+    ) {
+      continue;
+    }
     const target = firstRobotInLaserPath(shooter, shooter.facing);
     const range = target
       ? Math.abs(target.x - shooter.x) + Math.abs(target.y - shooter.y)
@@ -1310,6 +1379,8 @@ export function resolveLaserSnapshot(
   )) {
     if (
       optionDecisions[`r${register}-laser-${shooter.uid}-tractor-beam`]
+        ?.choiceId === 'use' ||
+      optionDecisions[`r${register}-laser-${shooter.uid}-mini-howitzer`]
         ?.choiceId === 'use'
     ) {
       continue;
@@ -1380,6 +1451,8 @@ export function resolveLaserSnapshot(
       optionDecisions[`r${register}-laser-${shooter.uid}-pressor-beam`]
         ?.choiceId === 'use' ||
       optionDecisions[`r${register}-laser-${shooter.uid}-tractor-beam`]
+        ?.choiceId === 'use' ||
+      optionDecisions[`r${register}-laser-${shooter.uid}-mini-howitzer`]
         ?.choiceId === 'use'
     ) {
       continue;
@@ -1513,6 +1586,66 @@ export function resolveLaserSnapshot(
         : [])
     ];
     for (const firingDirection of directions) {
+      if (
+        firingDirection === shooter.facing &&
+        optionDecisions[`r${register}-laser-${shooter.uid}-mini-howitzer`]
+          ?.choiceId === 'use'
+      ) {
+        const snapshotTarget = firstRobotInLaserPath(shooter, firingDirection);
+        const target = snapshotTarget
+          ? robots.find(({ uid }) => uid === snapshotTarget.uid)
+          : undefined;
+        const actualShooter = robots.find(({ uid }) => uid === shooter.uid);
+        const howitzer = actualShooter?.options.find(
+          ({ cardId }) => cardId === 'mini-howitzer'
+        );
+        if (snapshotTarget && target?.status === 'active' && actualShooter && howitzer) {
+          howitzer.spent += 1;
+          addTrace(
+            trace,
+            register,
+            shooter.uid,
+            null,
+            'option-effect',
+            `${shooter.name}'s mini howitzer hit ${target.name} ` +
+              `(shot ${howitzer.spent} of 5).`
+          );
+          hits.push({
+            sourceUid: shooter.uid,
+            targetUid: target.uid,
+            kind: 'robot-laser',
+            damage: 1,
+            direction: firingDirection,
+            pushDirection: firingDirection,
+            beam: {
+              id: `r${register}-${shooter.uid}-${target.uid}-mini-howitzer`,
+              sourceUid: shooter.uid,
+              targetUid: target.uid,
+              fromX: shooter.x,
+              fromY: shooter.y,
+              toX: snapshotTarget.x,
+              toY: snapshotTarget.y,
+              beamCount: 1
+            }
+          });
+          if (howitzer.spent >= 5) {
+            if (optionDeck) {
+              discardOwnedOption(actualShooter.options, optionDeck, 'mini-howitzer');
+            } else {
+              actualShooter.options.splice(actualShooter.options.indexOf(howitzer), 1);
+            }
+            addTrace(
+              trace,
+              register,
+              shooter.uid,
+              null,
+              'option-effect',
+              `${shooter.name}'s mini howitzer expended its fifth shot and was discarded.`
+            );
+          }
+        }
+        continue;
+      }
       if (
         firingDirection === shooter.facing &&
         optionDecisions[`r${register}-laser-${shooter.uid}-tractor-beam`]
@@ -1736,6 +1869,24 @@ export function resolveLaserSnapshot(
       damageSteps.push({
         robots: cloneRaceRobots(robots),
         trace: trace.slice(damageTraceStart)
+      });
+    }
+    if (hit.pushDirection && target.status === 'active') {
+      const pushTraceStart = trace.length;
+      translateOneCell(
+        robots,
+        target,
+        hit.pushDirection,
+        1,
+        register,
+        null,
+        trace,
+        'weapon',
+        course
+      );
+      damageSteps.push({
+        robots: cloneRaceRobots(robots),
+        trace: trace.slice(pushTraceStart)
       });
     }
   }

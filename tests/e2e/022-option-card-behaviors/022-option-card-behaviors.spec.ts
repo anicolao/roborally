@@ -1048,3 +1048,48 @@ test("Tractor Beam replaces the main laser with a one-space pull", async ({
     await guestContext.close();
   }
 });
+
+test("Mini Howitzer deals damage, pushes, and spends a shot", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "mini-howitzer",
+    "rotate-right",
+    undefined,
+    true,
+    undefined,
+    "ram",
+  );
+  try {
+    await chooseProgram(host, "rotate-right");
+    await chooseStationaryProgram(guest);
+
+    const decision = host.getByLabel("Option decision");
+    await expect(decision).toContainText("Use Mini Howitzer?");
+    await decision
+      .getByRole("button", { name: "Fire Mini Howitzer" })
+      .click();
+
+    const damage = guest.getByLabel("Damage prevention choice");
+    await expect(damage).toBeVisible();
+    await damage.getByRole("button", { name: "Take this damage" }).click();
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada's mini howitzer hit Grace (shot 1 of 5).",
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      "Grace was pushed east by an Option weapon",
+    );
+    await expect(
+      host
+        .getByRole("list", { name: "Robot Life and damage state" })
+        .getByRole("listitem")
+        .filter({ hasText: "Grace" }),
+    ).toContainText("1 Damage");
+  } finally {
+    await guestContext.close();
+  }
+});
