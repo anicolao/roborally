@@ -24,7 +24,7 @@ import {
   type ResolutionTraceEntry
 } from './movement';
 import { createProgrammingState, submitProgram } from './programming';
-import { deriveRaceSetup, riskyExchangeConfig } from './setup';
+import { deriveRaceSetup, raceConfig, riskyExchangeConfig } from './setup';
 import { createOptionDeck } from './options';
 import { compilePlayableCourse } from './playable-courses';
 
@@ -1007,10 +1007,63 @@ describe('priority Program movement', () => {
       ([2, 3, 4, 5] as const).map((register) => ({
         targetUid: 'target',
         register,
-        cardId: copiedCards[register - 1].id
+        cardId: copiedCards[register - 1].id,
+        controllerUid: 'shooter'
       }))
     );
     expect(robots[1].damage).toBe(0);
+  });
+
+  it('runs a Radio Control target immediately after its controller in reverse Dock order', () => {
+    const config = raceConfig('option-lab', 'OPTION-RAM-RADIO-ORDER');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'target', name: 'Target', robotId: 'bit' },
+        { uid: 'shooter', name: 'Shooter', robotId: 'axle' }
+      ],
+      config
+    );
+    setup.players.sort((left, right) =>
+      left.uid === 'target' ? -1 : right.uid === 'target' ? 1 : 0
+    );
+    const programming = createProgrammingState(setup, config);
+    const rotations = PROGRAM_CARDS.filter(({ action }) => action === 'rotate-left');
+    for (const [playerIndex, player] of programming.players.entries()) {
+      player.registers.forEach((candidate, registerIndex) => {
+        candidate.cardId = rotations[playerIndex * 5 + registerIndex].id;
+      });
+      player.submitted = true;
+    }
+    programming.phase = 'programmed';
+    const robots = [
+      raceRobot({ uid: 'target', name: 'Target', x: 1, y: 8, facing: 'north' }),
+      raceRobot({
+        uid: 'shooter',
+        name: 'Shooter',
+        x: 2,
+        y: 8,
+        facing: 'north',
+        options: [{ cardId: 'radio-control', spent: 0, storedProgramCardId: null }]
+      })
+    ];
+    const decisionId = 'r1-laser-shooter-radio-control';
+    const resolution = resolveProgrammedTurn(
+      programming,
+      setup,
+      robots,
+      undefined,
+      {},
+      {
+        [decisionId]: { decisionId, uid: 'shooter', choiceId: 'use' }
+      }
+    )!;
+
+    expect(
+      resolution.trace
+        .filter(({ register, kind }) => register === 2 && kind === 'reveal')
+        .map(({ actorUid }) => actorUid)
+        .slice(0, 2)
+    ).toEqual(['shooter', 'target']);
   });
 
   it('uses Scrambler to replace the target next register from the Program deck', () => {
