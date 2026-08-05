@@ -64,30 +64,20 @@ async function chooseProgram(page: Page, labels: Program) {
   if (await clear.isVisible()) await clear.click();
   for (const label of labels) {
     const button = page.getByRole('button', { name: label, exact: true });
-    await expect(button).toBeVisible();
     await expect
       .poll(async () => {
-        if ((await button.getAttribute('aria-pressed')) !== 'true') await button.click();
+        if ((await button.getAttribute('aria-pressed')) !== 'true') {
+          // A canonical Firestore snapshot can replace the hand between actionability
+          // checks and the pointer event. Re-acquire the semantic card on the next poll.
+          await button.click({ timeout: 1_000 }).catch(() => {});
+        }
         return button.getAttribute('aria-pressed');
-      })
+      }, { timeout: 15_000 })
       .toBe('true');
   }
   const submit = page.getByRole('button', { name: 'Submit immutable program' });
   await expect(submit).toBeEnabled();
   await submit.click();
-}
-
-async function commitOptionPlans(host: Page, guest: Page, turn: number) {
-  if (turn < 3) return;
-  if (turn <= 10) {
-    const hostSubmit = host.getByRole('button', { name: 'Commit finite Option plan' });
-    await expect(hostSubmit).toBeVisible();
-    await hostSubmit.click();
-  }
-  if (turn < 5) return;
-  const guestSubmit = guest.getByRole('button', { name: 'Commit finite Option plan' });
-  await expect(guestSubmit).toBeVisible();
-  await guestSubmit.click();
 }
 
 async function closeResolutionInterrupts(host: Page, guest: Page, turn: number) {
@@ -100,6 +90,12 @@ async function closeResolutionInterrupts(host: Page, guest: Page, turn: number) 
   for (let attempt = 0; attempt < 200; attempt += 1) {
     if (await completed.isVisible()) return;
     for (const page of [host, guest]) {
+      const takeDamage = page.getByRole('button', { name: 'Take this damage' });
+      if (await takeDamage.isVisible()) {
+        await takeDamage.click();
+        await finishSyntheticPlayback([host, guest]);
+        break;
+      }
       const loss = page
         .getByLabel('Destroyed robot Option loss')
         .getByRole('button')
@@ -280,7 +276,6 @@ test('a keyboard and touch-operable race completes at every target viewport', as
       await stayActiveInDockOrder([host, guest]);
       if (turns[index].host.length > 0) await chooseProgram(host, turns[index].host);
       if (turns[index].guest.length > 0) await chooseProgram(guest, turns[index].guest);
-      await commitOptionPlans(host, guest, turn);
       await closeResolutionInterrupts(host, guest, turn);
     }
 

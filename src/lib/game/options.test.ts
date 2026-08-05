@@ -32,14 +32,13 @@ describe('Option deck and finite choices', () => {
     expect(deck.discardPile).toEqual([expected]);
   });
 
-  it('rejects unowned, duplicate, malformed, and untargeted choices', () => {
+  it('rejects unowned, malformed, and untargeted activations', () => {
     const owned: OwnedOption[] = [
       { cardId: 'brakes', spent: 0, storedProgramCardId: null }
     ];
     expect(
       validateOptionPlan(owned, {
         kind: 'option-plan',
-        preventDamageWith: ['brakes', 'brakes', 'rear-laser'],
         activations: [
           {
             cardId: 'rear-laser',
@@ -51,8 +50,6 @@ describe('Option deck and finite choices', () => {
         ]
       })
     ).toEqual([
-      'duplicate-prevention:brakes',
-      'prevention-not-owned:rear-laser',
       'activation-not-owned:rear-laser',
       'invalid-register:rear-laser',
       'invalid-target:rear-laser'

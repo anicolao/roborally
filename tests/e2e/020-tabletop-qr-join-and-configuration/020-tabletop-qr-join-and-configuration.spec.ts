@@ -135,6 +135,11 @@ async function completePrivateResolutionChoices(
 ) {
   await expect.poll(async () => {
     for (const page of pages) {
+      const takeDamage = page.getByRole('button', { name: 'TAKE THIS DAMAGE' });
+      if (await takeDamage.isVisible()) {
+        await takeDamage.click();
+        return false;
+      }
       const optionLoss = page.getByLabel('Destroyed robot Option loss').getByRole('button');
       if (await optionLoss.first().isVisible()) {
         await optionLoss.first().click();

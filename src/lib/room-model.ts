@@ -37,6 +37,7 @@ import {
   beginNextTurnPowerDowns,
   createRaceRobotPositions,
   resolveProgrammedTurn,
+  type DamagePreventionChoice,
   type ProgramResolution,
   type ReentryChoice
 } from './game/movement';
@@ -120,6 +121,7 @@ export interface EffectChosenPayload {
   choice:
     | (ReentryChoice & { kind: 'reentry' })
     | { kind: 'option-loss'; cardId: OptionCardId }
+    | ({ kind: 'damage-prevention' } & DamagePreventionChoice)
     | OptionTurnPlan;
 }
 
@@ -153,7 +155,6 @@ export type EffectDraft =
     }
   | {
       kind: 'option-plan';
-      preventDamageWith: OptionCardId[];
       activations: [];
     };
 
@@ -244,6 +245,7 @@ export interface RoomState {
   powerDownResponses: PowerDownRespondedPayload[];
   pendingPowerDownUid: string | null;
   optionPlans: (OptionTurnPlan & { uid: string; turnId: TurnId })[];
+  damagePreventionChoices: (DamagePreventionChoice & { turnId: TurnId })[];
   effectDrafts: (EffectDraftUpdatedPayload & { uid: string })[];
   pendingOptionUid: string | null;
   acceptedEventIds: string[];
@@ -269,6 +271,7 @@ export function emptyRoomState(): RoomState {
     powerDownResponses: [],
     pendingPowerDownUid: null,
     optionPlans: [],
+    damagePreventionChoices: [],
     effectDrafts: [],
     pendingOptionUid: null,
     acceptedEventIds: [],
@@ -346,6 +349,18 @@ function turnStartRobots(
   programming: ProgrammingState
 ): ProgramResolution['robots'] {
   if (!state.setup) return [];
+  if (
+    state.resolution?.turnNumber === programming.turnNumber &&
+    state.resolution.playback.initialRobots.length > 0
+  ) {
+    return state.resolution.playback.initialRobots.map((robot) => ({
+      ...robot,
+      archive: { ...robot.archive },
+      options: robot.options.map((option) => ({ ...option })),
+      lockedRegisters: robot.lockedRegisters.map((locked) => ({ ...locked })),
+      touchedFlags: [...robot.touchedFlags]
+    }));
+  }
   if (programming.turnNumber === 1) return createRaceRobotPositions(state.setup);
   if (state.resolution?.turnNumber === programming.turnNumber - 1) {
     return beginNextTurnPowerDowns(state.resolution.robots);
@@ -468,8 +483,10 @@ function resolveReadyProgramming(state: RoomState) {
     refreshPowerDownPending(state);
     return;
   }
-  refreshOptionPending(state, robots);
-  if (state.pendingOptionUid) return;
+  // Damage prevention and other execution-time Options must not be planned up
+  // front. The resolver stops at each unanswered choice and resumes by
+  // replaying from this immutable turn-start snapshot.
+  state.pendingOptionUid = null;
   for (const robot of robots) {
     robot.powerDownNextTurn =
       state.powerDownResponses.find(
@@ -483,12 +500,22 @@ function resolveReadyProgramming(state: RoomState) {
       .filter(({ turnId }) => turnId === state.programming?.turnId)
       .map(({ uid, ...plan }) => [uid, plan])
   );
+  const damageChoices = Object.fromEntries(
+    state.damagePreventionChoices
+      .filter(({ turnId }) => turnId === state.programming?.turnId)
+      .map(({ decisionId, uid, cardId }) => [decisionId, { decisionId, uid, cardId }])
+  );
+  const initialOptionDeck =
+    state.resolution?.turnNumber === state.programming.turnNumber
+      ? state.resolution.initialOptionDeck
+      : state.resolution?.optionDeck;
   state.resolution = resolveProgrammedTurn(
     state.programming,
     state.setup,
     robots,
-    state.resolution?.optionDeck ?? createOptionDeck(state.configuration?.seed ?? state.gameId),
-    optionPlans
+    initialOptionDeck ?? createOptionDeck(state.configuration?.seed ?? state.gameId),
+    optionPlans,
+    damageChoices
   );
   projectNextProgramming(state);
 }
@@ -725,6 +752,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         if (state.raceEpoch === 0) state.raceEpoch = 1;
         state.powerDownResponses = [];
         state.optionPlans = [];
+        state.damagePreventionChoices = [];
         state.effectDrafts = [];
         refreshPowerDownPending(state);
       }
@@ -788,6 +816,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       }
       if (activatesNextTurn) state.powerDownResponses = [];
       if (activatesNextTurn) state.optionPlans = [];
+      if (activatesNextTurn) state.damagePreventionChoices = [];
       if (activatesNextTurn) state.effectDrafts = [];
       state.programming = next;
       state.nextProgramming = null;
@@ -829,6 +858,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       }
       if (activatesNextTurn) state.powerDownResponses = [];
       if (activatesNextTurn) state.optionPlans = [];
+      if (activatesNextTurn) state.damagePreventionChoices = [];
       if (activatesNextTurn) state.effectDrafts = [];
       state.programming = next;
       state.nextProgramming = null;
@@ -850,8 +880,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         !validTurn ||
         !payload.draft ||
         (payload.draft.kind === 'option-plan' &&
-          (!Array.isArray(payload.draft.preventDamageWith) ||
-            !Array.isArray(payload.draft.activations) ||
+          (!Array.isArray(payload.draft.activations) ||
             payload.draft.activations.length !== 0)) ||
         (payload.draft.kind === 'reentry' &&
           (typeof payload.draft.poweredDown !== 'boolean' ||
@@ -907,6 +936,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         state.nextProgramming = null;
         state.powerDownResponses = [];
         state.optionPlans = [];
+        state.damagePreventionChoices = [];
         state.effectDrafts = [];
         refreshPowerDownPending(state);
       }
@@ -932,16 +962,54 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       }
     } else if (event.type === 'effect/chosen') {
       const payload = event.payload as EffectChosenPayload;
+      const executionChoice =
+        payload?.choice?.kind === 'option-plan' ||
+        payload?.choice?.kind === 'damage-prevention';
       if (
         !payload ||
         payload.uid !== event.actorUid ||
-        (payload.choice?.kind === 'option-plan'
+        (executionChoice
           ? payload.turnId !== state.programming?.turnId
           : payload.turnId !==
             `turn-${String(state.resolution?.turnNumber ?? 0).padStart(3, '0')}`) ||
         !state.resolution
       ) {
         diagnostic(state, event, 'invalid-effect', 'The effect choice is malformed.');
+        continue;
+      }
+      if (payload.choice.kind === 'damage-prevention') {
+        const pendingDamage = state.resolution.pendingDamageChoice;
+        const cardId = payload.choice.cardId;
+        const decisionId = payload.choice.decisionId;
+        if (
+          !pendingDamage ||
+          state.resolution.phase !== 'awaiting-damage' ||
+          pendingDamage.uid !== event.actorUid ||
+          pendingDamage.decisionId !== decisionId ||
+          payload.choice.uid !== event.actorUid ||
+          (cardId !== null && !pendingDamage.eligibleCardIds.includes(cardId)) ||
+          state.damagePreventionChoices.some(
+            ({ turnId, decisionId: storedDecisionId }) =>
+              turnId === payload.turnId && storedDecisionId === decisionId
+          )
+        ) {
+          diagnostic(
+            state,
+            event,
+            'invalid-effect',
+            'Damage prevention choices must answer the current Dock-ordered prompt with an owned Option.'
+          );
+          continue;
+        }
+        state.damagePreventionChoices.push({
+          decisionId,
+          uid: event.actorUid,
+          cardId,
+          turnId: payload.turnId
+        });
+        resolveReadyProgramming(state);
+        projectNextProgramming(state);
+        state.acceptedEventIds.push(event.id);
         continue;
       }
       const next =
@@ -1043,6 +1111,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       state.resolution = null;
       state.powerDownResponses = [];
       state.optionPlans = [];
+      state.damagePreventionChoices = [];
       state.effectDrafts = [];
       refreshPowerDownPending(state);
     } else if (event.type === 'game/rematch-redirected') {

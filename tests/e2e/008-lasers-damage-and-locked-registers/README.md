@@ -2,9 +2,18 @@
 
 Four ordinary Programs create repeated unobstructed robot-laser snapshots. Margaret receives six damage, locking registers 4 and 5 with their exact card IDs; owner and observer clients converge on the same public result.
 
+## Successful robot lasers grow from each shooter to its visible target
+
+![Successful robot lasers grow from each shooter to its visible target](./screenshots/000-robot-lasers-grow-to-targets-desktop.png)
+
+**Verifications:**
+
+- [x] The dedicated laser stage renders only target-reaching robot beams
+- [x] Each rendered beam identifies its source and target for deterministic playback
+
 ## One snapshot per register locks Margaret’s final two registers
 
-![One snapshot per register locks Margaret’s final two registers](./screenshots/000-laser-damage-locks-resolved-desktop.png)
+![One snapshot per register locks Margaret’s final two registers](./screenshots/001-laser-damage-locks-resolved-desktop.png)
 
 **Verifications:**
 

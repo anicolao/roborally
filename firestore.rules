@@ -124,6 +124,16 @@ service cloud.firestore {
                 && request.resource.data.payload.choice.preventDamageWith is list
                 && request.resource.data.payload.choice.activations is list
               )
+              ||
+              (
+                request.resource.data.payload.choice.kind == 'damage-prevention'
+                && request.resource.data.payload.choice.uid == request.auth.uid
+                && request.resource.data.payload.choice.decisionId is string
+                && (
+                  request.resource.data.payload.choice.cardId == null
+                  || request.resource.data.payload.choice.cardId is string
+                )
+              )
             )
           )
           ||

@@ -5,7 +5,7 @@
   import { compilePlayableCourse } from '$lib/game/playable-courses';
   import { ROBOTS } from '$lib/room-model';
   import type { RaceSetup } from '$lib/game/setup';
-  import type { RaceRobotPosition } from '$lib/game/movement';
+  import type { RaceRobotPosition, RobotLaserBeam } from '$lib/game/movement';
 
   let {
     setup,
@@ -13,6 +13,7 @@
     currentPlayerUid,
     animateRobots = false,
     transitionDurationMs = 2_000,
+    laserBeams = [],
     presentationOnly = false,
     rotatePortrait = false
   }: {
@@ -21,6 +22,7 @@
     currentPlayerUid?: string;
     animateRobots?: boolean;
     transitionDurationMs?: number;
+    laserBeams?: RobotLaserBeam[];
     presentationOnly?: boolean;
     rotatePortrait?: boolean;
   } = $props();
@@ -116,6 +118,16 @@
     event.preventDefault();
     activeX = next.x;
     activeY = next.y;
+  }
+
+  function laserBeamStyle(beam: RobotLaserBeam): string {
+    const dx = beam.toX - beam.fromX;
+    const dy = beam.toY - beam.fromY;
+    const distance = Math.abs(dx) + Math.abs(dy);
+    const angle = dx < 0 ? 180 : dy > 0 ? 90 : dy < 0 ? -90 : 0;
+    const left = ((beam.fromX - compiledCourse.minX + 0.5) / compiledCourse.width) * 100;
+    const top = ((beam.fromY - compiledCourse.minY + 0.5) / compiledCourse.height) * 100;
+    return `--laser-left:${left}%;--laser-top:${top}%;--laser-length:${distance * 100 / compiledCourse.width}%;--laser-angle:${angle}deg;--laser-duration:${transitionDurationMs}ms`;
   }
 </script>
 
@@ -214,6 +226,16 @@
           </span>
         {/each}
       {/if}
+      {#each laserBeams as beam (beam.id)}
+        <span
+          aria-hidden="true"
+          class:double={beam.beamCount === 2}
+          class="robot-laser-beam"
+          data-laser-source={beam.sourceUid}
+          data-laser-target={beam.targetUid}
+          style={laserBeamStyle(beam)}
+        ></span>
+      {/each}
       </div>
     </div>
   </div>
@@ -256,6 +278,49 @@
     padding: 12px;
     border: 1px solid #435052;
     background: rgba(16, 23, 25, 0.96);
+  }
+  .robot-laser-beam {
+    position: absolute;
+    z-index: 8;
+    top: var(--laser-top);
+    left: var(--laser-left);
+    width: var(--laser-length);
+    height: clamp(3px, 0.42vw, 8px);
+    pointer-events: none;
+    border-radius: 999px;
+    background: #ff3131;
+    box-shadow:
+      0 0 3px #fff,
+      0 0 8px #ff2a2a,
+      0 0 18px #ff1010;
+    transform: translateY(-50%) rotate(var(--laser-angle)) scaleX(0);
+    transform-origin: left center;
+    animation: robot-laser-grow var(--laser-duration) cubic-bezier(.2, .75, .25, 1) forwards;
+  }
+  .robot-laser-beam.double {
+    height: clamp(8px, 0.9vw, 15px);
+    background: linear-gradient(
+      to bottom,
+      #ff3131 0 30%,
+      transparent 30% 70%,
+      #ff3131 70% 100%
+    );
+  }
+  .robot-laser-beam::after {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    width: clamp(10px, 1.2vw, 22px);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 12px 5px #ff2727, 0 0 28px 10px #ff000088;
+    content: '';
+    transform: translate(45%, -50%);
+  }
+  @keyframes robot-laser-grow {
+    0% { opacity: .35; transform: translateY(-50%) rotate(var(--laser-angle)) scaleX(0); }
+    100% { opacity: 1; transform: translateY(-50%) rotate(var(--laser-angle)) scaleX(1); }
   }
   .course-panel.presentation-only {
     display: block;
@@ -463,5 +528,9 @@
   @media (prefers-reduced-motion: reduce) {
     .course-board { transition: none; }
     .animated-race-robot { transition: none; }
+    .robot-laser-beam {
+      animation: none;
+      transform: translateY(-50%) rotate(var(--laser-angle)) scaleX(1);
+    }
   }
 </style>

@@ -57,10 +57,13 @@
   let playbackCardId: ProgramCard['id'] | null = null;
   let playbackRobots: RaceRobotPosition[] | undefined;
   let playbackTrace: ProgramPlayback['frames'][number]['trace'] = [];
+  let playbackLaserBeams: ProgramPlayback['frames'][number]['laserBeams'] = [];
   let playbackFrameIndex = 0;
   let playbackFrameCount = 0;
   let playbackProductionDurationMs = 2_000;
   let playbackKey = '';
+  let scheduledPlaybackFrames = 0;
+  let queuedPlayback: ProgramPlayback | undefined;
   let playbackTimers: PlaybackTimer[] = [];
   const PRODUCTION_PROGRAM_CARD_MS = 2_000;
   const PRODUCTION_FACTORY_STAGE_MS = 1_000;
@@ -86,9 +89,16 @@
         : playbackStage === 'pushers'
           ? 'Pushers'
           : playbackStage === 'gears'
-            ? 'Gears · lasers · flags'
+            ? 'Gears'
+            : playbackStage === 'lasers'
+              ? 'Robot and board lasers'
+              : playbackStage === 'laser-damage'
+                ? 'Damage decision'
             : '';
   $: presentedRobots = playbackRobots ?? state.resolution?.robots;
+  $: pendingDamageRobot = state.resolution?.robots.find(
+    ({ uid }) => uid === state.resolution?.pendingDamageChoice?.uid
+  );
   $: latestPlaybackEntry = playbackTrace.at(-1);
   $: isTableHost = services?.user.uid === state.hostUid;
   $: finishWinners = (state.resolution?.summary?.winnerUids ?? [])
@@ -178,9 +188,12 @@
     playbackCardId = null;
     playbackRobots = undefined;
     playbackTrace = [];
+    playbackLaserBeams = [];
     playbackFrameIndex = 0;
     playbackFrameCount = 0;
     playbackProductionDurationMs = PRODUCTION_PROGRAM_CARD_MS;
+    scheduledPlaybackFrames = 0;
+    queuedPlayback = undefined;
   }
 
   function schedulePlayback(callback: () => void, delay: number) {
@@ -193,19 +206,12 @@
       : PRODUCTION_FACTORY_STAGE_MS;
   }
 
-  function startProgramPlayback(key: string, playback: ProgramPlayback) {
-    resetProgramPlayback();
-    playbackKey = key;
-    playbackPhase = 'countdown';
-    playbackCountdown = 3;
-    playbackRobots = playback.initialRobots;
+  function schedulePlaybackFrames(playback: ProgramPlayback, fromIndex: number, initialDelay: number) {
     playbackFrameCount = playback.frames.length;
-
-    schedulePlayback(() => (playbackCountdown = 2), countdownStepMs);
-    schedulePlayback(() => (playbackCountdown = 1), countdownStepMs * 2);
-
-    let frameStart = countdownStepMs * 3;
+    scheduledPlaybackFrames = playback.frames.length;
+    let frameStart = initialDelay;
     for (const [index, frame] of playback.frames.entries()) {
+      if (index < fromIndex) continue;
       const productionDuration = productionDurationForFrame(frame);
       schedulePlayback(() => {
         playbackPhase = 'register';
@@ -215,20 +221,49 @@
         playbackCardId = frame.cardId;
         playbackRobots = frame.robots;
         playbackTrace = frame.trace;
+        playbackLaserBeams = frame.laserBeams ?? [];
         playbackFrameIndex = index + 1;
         playbackProductionDurationMs = productionDuration;
       }, frameStart);
       frameStart += Math.round(productionDuration * playbackTimeScale);
     }
     schedulePlayback(() => {
+      if (queuedPlayback && queuedPlayback.frames.length > scheduledPlaybackFrames) {
+        const continuation = queuedPlayback;
+        queuedPlayback = undefined;
+        clearPlaybackTimers();
+        schedulePlaybackFrames(continuation, scheduledPlaybackFrames, 0);
+        return;
+      }
       playbackPhase = 'complete';
       playbackRegister = null;
       playbackStage = null;
       playbackActorUid = null;
       playbackCardId = null;
-      playbackRobots = undefined;
+      if (!state.resolution?.pendingDamageChoice) {
+        playbackRobots = undefined;
+        playbackLaserBeams = [];
+      }
       playbackTrace = [];
     }, frameStart);
+  }
+
+  function startProgramPlayback(key: string, playback: ProgramPlayback) {
+    resetProgramPlayback();
+    playbackKey = key;
+    playbackPhase = 'countdown';
+    playbackCountdown = 3;
+    playbackRobots = playback.initialRobots;
+
+    schedulePlayback(() => (playbackCountdown = 2), countdownStepMs);
+    schedulePlayback(() => (playbackCountdown = 1), countdownStepMs * 2);
+    schedulePlaybackFrames(playback, 0, countdownStepMs * 3);
+  }
+
+  function continueProgramPlayback(playback: ProgramPlayback) {
+    const fromIndex = scheduledPlaybackFrames;
+    clearPlaybackTimers();
+    schedulePlaybackFrames(playback, fromIndex, 0);
   }
 
   $: {
@@ -242,6 +277,13 @@
       nextPlaybackKey !== playbackKey
     ) {
       startProgramPlayback(nextPlaybackKey, resolution.playback);
+    } else if (
+      resolution?.playback.frames.length &&
+      nextPlaybackKey === playbackKey &&
+      resolution.playback.frames.length > scheduledPlaybackFrames
+    ) {
+      if (playbackIsActive) queuedPlayback = resolution.playback;
+      else continueProgramPlayback(resolution.playback);
     }
   }
 
@@ -334,6 +376,23 @@
       <strong>REGISTER {playbackRegister} / {playbackStageLabel}</strong>
       <span>{latestPlaybackEntry?.text ?? `${playbackStageLabel} resolved with no movement`}</span>
       <i style={`--playback-progress:${playbackFrameIndex / playbackFrameCount}`}></i>
+    </div>
+  {/if}
+
+  {#if !playbackIsActive && state.resolution?.pendingDamageChoice && pendingDamageRobot}
+    <div
+      class="damage-prompt"
+      role="status"
+      aria-live="assertive"
+      data-testid="tabletop-damage-prompt"
+      data-decision-id={state.resolution.pendingDamageChoice.decisionId}
+    >
+      <small>DAMAGE DECISION · ORIGINAL DOCK ORDER</small>
+      <strong>{pendingDamageRobot.name}</strong>
+      <span>
+        Check your controller: take damage or discard an Option
+        ({state.resolution.pendingDamageChoice.damagePoint}/{state.resolution.pendingDamageChoice.damageTotal})
+      </span>
     </div>
   {/if}
 
@@ -455,6 +514,7 @@
           robots={presentedRobots}
           animateRobots={playbackIsActive}
           transitionDurationMs={playbackTransitionMs}
+          laserBeams={playbackLaserBeams}
           presentationOnly
         />
       {:else}
@@ -524,6 +584,26 @@
   .register-playback strong { color: #d2ff37; font-size: clamp(16px, 2vw, 28px); text-transform: uppercase; }
   .register-playback span { overflow: hidden; font-size: clamp(14px, 1.5vw, 20px); text-overflow: ellipsis; white-space: nowrap; }
   .register-playback i { display: block; height: 5px; background: linear-gradient(90deg, #d2ff37 0 calc(var(--playback-progress) * 100%), #344043 calc(var(--playback-progress) * 100%) 100%); }
+  .damage-prompt {
+    position: fixed;
+    z-index: 45;
+    top: 50%;
+    left: 50%;
+    display: grid;
+    width: min(78vw, 920px);
+    gap: 10px;
+    padding: clamp(18px, 3vw, 42px);
+    border: 4px solid #ff4545;
+    border-radius: 14px;
+    color: #eef4ee;
+    background: #090d0ef2;
+    box-shadow: 0 0 55px #ff202066, 0 24px 80px #000;
+    text-align: center;
+    transform: translate(-50%, -50%);
+  }
+  .damage-prompt small { color: #ffcf4b; font: 700 clamp(14px, 2vw, 24px) 'Space Mono', monospace; }
+  .damage-prompt strong { color: #fff; font: 700 clamp(48px, 10vw, 132px) 'Space Mono', monospace; text-transform: uppercase; }
+  .damage-prompt span { font-size: clamp(18px, 2.5vw, 34px); }
   .race-finish-overlay { position: fixed; z-index: 55; inset: 0; display: grid; padding: clamp(16px, 5vw, 70px); place-items: center; background: #050909e8; }
   .race-finish-overlay > div { display: grid; width: min(92vw, 1000px); gap: clamp(12px, 2vh, 28px); justify-items: center; padding: clamp(24px, 5vw, 70px); border: 4px solid #d2ff37; border-radius: 18px; background: radial-gradient(circle at top, #243739, #0c1213 72%); box-shadow: 0 0 80px #d2ff3744; text-align: center; }
   .race-finish-overlay span { color: #ffcf4b; font: 700 clamp(20px, 3vw, 42px) 'Space Mono', monospace; letter-spacing: .14em; }
