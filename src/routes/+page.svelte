@@ -29,6 +29,7 @@
     draftSlotsForPlayer,
     previewProgram,
     programCardZones,
+    recompileDecisionId,
     type ProgrammingPlayer
   } from '$lib/game/programming';
   import {
@@ -48,6 +49,7 @@
     emptyRoomState,
     normalizePlayerName,
     normalizeRoomCode,
+    programmingOptionCardIds,
     type RobotId
   } from '$lib/room-model';
   import type * as RoomService from '$lib/room-service';
@@ -196,6 +198,14 @@
   $: programPreview = programmingPlayer
     ? previewProgram(programmingPlayer, selectedProgramCardIds)
     : [];
+  $: recompileOptionCardIds = currentPlayer && activeProgramming
+    ? programmingOptionCardIds(roomState, activeProgramming, currentPlayer.uid)
+    : [];
+  $: recompileUsed = !!currentPlayer && !!activeProgramming && roomState.optionDecisions.some(
+    ({ turnId, decisionId }) =>
+      turnId === activeProgramming?.turnId &&
+      decisionId === recompileDecisionId(activeProgramming.turnNumber, currentPlayer.uid)
+  );
   $: playbackIsActive = playbackPhase === 'countdown' || playbackPhase === 'register';
   $: playbackTransitionMs = Math.round(playbackProductionDurationMs * playbackTimeScale);
   $: countdownStepMs = Math.round(PRODUCTION_COUNTDOWN_STEP_MS * playbackTimeScale);
@@ -737,6 +747,35 @@
     }
   }
 
+  async function recompileProgramCards(choiceId: string) {
+    if (!services || !roomService || !activeProgramming || !currentPlayer || pending) return;
+    pending = true;
+    formError = '';
+    try {
+      await programDraftWriteQueue;
+      await roomService.chooseEffect(
+        services.db,
+        services.user,
+        roomCode,
+        {
+          kind: 'option-decision',
+          decisionId: recompileDecisionId(activeProgramming.turnNumber, currentPlayer.uid),
+          uid: currentPlayer.uid,
+          choiceId
+        },
+        activeProgramming.turnId
+      );
+      programDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
+      programDraftDirty = false;
+      programDraftWriteQueue = Promise.resolve();
+    } catch (error) {
+      console.error(error);
+      formError = 'The Recompile choice could not be written.';
+    } finally {
+      pending = false;
+    }
+  }
+
   async function claimTimeout() {
     const targetUid = activeProgramming?.deadlinePlayerUid;
     if (!services || !roomService || !targetUid || deadlineSeconds !== 0) return;
@@ -1143,8 +1182,11 @@
                   showHeading={false}
                   instructionsVisible={false}
                   previewText={`Preview excludes robots and unrevealed board outcomes. ${programPreview.join(' · ')}`}
+                  {recompileOptionCardIds}
+                  {recompileUsed}
                   ondraftchange={writeProgramDraft}
                   onprogramsubmit={submitProgramCards}
+                  onrecompile={recompileProgramCards}
                 />
               </div>
             {/key}

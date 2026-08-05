@@ -28,6 +28,8 @@ import { playableCourse } from './game/playable-courses';
 import { scenarioResolutionRules } from './game/course-rules';
 import {
   createProgrammingState,
+  recompileDecisionId,
+  recompileProgramHand,
   submitProgram,
   timeOutProgram,
   updateProgramDraft,
@@ -371,6 +373,16 @@ function turnStartRobots(
     return beginNextTurnPowerDowns(state.resolution.robots);
   }
   return [];
+}
+
+export function programmingOptionCardIds(
+  state: RoomState,
+  programming: ProgrammingState,
+  uid: string
+): OptionCardId[] {
+  return turnStartRobots(state, programming)
+    .find((robot) => robot.uid === uid)
+    ?.options.map(({ cardId }) => cardId) ?? [];
 }
 
 function initialRaceState(state: Pick<RoomState, 'setup' | 'configuration' | 'gameId'>) {
@@ -860,7 +872,11 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       }
       if (activatesNextTurn) state.powerDownResponses = [];
       if (activatesNextTurn) state.optionPlans = [];
-      if (activatesNextTurn) state.optionDecisions = [];
+      if (activatesNextTurn) {
+        state.optionDecisions = state.optionDecisions.filter(
+          ({ turnId }) => turnId === next.turnId
+        );
+      }
       if (activatesNextTurn) state.effectDrafts = [];
       state.programming = next;
       state.nextProgramming = null;
@@ -902,7 +918,11 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       }
       if (activatesNextTurn) state.powerDownResponses = [];
       if (activatesNextTurn) state.optionPlans = [];
-      if (activatesNextTurn) state.optionDecisions = [];
+      if (activatesNextTurn) {
+        state.optionDecisions = state.optionDecisions.filter(
+          ({ turnId }) => turnId === next.turnId
+        );
+      }
       if (activatesNextTurn) state.effectDrafts = [];
       state.programming = next;
       state.nextProgramming = null;
@@ -980,7 +1000,9 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         state.nextProgramming = null;
         state.powerDownResponses = [];
         state.optionPlans = [];
-        state.optionDecisions = [];
+        state.optionDecisions = state.optionDecisions.filter(
+          ({ turnId }) => turnId === eventProgramming.turnId
+        );
         state.effectDrafts = [];
         refreshPowerDownPending(state);
       }
@@ -1006,6 +1028,68 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       }
     } else if (event.type === 'effect/chosen') {
       const payload = event.payload as EffectChosenPayload;
+      const eventProgramming =
+        payload?.turnId === state.programming?.turnId
+          ? state.programming
+          : payload?.turnId === state.nextProgramming?.turnId
+            ? state.nextProgramming
+            : null;
+      const recompileChoice =
+        payload?.choice?.kind === 'option-decision' ? payload.choice : null;
+      const isRecompileDecision =
+        !!recompileChoice &&
+        !!eventProgramming &&
+        recompileChoice.decisionId ===
+          recompileDecisionId(eventProgramming.turnNumber, event.actorUid);
+      if (isRecompileDecision && recompileChoice) {
+        const player = eventProgramming.players.find(({ uid }) => uid === event.actorUid);
+        const optionCardIds = programmingOptionCardIds(
+          state,
+          eventProgramming,
+          event.actorUid
+        );
+        const choiceId = recompileChoice.choiceId;
+        const legalChoice =
+          choiceId === 'take-damage' ||
+          (choiceId.startsWith('discard:') &&
+            optionCardIds.includes(choiceId.slice('discard:'.length) as OptionCardId));
+        if (
+          payload.uid !== event.actorUid ||
+          recompileChoice.uid !== event.actorUid ||
+          !player ||
+          player.submitted ||
+          !optionCardIds.includes('recompile') ||
+          !legalChoice ||
+          state.optionDecisions.some(
+            ({ turnId, decisionId }) =>
+              turnId === payload.turnId && decisionId === recompileChoice.decisionId
+          ) ||
+          !state.configuration
+        ) {
+          diagnostic(
+            state,
+            event,
+            'invalid-effect',
+            'Recompile may redeal an unsubmitted hand once per turn with a legal damage choice.'
+          );
+          continue;
+        }
+        const next = recompileProgramHand(
+          eventProgramming,
+          event.actorUid,
+          state.configuration.seed
+        );
+        state.optionDecisions.push({
+          decisionId: recompileChoice.decisionId,
+          uid: event.actorUid,
+          choiceId,
+          turnId: payload.turnId
+        });
+        if (eventProgramming === state.nextProgramming) state.nextProgramming = next;
+        else state.programming = next;
+        state.acceptedEventIds.push(event.id);
+        continue;
+      }
       const executionChoice =
         payload?.choice?.kind === 'option-plan' ||
         payload?.choice?.kind === 'option-decision';

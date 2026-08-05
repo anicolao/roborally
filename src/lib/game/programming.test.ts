@@ -6,6 +6,7 @@ import {
   handSizeForDamage,
   previewProgram,
   programCardZones,
+  recompileProgramHand,
   submitProgram,
   timeOutProgram,
   updateProgramDraft
@@ -293,5 +294,25 @@ describe('shared Program deck', () => {
     expect(enhanced.players.find(({ uid }) => uid === ownerUid)?.hand).toHaveLength(10);
     expect(ordinary.players.find(({ uid }) => uid === ownerUid)?.hand).toHaveLength(9);
     expect(enhanced.players.find(({ uid }) => uid !== ownerUid)?.hand).toHaveLength(9);
+  });
+
+  it('redeals Recompile from the shared deck while clearing the private draft', () => {
+    const state = createProgrammingState(setup, config);
+    const owner = state.players[0];
+    const drafted = updateProgramDraft(
+      state,
+      owner.uid,
+      owner.hand.slice(0, 2),
+      [owner.hand[0], owner.hand[1], null, null, null]
+    );
+    const beforeHand = [...owner.hand];
+    const recompiled = recompileProgramHand(drafted, owner.uid, config.seed);
+    const nextOwner = recompiled.players[0];
+
+    expect(nextOwner.hand).toHaveLength(beforeHand.length);
+    expect(nextOwner.hand).not.toEqual(beforeHand);
+    expect(nextOwner.draftCardIds).toEqual([]);
+    expect(nextOwner.draftSlots).toEqual([null, null, null, null, null]);
+    expect(programCardZones(recompiled)).toHaveLength(PROGRAM_CARDS.length);
   });
 });

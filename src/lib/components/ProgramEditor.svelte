@@ -1,5 +1,6 @@
 <script lang="ts">
   import ProgramCardFace from '$lib/components/ProgramCardFace.svelte';
+  import { OPTION_CARDS_BY_ID, type OptionCardId } from '$lib/game/option-manifest';
   import { PROGRAM_CARDS, type ProgramCard } from '$lib/game/program-manifest';
   import {
     REGISTER_COUNT,
@@ -19,6 +20,9 @@
   export let previewText = '';
   export let ondraftchange: (slots: (ProgramCard['id'] | null)[]) => void;
   export let onprogramsubmit: () => void | Promise<void>;
+  export let recompileOptionCardIds: OptionCardId[] = [];
+  export let recompileUsed = false;
+  export let onrecompile: (choiceId: string) => void | Promise<void> = () => {};
 
   let selectedRegisterIndex: number | null = null;
   let pointerDrag:
@@ -32,9 +36,12 @@
       }
     | undefined;
   let suppressCardClick: ProgramCard['id'] | null = null;
+  let choosingRecompile = false;
 
   $: openRegisterCount = player.registers.filter((register) => !register.locked).length;
   $: selectedCardIds = draftCardIdsInRegisterOrder(player, draftSlots);
+  $: canRecompile = recompileOptionCardIds.includes('recompile') && !recompileUsed;
+  $: if (recompileUsed) choosingRecompile = false;
 
   function cardForId(cardId: ProgramCard['id'] | null) {
     return PROGRAM_CARDS.find((card) => card.id === cardId);
@@ -243,6 +250,14 @@
     </ol>
     {#if previewText}<p class="preview-note">{previewText}</p>{/if}
     <div class="editor-actions">
+      {#if canRecompile}
+        <button
+          type="button"
+          class="recompile-program"
+          onclick={() => (choosingRecompile = !choosingRecompile)}
+          disabled={pending}
+        >Recompile hand</button>
+      {/if}
       <button
         type="button"
         class="submit-program"
@@ -253,11 +268,35 @@
         <button type="button" class="clear-program" onclick={clearDraft}>Clear register choices</button>
       {/if}
     </div>
+    {#if choosingRecompile}
+      <div class="recompile-choice" aria-label="Recompile damage choice">
+        <strong>Resolve Recompile damage</strong>
+        <p>Redeal this hand, then choose whether to take one damage or discard an Option.</p>
+        {#each recompileOptionCardIds as optionCardId}
+          <button
+            type="button"
+            disabled={pending}
+            onclick={() => onrecompile(`discard:${optionCardId}`)}
+          >Discard {OPTION_CARDS_BY_ID.get(optionCardId)?.name ?? optionCardId} to prevent this damage</button>
+        {/each}
+        <button type="button" disabled={pending} onclick={() => onrecompile('take-damage')}>
+          Take this damage
+        </button>
+      </div>
+    {/if}
   {/if}
 </section>
 
 <style>
   .program-editor { display: grid; min-width: 0; gap: 8px; }
+  .recompile-choice {
+    display: grid;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid #d2ff37;
+    background: #111819;
+  }
+  .recompile-choice p { margin: 0; }
   .program-editor.viewport-fit {
     height: 100%;
     min-height: 0;
