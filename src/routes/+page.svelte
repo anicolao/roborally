@@ -156,6 +156,7 @@
             uid: currentPlayer.uid,
             damage: 0,
             hand: [],
+            unusedCardIds: [],
             registers: Array.from({ length: 5 }, () => ({ cardId: null, locked: false })),
             draftCardIds: [],
             draftSlots: Array.from({ length: REGISTER_COUNT }, () => null),

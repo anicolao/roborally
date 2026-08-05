@@ -690,36 +690,93 @@ export function applyProgramCard(
       );
     }
   }
-  const combined = optionPlan?.activations.find(
-    (candidate) =>
-      candidate.cardId === 'dual-processor' &&
-      candidate.register === register &&
-      robot.options.some((option) => option.cardId === 'dual-processor')
+  const programmingPlayer = programming?.players.find(({ uid }) => uid === robot.uid);
+  const pairedCardIds = new Set(
+    Object.values(optionDecisions).flatMap((decision) =>
+      decision.uid === robot.uid &&
+      decision.choiceId.startsWith('pair:') &&
+      !decision.decisionId.startsWith(`r${register}-program-${robot.uid}-`)
+        ? [decision.choiceId.slice('pair:'.length)]
+        : []
+    )
   );
-  if (combined) {
-    const effect = applyOptionEffect('dual-processor', {
-      action: card.action,
-      pairedAction: combined.pairedAction as ProgramAction
-    });
-    if (effect.active && effect.movementDistance !== undefined) {
-      signedDistance = effect.movementDistance;
-      rotationAfterMovement = effect.rotationAfterMovement;
+  const availableRotations = (programmingPlayer?.unusedCardIds ?? []).flatMap(
+    (cardId) => {
+      const pairedCard = PROGRAM_CARDS.find(({ id }) => id === cardId);
+      return pairedCard &&
+        ['rotate-left', 'rotate-right', 'u-turn'].includes(pairedCard.action) &&
+        !pairedCardIds.has(cardId)
+        ? [pairedCard]
+        : [];
     }
-  }
-  const crab = optionPlan?.activations.find(
-    (candidate) =>
-      candidate.cardId === 'crab-legs' &&
-      candidate.register === register &&
-      robot.options.some((option) => option.cardId === 'crab-legs')
   );
-  if (crab) {
-    const effect = applyOptionEffect('crab-legs', {
-      action: card.action,
-      pairedAction: crab.pairedAction as ProgramAction
-    });
-    if (effect.active && effect.sideStep) {
-      direction = rotate(robot.facing, effect.sideStep === 'left' ? -1 : 1);
-      signedDistance = 1;
+  if (
+    card.action === 'move-1' &&
+    signedDistance === 1 &&
+    robot.options.some(({ cardId }) => cardId === 'crab-legs')
+  ) {
+    const crabRotations = availableRotations.filter(
+      ({ action }) => action === 'rotate-left' || action === 'rotate-right'
+    );
+    if (crabRotations.length > 0) {
+      const decisionId = `r${register}-program-${robot.uid}-crab-legs`;
+      const decision = optionDecisions[decisionId];
+      const validChoiceIds = new Set([
+        'decline',
+        ...crabRotations.map(({ id }) => `pair:${id}`)
+      ]);
+      if (
+        !decision ||
+        decision.uid !== robot.uid ||
+        !validChoiceIds.has(decision.choiceId)
+      ) {
+        addTrace(
+          trace,
+          register,
+          robot.uid,
+          card,
+          'option-decision-required',
+          `${robot.name} must decide whether to pair Move 1 with Crab Legs.`
+        );
+        return {
+          decisionId,
+          uid: robot.uid,
+          cardId: 'crab-legs',
+          timing: 'program-movement',
+          register: register as RegisterNumber,
+          heading: 'Use Crab Legs?',
+          prompt: 'Pair an unused Rotate Left or Rotate Right to sidestep without rotating?',
+          tabletopPrompt: 'Use Crab Legs for this Move 1',
+          choices: [
+            ...crabRotations.map((pairedCard) => ({
+              id: `pair:${pairedCard.id}`,
+              label: `Sidestep ${pairedCard.action === 'rotate-left' ? 'left' : 'right'}`,
+              description: `Pair the unused ${pairedCard.action} ${pairedCard.priority} card.`,
+              cardId: 'crab-legs' as const
+            })),
+            {
+              id: 'decline',
+              label: 'Move normally',
+              description: 'Keep the unused Rotate card and execute Move 1.'
+            }
+          ]
+        };
+      }
+      if (decision.choiceId.startsWith('pair:')) {
+        const pairedCard = crabRotations.find(
+          ({ id }) => `pair:${id}` === decision.choiceId
+        )!;
+        direction = rotate(robot.facing, pairedCard.action === 'rotate-left' ? -1 : 1);
+        signedDistance = 1;
+        addTrace(
+          trace,
+          register,
+          robot.uid,
+          card,
+          'option-effect',
+          `${robot.name} paired ${pairedCard.action} with Crab Legs and sidestepped ${direction}.`
+        );
+      }
     }
   }
   for (let step = 1; step <= Math.abs(signedDistance); step += 1) {

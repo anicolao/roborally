@@ -175,6 +175,17 @@ function optionSeed(
     if (!hasActions(host, requiredAction)) {
       continue;
     }
+    if (cardId === "crab-legs") {
+      const actions = playerActions(host);
+      if (
+        !actions.some(
+          (action) => action === "rotate-left" || action === "rotate-right",
+        ) ||
+        actions.filter((action) => !stationaryActions.has(action)).length < 5
+      ) {
+        continue;
+      }
+    }
     if (!hasActions(guest, guestRequiredAction)) {
       continue;
     }
@@ -218,6 +229,7 @@ function optionSeed(
 async function chooseProgram(
   page: Page,
   firstAction?: ProgramAction | readonly ProgramAction[],
+  leaveRotationsUnused = false,
 ) {
   const hand = page.getByLabel("Your Program hand").getByRole("button");
   for (const action of firstAction
@@ -246,7 +258,12 @@ async function chooseProgram(
     index += 1
   ) {
     const card = hand.nth(index);
-    if ((await card.getAttribute("aria-pressed")) !== "true")
+    const label = (await card.getAttribute("aria-label")) ?? "";
+    if (
+      (await card.getAttribute("aria-pressed")) !== "true" &&
+      (!leaveRotationsUnused ||
+        !/^(rotate-left|rotate-right|u-turn) priority/.test(label))
+    )
       await card.click();
   }
   await expect(submit).toBeEnabled();
@@ -1218,6 +1235,38 @@ test("Scrambler replaces the target next register from the Program deck", async 
         .getByRole("listitem")
         .filter({ hasText: "Grace" }),
     ).toContainText("0 Damage");
+  } finally {
+    await guestContext.close();
+  }
+});
+
+test("Crab Legs pairs an unused Rotate card with Move 1", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "crab-legs",
+    "move-1",
+  );
+  try {
+    await chooseProgram(host, "move-1", true);
+    await chooseProgram(guest);
+
+    const decision = host.getByLabel("Option decision");
+    await expect(decision).toContainText("Use Crab Legs?");
+    const sidestep = decision.getByRole("button", { name: /^Sidestep / }).first();
+    await expect(sidestep).toBeVisible();
+    await sidestep.click();
+
+    await expect(host.locator(".full-resolution")).toContainText(
+      /Ada paired rotate-(?:left|right) with Crab Legs and sidestepped/,
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      /Ada paired rotate-(?:left|right) with Crab Legs and sidestepped/,
+    );
   } finally {
     await guestContext.close();
   }
