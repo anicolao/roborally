@@ -84,6 +84,22 @@ async function expectFixedPrivateViewport(page: import('@playwright/test').Page)
   }
 }
 
+async function expectReadablePrivateProgramCards(page: import('@playwright/test').Page) {
+  const cards = page.getByLabel('Your Program hand').getByRole('button');
+  await expect(cards).toHaveCount(9);
+  const bounds = await cards.evaluateAll((elements) =>
+    elements.map((element) => {
+      const rect = element.getBoundingClientRect();
+      return { width: rect.width, height: rect.height };
+    })
+  );
+  for (const card of bounds) {
+    expect(card.width).toBeGreaterThanOrEqual(100);
+    expect(card.height).toBeGreaterThanOrEqual(140);
+    expect(card.height / card.width).toBeGreaterThan(1.35);
+  }
+}
+
 async function touchDrag(
   page: import('@playwright/test').Page,
   source: import('@playwright/test').Locator,
@@ -201,6 +217,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
   const firstPhone = await firstContext.newPage();
   const secondPhone = await secondContext.newPage();
   const steps = new TestStepHelper(table, testInfo);
+  const phoneSteps = new TestStepHelper(firstPhone, testInfo);
   steps.setMetadata(
     'Tabletop QR joining and configuration',
     'The shared display creates a fresh room, exposes eight position-specific QR joins, owns race configuration, renders the course and public player state, and animates Program execution while phones retain private choices.'
@@ -335,6 +352,19 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expect(secondPhone.getByLabel('Course')).toHaveCount(0);
     await expectFixedPrivateViewport(firstPhone);
     await expectFixedPrivateViewport(secondPhone);
+    await phoneSteps.step('private-programming-controller', {
+      description: 'The private phone presents a large, tightly packed portrait Program hand',
+      status: 'skip',
+      verifications: [
+        {
+          spec: 'Nine Program cards remain legible while the fixed controller viewport does not scroll',
+          check: async () => {
+            await expectReadablePrivateProgramCards(firstPhone);
+            await expectFixedPrivateViewport(firstPhone);
+          }
+        }
+      ]
+    });
 
     const touchCard = firstPhone.getByLabel('Your Program hand').getByRole('button').first();
     const touchCardLabel = await touchCard.getAttribute('aria-label');
