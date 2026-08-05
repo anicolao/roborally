@@ -1093,3 +1093,48 @@ test("Mini Howitzer deals damage, pushes, and spends a shot", async ({
     await guestContext.close();
   }
 });
+
+test("Fire Control locks a named register instead of dealing damage", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "fire-control",
+    "rotate-right",
+    undefined,
+    true,
+    undefined,
+    "ram",
+  );
+  try {
+    await chooseProgram(host, "rotate-right");
+    await chooseStationaryProgram(guest);
+
+    const decision = host.getByLabel("Option decision");
+    await expect(decision).toContainText("Use Fire Control?");
+    await expect(
+      decision.getByRole("button", { name: "Lock register 1" }),
+    ).toBeVisible();
+    await decision
+      .getByRole("button", { name: "Lock register 1" })
+      .click();
+
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada's fire control locked Grace's register 1.",
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      "Ada's fire control locked Grace's register 1.",
+    );
+    await expect(
+      host
+        .getByRole("list", { name: "Robot Life and damage state" })
+        .getByRole("listitem")
+        .filter({ hasText: "Grace" }),
+    ).toContainText("0 Damage");
+  } finally {
+    await guestContext.close();
+  }
+});

@@ -136,6 +136,10 @@ test('face-up Options remain available for execution-time decisions', async (
     await chooseFirstProgram(host);
     await chooseFirstProgram(guest);
 
+    const fireControl = guest.getByLabel('Option decision');
+    await expect(fireControl).toContainText('Use Fire Control?');
+    await fireControl.getByRole('button', { name: 'Deal normal damage' }).click();
+
     const damageChoice = host.getByLabel('Damage prevention choice');
     await expect(damageChoice).toBeVisible({ timeout: 45_000 });
     const tableDamagePrompt = table.getByTestId('tabletop-damage-prompt');

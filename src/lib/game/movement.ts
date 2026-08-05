@@ -1242,8 +1242,100 @@ export function resolveLaserSnapshot(
 
   for (const shooter of activeSnapshot.filter(
     ({ poweredDown, options }) =>
+      !poweredDown && options.some(({ cardId }) => cardId === 'fire-control')
+  )) {
+    const target = firstRobotInLaserPath(shooter, shooter.facing);
+    if (!target) continue;
+    const targetProgram = programming.players.find(({ uid }) => uid === target.uid);
+    const lockChoices = targetProgram?.registers.flatMap((candidate, index) =>
+      candidate.cardId &&
+      !target.lockedRegisters.some(({ register }) => register === index + 1)
+        ? [
+            {
+              id: `lock:${index + 1}`,
+              label: `Lock register ${index + 1}`,
+              description: `Lock ${target.name}'s register ${index + 1} instead of damage.`,
+              cardId: 'fire-control' as const
+            }
+          ]
+        : []
+    ) ?? [];
+    const destroyChoices = target.options.map(({ cardId }) => ({
+      id: `destroy:${cardId}`,
+      label: `Destroy ${OPTION_CARDS_BY_ID.get(cardId)?.name ?? cardId}`,
+      description: `Destroy ${target.name}'s named Option instead of damage.`,
+      cardId: 'fire-control' as const
+    }));
+    if (lockChoices.length === 0 && destroyChoices.length === 0) continue;
+    const decisionId = `r${register}-laser-${shooter.uid}-fire-control`;
+    const decision = optionDecisions[decisionId];
+    const choiceIds = new Set([
+      'decline',
+      ...lockChoices.map(({ id }) => id),
+      ...destroyChoices.map(({ id }) => id)
+    ]);
+    if (
+      !decision ||
+      decision.uid !== shooter.uid ||
+      !choiceIds.has(decision.choiceId)
+    ) {
+      addTrace(
+        trace,
+        register,
+        shooter.uid,
+        null,
+        'option-decision-required',
+        `${shooter.name} must decide how Fire Control affects ${target.name}.`
+      );
+      return {
+        laserTrace: trace.slice(traceStart),
+        laserBeams: [],
+        damageSteps: [],
+        pendingOptionDecision: {
+          decisionId,
+          uid: shooter.uid,
+          cardId: 'fire-control',
+          timing: 'robot-lasers',
+          register: register as RegisterNumber,
+          heading: 'Use Fire Control?',
+          prompt: `Replace the main-laser damage to ${target.name}?`,
+          tabletopPrompt: 'Choose Fire Control effect for this hit',
+          choices: [
+            ...lockChoices,
+            ...destroyChoices,
+            {
+              id: 'decline',
+              label: 'Deal normal damage',
+              description: 'Do not use Fire Control for this hit.'
+            }
+          ]
+        }
+      };
+    }
+    addTrace(
+      trace,
+      register,
+      shooter.uid,
+      null,
+      'option-decision-resolved',
+      decision.choiceId === 'decline'
+        ? `${shooter.name} left fire control inactive.`
+        : `${shooter.name} armed fire control against ${target.name}.`
+    );
+  }
+
+  for (const shooter of activeSnapshot.filter(
+    ({ poweredDown, options }) =>
       !poweredDown && options.some(({ cardId }) => cardId === 'mini-howitzer')
   )) {
+    if (
+      optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
+        ?.choiceId !== undefined &&
+      optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
+        ?.choiceId !== 'decline'
+    ) {
+      continue;
+    }
     const target = firstRobotInLaserPath(shooter, shooter.facing);
     if (!target) continue;
     const decisionId = `r${register}-laser-${shooter.uid}-mini-howitzer`;
@@ -1308,7 +1400,11 @@ export function resolveLaserSnapshot(
   )) {
     if (
       optionDecisions[`r${register}-laser-${shooter.uid}-mini-howitzer`]
-        ?.choiceId === 'use'
+        ?.choiceId === 'use' ||
+      (optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
+        ?.choiceId !== undefined &&
+        optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
+          ?.choiceId !== 'decline')
     ) {
       continue;
     }
@@ -1381,7 +1477,11 @@ export function resolveLaserSnapshot(
       optionDecisions[`r${register}-laser-${shooter.uid}-tractor-beam`]
         ?.choiceId === 'use' ||
       optionDecisions[`r${register}-laser-${shooter.uid}-mini-howitzer`]
-        ?.choiceId === 'use'
+        ?.choiceId === 'use' ||
+      (optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
+        ?.choiceId !== undefined &&
+        optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
+          ?.choiceId !== 'decline')
     ) {
       continue;
     }
@@ -1453,7 +1553,11 @@ export function resolveLaserSnapshot(
       optionDecisions[`r${register}-laser-${shooter.uid}-tractor-beam`]
         ?.choiceId === 'use' ||
       optionDecisions[`r${register}-laser-${shooter.uid}-mini-howitzer`]
-        ?.choiceId === 'use'
+        ?.choiceId === 'use' ||
+      (optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
+        ?.choiceId !== undefined &&
+        optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
+          ?.choiceId !== 'decline')
     ) {
       continue;
     }
@@ -1586,6 +1690,72 @@ export function resolveLaserSnapshot(
         : [])
     ];
     for (const firingDirection of directions) {
+      const fireControlChoice =
+        optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
+          ?.choiceId;
+      if (
+        firingDirection === shooter.facing &&
+        fireControlChoice &&
+        fireControlChoice !== 'decline'
+      ) {
+        const snapshotTarget = firstRobotInLaserPath(shooter, firingDirection);
+        const target = snapshotTarget
+          ? robots.find(({ uid }) => uid === snapshotTarget.uid)
+          : undefined;
+        if (snapshotTarget && target?.status === 'active') {
+          weaponBeams.push({
+            id: `r${register}-${shooter.uid}-${target.uid}-fire-control`,
+            sourceUid: shooter.uid,
+            targetUid: target.uid,
+            fromX: shooter.x,
+            fromY: shooter.y,
+            toX: snapshotTarget.x,
+            toY: snapshotTarget.y,
+            beamCount: 1
+          });
+          if (fireControlChoice.startsWith('lock:')) {
+            const lockedRegister = Number(fireControlChoice.slice('lock:'.length)) as RegisterNumber;
+            const cardId = programming.players
+              .find(({ uid }) => uid === target.uid)
+              ?.registers[lockedRegister - 1]?.cardId;
+            if (
+              cardId &&
+              !target.lockedRegisters.some(({ register: existing }) =>
+                existing === lockedRegister
+              )
+            ) {
+              target.lockedRegisters.push({ register: lockedRegister, cardId });
+              target.lockedRegisters.sort((left, right) => left.register - right.register);
+            }
+            addTrace(
+              trace,
+              register,
+              shooter.uid,
+              null,
+              'option-effect',
+              `${shooter.name}'s fire control locked ${target.name}'s register ${lockedRegister}.`
+            );
+          } else if (fireControlChoice.startsWith('destroy:')) {
+            const cardId = fireControlChoice.slice('destroy:'.length) as OptionCardId;
+            if (optionDeck) {
+              discardOwnedOption(target.options, optionDeck, cardId);
+            } else {
+              const owned = target.options.find((option) => option.cardId === cardId);
+              if (owned) target.options.splice(target.options.indexOf(owned), 1);
+            }
+            addTrace(
+              trace,
+              register,
+              shooter.uid,
+              null,
+              'option-effect',
+              `${shooter.name}'s fire control destroyed ${target.name}'s ` +
+                `${OPTION_CARDS_BY_ID.get(cardId)?.name ?? cardId}.`
+            );
+          }
+        }
+        continue;
+      }
       if (
         firingDirection === shooter.facing &&
         optionDecisions[`r${register}-laser-${shooter.uid}-mini-howitzer`]
