@@ -897,6 +897,73 @@ describe('priority Program movement', () => {
     );
   });
 
+  it('uses Fire Control to lock a register or destroy an Option instead of damage', () => {
+    const config = riskyExchangeConfig('FIRE-CONTROL');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'shooter', name: 'Shooter', robotId: 'axle' },
+        { uid: 'target', name: 'Target', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const targetProgram = programming.players.find(({ uid }) => uid === 'target')!;
+    targetProgram.registers[0].cardId = card('move-1').id;
+    const robots = () => [
+      raceRobot({
+        uid: 'shooter',
+        name: 'Shooter',
+        x: 1,
+        y: 6,
+        facing: 'east',
+        options: [{ cardId: 'fire-control', spent: 0, storedProgramCardId: null }]
+      }),
+      raceRobot({
+        uid: 'target',
+        name: 'Target',
+        x: 3,
+        y: 6,
+        options: [{ cardId: 'rear-laser', spent: 0, storedProgramCardId: null }]
+      })
+    ];
+
+    const pending = resolveLaserSnapshot(robots(), 1, [], programming, []);
+    expect(pending.pendingOptionDecision).toMatchObject({
+      decisionId: 'r1-laser-shooter-fire-control',
+      uid: 'shooter'
+    });
+    expect(pending.pendingOptionDecision?.choices.map(({ id }) => id)).toContain('lock:1');
+    expect(pending.pendingOptionDecision?.choices.map(({ id }) => id)).toContain(
+      'destroy:rear-laser'
+    );
+
+    const locked = robots();
+    const decisionId = pending.pendingOptionDecision!.decisionId;
+    resolveLaserSnapshot(locked, 1, [], programming, [], undefined, {
+      [decisionId]: {
+        decisionId,
+        uid: 'shooter',
+        choiceId: 'lock:1'
+      }
+    });
+    expect(locked[1]).toMatchObject({
+      damage: 0,
+      lockedRegisters: [{ register: 1, cardId: card('move-1').id }]
+    });
+
+    const optionDeck = createOptionDeck('FIRE-CONTROL');
+    const destroyed = robots();
+    resolveLaserSnapshot(destroyed, 1, [], programming, [], optionDeck, {
+      [decisionId]: {
+        decisionId,
+        uid: 'shooter',
+        choiceId: 'destroy:rear-laser'
+      }
+    });
+    expect(destroyed[1]).toMatchObject({ damage: 0, options: [] });
+    expect(optionDeck.discardPile).toContain('rear-laser');
+  });
+
   it('uses Ramming Gear damage before a blocked push and the shared damage choice', () => {
     const config = riskyExchangeConfig('RAMMING-GEAR');
     const setup = deriveRaceSetup(
