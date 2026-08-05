@@ -154,8 +154,14 @@ export function deriveRaceSetup(
     firstPlayerUid: clockwise[0].uid,
     players: clockwise.map((player, index) => {
       const dock = index + 1;
-      const position = dockCells.get(dock);
-      if (!position) throw new Error(`Dock ${dock} is not present on ${course.name}.`);
+      const dockPosition = dockCells.get(dock);
+      if (!dockPosition) throw new Error(`Dock ${dock} is not present on ${course.name}.`);
+      const position =
+        config.courseId === 'option-lab' &&
+        config.seed.startsWith('OPTION-FLAG-') &&
+        index === 0
+          ? { x: 7, y: 3 }
+          : dockPosition;
       return {
         ...player,
         dock,
