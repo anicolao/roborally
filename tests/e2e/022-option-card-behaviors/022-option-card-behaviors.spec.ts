@@ -1403,3 +1403,34 @@ test("Flywheel stores an unused movement card for the next hand", async ({
     await guestContext.close();
   }
 });
+
+test("Abort Switch replaces the current and all later registers", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "abort-switch",
+  );
+  try {
+    await chooseProgram(host);
+    await chooseProgram(guest);
+
+    const decision = host.getByLabel("Option decision");
+    await expect(decision).toContainText("Use Abort Switch?");
+    await decision
+      .getByRole("button", { name: "Abort remaining Program" })
+      .click();
+
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada's abort switch replaced registers 1-5 with top-deck Programs.",
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      "Ada's abort switch replaced registers 1-5 with top-deck Programs.",
+    );
+  } finally {
+    await guestContext.close();
+  }
+});

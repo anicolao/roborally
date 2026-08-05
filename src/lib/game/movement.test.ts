@@ -2031,6 +2031,65 @@ describe('priority Program movement', () => {
     expect(next.drawPile).not.toContain(storedCard.id);
   });
 
+  it('uses Abort Switch to replace the current and remaining registers', () => {
+    const config = riskyExchangeConfig('ABORT-SWITCH-RUNTIME');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'abort', name: 'Abort', robotId: 'axle' },
+        { uid: 'other', name: 'Other', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const rotations = PROGRAM_CARDS.filter(({ action }) => action === 'rotate-right').slice(
+      0,
+      10
+    );
+    for (const [playerIndex, player] of programming.players.entries()) {
+      player.registers.forEach((candidate, index) => {
+        candidate.cardId = rotations[playerIndex * 5 + index].id;
+      });
+      player.submitted = true;
+    }
+    programming.phase = 'programmed';
+    const robots = createRaceRobotPositions(setup);
+    robots.find(({ uid }) => uid === 'abort')!.options.push({
+      cardId: 'abort-switch',
+      spent: 0,
+      storedProgramCardId: null
+    });
+    const pending = resolveProgrammedTurn(programming, setup, robots)!;
+    expect(pending.pendingOptionDecision).toMatchObject({
+      decisionId: 'r1-before-abort-abort-switch',
+      timing: 'before-register'
+    });
+    const decisionId = pending.pendingOptionDecision!.decisionId;
+    const topCardId = programming.drawPile[0];
+    const resolved = resolveProgrammedTurn(
+      programming,
+      setup,
+      robots,
+      undefined,
+      {},
+      {
+        [decisionId]: {
+          decisionId,
+          uid: 'abort',
+          choiceId: 'use'
+        }
+      }
+    )!;
+    expect(resolved.trace).toContainEqual(
+      expect.objectContaining({
+        kind: 'option-decision-resolved',
+        text: "Abort's abort switch replaced registers 1-5 with top-deck Programs."
+      })
+    );
+    expect(
+      resolved.trace.find(({ actorUid, kind }) => actorUid === 'abort' && kind === 'reveal')
+    ).toMatchObject({ cardId: topCardId });
+  });
+
   it('applies armor, laser, circuit-breaker, and archive-copy hooks', () => {
     const config = riskyExchangeConfig('OPTION-HOOKS');
     const setup = deriveRaceSetup(
