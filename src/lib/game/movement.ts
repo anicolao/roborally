@@ -3231,7 +3231,96 @@ export function resolveProgrammedTurn(
     }
   }
 
+  const abortSwitchUsed = new Set<string>();
   for (let register = 1; register <= 5; register += 1) {
+    for (const robot of robots.filter(
+      ({ uid, status, options }) =>
+        status === 'active' &&
+        !abortSwitchUsed.has(uid) &&
+        options.some(({ cardId }) => cardId === 'abort-switch')
+    )) {
+      const decisionId = `r${register}-before-${robot.uid}-abort-switch`;
+      const decision = optionDecisions[decisionId];
+      if (
+        !decision ||
+        decision.uid !== robot.uid ||
+        !['use', 'decline'].includes(decision.choiceId)
+      ) {
+        addTrace(
+          trace,
+          register,
+          robot.uid,
+          null,
+          'option-decision-required',
+          `${robot.name} must decide whether to abort before register ${register}.`
+        );
+        return {
+          courseId: setup.courseId,
+          turnNumber: programming.turnNumber,
+          phase: 'awaiting-option-decision',
+          robots,
+          trace,
+          optionDeck,
+          nextOptionChoiceUid: null,
+          pendingOptionDecision: {
+            decisionId,
+            uid: robot.uid,
+            cardId: 'abort-switch',
+            timing: 'before-register',
+            register: register as RegisterNumber,
+            heading: 'Use Abort Switch?',
+            prompt: `Replace registers ${register}-5 with top-deck Program cards?`,
+            tabletopPrompt: `Use Abort Switch before register ${register}`,
+            choices: [
+              {
+                id: 'use',
+                label: 'Abort remaining Program',
+                description: 'Replace this and every later register from the Program deck.',
+                cardId: 'abort-switch'
+              },
+              {
+                id: 'decline',
+                label: 'Keep programmed cards',
+                description: 'Keep Abort Switch available before the next register.'
+              }
+            ]
+          },
+          nextReentryUid: null,
+          winnerUids: [],
+          runnersUpUids: [],
+          summary: null,
+          playback,
+          initialOptionDeck: cloneOptionDeck(
+            initialOptionDeck ?? createOptionDeck(`standalone-turn-${programming.turnNumber}`)
+          )
+        };
+      }
+      if (decision.choiceId === 'use') {
+        for (let replacement = register; replacement <= 5; replacement += 1) {
+          const cardId = resolutionProgramDrawPile.shift();
+          if (!cardId) break;
+          programOverrides.set(`${robot.uid}:${replacement}`, cardId);
+        }
+        abortSwitchUsed.add(robot.uid);
+        addTrace(
+          trace,
+          register,
+          robot.uid,
+          null,
+          'option-decision-resolved',
+          `${robot.name}'s abort switch replaced registers ${register}-5 with top-deck Programs.`
+        );
+      } else {
+        addTrace(
+          trace,
+          register,
+          robot.uid,
+          null,
+          'option-decision-resolved',
+          `${robot.name} kept the programmed card in register ${register}.`
+        );
+      }
+    }
     for (const robot of robots.filter(
       ({ status, options }) =>
         status === 'active' &&
