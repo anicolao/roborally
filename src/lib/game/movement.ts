@@ -1241,8 +1241,79 @@ export function resolveLaserSnapshot(
 
   for (const shooter of activeSnapshot.filter(
     ({ poweredDown, options }) =>
+      !poweredDown && options.some(({ cardId }) => cardId === 'tractor-beam')
+  )) {
+    const target = firstRobotInLaserPath(shooter, shooter.facing);
+    const range = target
+      ? Math.abs(target.x - shooter.x) + Math.abs(target.y - shooter.y)
+      : 0;
+    if (!target || range <= 1) continue;
+    const decisionId = `r${register}-laser-${shooter.uid}-tractor-beam`;
+    const decision = optionDecisions[decisionId];
+    if (
+      !decision ||
+      decision.uid !== shooter.uid ||
+      !['use', 'decline'].includes(decision.choiceId)
+    ) {
+      addTrace(
+        trace,
+        register,
+        shooter.uid,
+        null,
+        'option-decision-required',
+        `${shooter.name} must decide whether to replace its main laser with Tractor Beam.`
+      );
+      return {
+        laserTrace: trace.slice(traceStart),
+        laserBeams: [],
+        damageSteps: [],
+        pendingOptionDecision: {
+          decisionId,
+          uid: shooter.uid,
+          cardId: 'tractor-beam',
+          timing: 'robot-lasers',
+          register: register as RegisterNumber,
+          heading: 'Use Tractor Beam?',
+          prompt: `Pull ${target.name} one space closer instead of firing the main laser?`,
+          tabletopPrompt: 'Use Tractor Beam for this register',
+          choices: [
+            {
+              id: 'use',
+              label: 'Pull with Tractor Beam',
+              description: 'Replace the main laser with a one-space pull closer.',
+              cardId: 'tractor-beam'
+            },
+            {
+              id: 'decline',
+              label: 'Fire normally',
+              description: 'Fire the main laser normally.'
+            }
+          ]
+        }
+      };
+    }
+    addTrace(
+      trace,
+      register,
+      shooter.uid,
+      null,
+      'option-decision-resolved',
+      decision.choiceId === 'use'
+        ? `${shooter.name} armed tractor beam against ${target.name}.`
+        : `${shooter.name} left tractor beam inactive.`
+    );
+  }
+
+  for (const shooter of activeSnapshot.filter(
+    ({ poweredDown, options }) =>
       !poweredDown && options.some(({ cardId }) => cardId === 'pressor-beam')
   )) {
+    if (
+      optionDecisions[`r${register}-laser-${shooter.uid}-tractor-beam`]
+        ?.choiceId === 'use'
+    ) {
+      continue;
+    }
     const target = firstRobotInLaserPath(shooter, shooter.facing);
     if (!target) continue;
     const decisionId = `r${register}-laser-${shooter.uid}-pressor-beam`;
@@ -1307,6 +1378,8 @@ export function resolveLaserSnapshot(
   )) {
     if (
       optionDecisions[`r${register}-laser-${shooter.uid}-pressor-beam`]
+        ?.choiceId === 'use' ||
+      optionDecisions[`r${register}-laser-${shooter.uid}-tractor-beam`]
         ?.choiceId === 'use'
     ) {
       continue;
@@ -1440,6 +1513,49 @@ export function resolveLaserSnapshot(
         : [])
     ];
     for (const firingDirection of directions) {
+      if (
+        firingDirection === shooter.facing &&
+        optionDecisions[`r${register}-laser-${shooter.uid}-tractor-beam`]
+          ?.choiceId === 'use'
+      ) {
+        const snapshotTarget = firstRobotInLaserPath(shooter, firingDirection);
+        const target = snapshotTarget
+          ? robots.find(({ uid }) => uid === snapshotTarget.uid)
+          : undefined;
+        if (snapshotTarget && target?.status === 'active') {
+          weaponBeams.push({
+            id: `r${register}-${shooter.uid}-${target.uid}-tractor-beam`,
+            sourceUid: shooter.uid,
+            targetUid: target.uid,
+            fromX: shooter.x,
+            fromY: shooter.y,
+            toX: snapshotTarget.x,
+            toY: snapshotTarget.y,
+            beamCount: 1
+          });
+          const pullDirection = opposite[firingDirection];
+          addTrace(
+            trace,
+            register,
+            shooter.uid,
+            null,
+            'option-effect',
+            `${shooter.name}'s tractor beam pulled ${target.name} one space ${pullDirection}.`
+          );
+          translateOneCell(
+            robots,
+            target,
+            pullDirection,
+            1,
+            register,
+            null,
+            trace,
+            'weapon',
+            course
+          );
+        }
+        continue;
+      }
       if (
         firingDirection === shooter.facing &&
         optionDecisions[`r${register}-laser-${shooter.uid}-pressor-beam`]
