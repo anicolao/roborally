@@ -796,6 +796,55 @@ describe('priority Program movement', () => {
     );
   });
 
+  it('asks for Tractor Beam and pulls a distant target closer', () => {
+    const config = riskyExchangeConfig('TRACTOR-BEAM');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'shooter', name: 'Shooter', robotId: 'axle' },
+        { uid: 'target', name: 'Target', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const robots = () => [
+      raceRobot({
+        uid: 'shooter',
+        name: 'Shooter',
+        x: 1,
+        y: 6,
+        facing: 'east',
+        options: [{ cardId: 'tractor-beam', spent: 0, storedProgramCardId: null }]
+      }),
+      raceRobot({ uid: 'target', name: 'Target', x: 3, y: 6 })
+    ];
+
+    const awaiting = robots();
+    const pending = resolveLaserSnapshot(awaiting, 1, [], programming, []);
+    expect(pending.pendingOptionDecision).toMatchObject({
+      decisionId: 'r1-laser-shooter-tractor-beam',
+      uid: 'shooter',
+      timing: 'robot-lasers'
+    });
+
+    const fired = robots();
+    const decisionId = pending.pendingOptionDecision!.decisionId;
+    const resolved = resolveLaserSnapshot(fired, 1, [], programming, [], undefined, {
+      [decisionId]: {
+        decisionId,
+        uid: 'shooter',
+        choiceId: 'use'
+      }
+    });
+    expect(resolved.pendingOptionDecision).toBeNull();
+    expect(fired[1]).toMatchObject({ x: 2, y: 6, damage: 0 });
+    expect(resolved.laserTrace).toContainEqual(
+      expect.objectContaining({
+        kind: 'option-effect',
+        text: "Shooter's tractor beam pulled Target one space west."
+      })
+    );
+  });
+
   it('uses Ramming Gear damage before a blocked push and the shared damage choice', () => {
     const config = riskyExchangeConfig('RAMMING-GEAR');
     const setup = deriveRaceSetup(

@@ -109,12 +109,14 @@ function optionSeed(
   guestRequiredAction?: ProgramAction | readonly ProgramAction[],
   hostMustBeDockOne = false,
   guestOptionId?: OptionCardId,
-  layout: "dock" | "flag" | "gyro" | "ram" | "shield" = "dock",
+  layout: "beam" | "dock" | "flag" | "gyro" | "ram" | "shield" = "dock",
   requireStationaryTurns = false,
 ) {
   for (let index = 0; index < 50_000; index += 1) {
     const fixturePrefix =
-      layout === "flag"
+      layout === "beam"
+        ? "BEAM-"
+        : layout === "flag"
         ? "FLAG-"
         : layout === "gyro"
           ? "GYRO-"
@@ -176,7 +178,10 @@ function optionSeed(
     if (!hasActions(guest, guestRequiredAction)) {
       continue;
     }
-    if (layout === "ram" && !findStationarySequence(playerActions(guest))) {
+    if (
+      (layout === "beam" || layout === "ram") &&
+      !findStationarySequence(playerActions(guest))
+    ) {
       continue;
     }
     if (requireStationaryTurns) {
@@ -281,7 +286,7 @@ async function createOptionRace(
   guestRequiredAction?: ProgramAction | readonly ProgramAction[],
   hostMustBeDockOne = false,
   guestOptionId?: OptionCardId,
-  layout: "dock" | "flag" | "gyro" | "ram" | "shield" = "dock",
+  layout: "beam" | "dock" | "flag" | "gyro" | "ram" | "shield" = "dock",
   initialHostPowerDown = false,
   requireStationaryTurns = false,
 ) {
@@ -990,6 +995,48 @@ test("Pressor Beam replaces the main laser with a one-space push", async ({
     );
     await expect(guest.locator(".full-resolution")).toContainText(
       "Grace was pushed east by an Option weapon",
+    );
+    await expect(
+      host
+        .getByRole("list", { name: "Robot Life and damage state" })
+        .getByRole("listitem")
+        .filter({ hasText: "Grace" }),
+    ).toContainText("0 Damage");
+  } finally {
+    await guestContext.close();
+  }
+});
+
+test("Tractor Beam replaces the main laser with a one-space pull", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "tractor-beam",
+    "rotate-right",
+    undefined,
+    true,
+    undefined,
+    "beam",
+  );
+  try {
+    await chooseProgram(host, "rotate-right");
+    await chooseStationaryProgram(guest);
+
+    const decision = host.getByLabel("Option decision");
+    await expect(decision).toContainText("Use Tractor Beam?");
+    await decision
+      .getByRole("button", { name: "Pull with Tractor Beam" })
+      .click();
+
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada's tractor beam pulled Grace one space west.",
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      "Grace was pushed west by an Option weapon",
     );
     await expect(
       host
