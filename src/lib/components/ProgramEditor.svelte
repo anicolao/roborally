@@ -215,7 +215,7 @@
           onpointercancel={cancelPointerDrag}
           onclick={() => tapCard(cardId)}
         >
-          {#if card}<ProgramCardFace {card} compact variant={viewportFit ? 'square' : 'adaptive'} />{/if}
+          {#if card}<ProgramCardFace {card} compact variant="adaptive" />{/if}
           {#if selectedIndex >= 0}<span class="register-badge">R{selectedIndex + 1}</span>{/if}
         </button>
       {/each}
@@ -332,14 +332,15 @@
   }
   .viewport-fit .program-hand {
     min-height: 0;
-    grid-template-rows: repeat(2, minmax(0, 1fr));
-    align-items: center;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: none;
+    grid-auto-rows: max-content;
+    align-content: center;
     overflow: hidden;
   }
   .viewport-fit .program-hand button {
     width: 100%;
-    max-height: 100%;
-    aspect-ratio: 1;
+    aspect-ratio: 1014 / 1424;
   }
   .program-hand button.selected {
     border-color: #d2ff37;
@@ -450,7 +451,8 @@
     .editor-actions button { width: 100%; min-height: 48px; }
     .viewport-fit .program-hand {
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      grid-template-rows: repeat(3, minmax(0, 1fr));
+      grid-template-rows: none;
+      grid-auto-rows: max-content;
       gap: 4px;
     }
     .viewport-fit .editor-actions button { min-height: 44px; }
@@ -463,6 +465,15 @@
     .viewport-fit .program-hand {
       grid-template-columns: repeat(5, minmax(0, 1fr));
       grid-template-rows: repeat(2, minmax(0, 1fr));
+      grid-auto-rows: auto;
+      align-content: stretch;
+    }
+    .viewport-fit .program-hand button {
+      width: auto;
+      height: 100%;
+      max-width: 100%;
+      justify-self: center;
+      aspect-ratio: 1;
     }
     .chosen-registers { gap: 2px; }
     .chosen-registers li, .chosen-registers button { min-height: 30px; }
@@ -470,5 +481,36 @@
     .editor-actions { display: flex; gap: 2px; }
     .editor-actions button { width: auto; min-height: 23px; padding: 0 4px; font-size: 12px; }
     .submission-state { padding: 3px; font-size: 12px; }
+  }
+
+  @media (max-height: 720px) and (orientation: landscape) {
+    .program-editor.viewport-fit { gap: 2px; }
+    .viewport-fit .instructions, .viewport-fit .preview-note { display: none; }
+    .viewport-fit .program-hand {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-rows: repeat(2, minmax(0, 1fr));
+      grid-auto-rows: auto;
+      align-content: stretch;
+      gap: 2px;
+    }
+    .viewport-fit .program-hand button {
+      width: auto;
+      height: 100%;
+      max-width: 100%;
+      justify-self: center;
+      aspect-ratio: 1;
+    }
+    .viewport-fit .chosen-registers { gap: 2px; }
+    .viewport-fit .chosen-registers li,
+    .viewport-fit .chosen-registers button { min-height: 30px; }
+    .viewport-fit .chosen-registers button { font-size: 9px; }
+    .viewport-fit .editor-actions { display: flex; gap: 2px; }
+    .viewport-fit .editor-actions button {
+      width: auto;
+      min-height: 23px;
+      padding: 0 4px;
+      font-size: 12px;
+    }
+    .viewport-fit .submission-state { padding: 3px; font-size: 12px; }
   }
 </style>
