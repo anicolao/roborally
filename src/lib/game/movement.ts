@@ -1059,6 +1059,11 @@ interface LaserSnapshotResult {
   laserBeams: RobotLaserBeam[];
   damageSteps: LaserDamageStep[];
   pendingOptionDecision: PendingOptionDecision | null;
+  programOverrides?: {
+    targetUid: string;
+    register: RegisterNumber;
+    cardId: ProgramCard['id'];
+  }[];
 }
 
 function cloneRaceRobots(source: readonly RaceRobotPosition[]): RaceRobotPosition[] {
@@ -1221,6 +1226,7 @@ export function resolveLaserSnapshot(
   );
   const hits: LaserHit[] = [];
   const weaponBeams: RobotLaserBeam[] = [];
+  const weaponProgramOverrides: NonNullable<LaserSnapshotResult['programOverrides']> = [];
   const traceStart = trace.length;
   const firstRobotInLaserPath = (
     shooter: RaceRobotPosition,
@@ -1242,8 +1248,76 @@ export function resolveLaserSnapshot(
 
   for (const shooter of activeSnapshot.filter(
     ({ poweredDown, options }) =>
+      !poweredDown && options.some(({ cardId }) => cardId === 'radio-control')
+  )) {
+    const target = firstRobotInLaserPath(shooter, shooter.facing);
+    if (!target || register >= 5) continue;
+    const decisionId = `r${register}-laser-${shooter.uid}-radio-control`;
+    const decision = optionDecisions[decisionId];
+    if (
+      !decision ||
+      decision.uid !== shooter.uid ||
+      !['use', 'decline'].includes(decision.choiceId)
+    ) {
+      addTrace(
+        trace,
+        register,
+        shooter.uid,
+        null,
+        'option-decision-required',
+        `${shooter.name} must decide whether Radio Control copies its remaining Program to ${target.name}.`
+      );
+      return {
+        laserTrace: trace.slice(traceStart),
+        laserBeams: [],
+        damageSteps: [],
+        pendingOptionDecision: {
+          decisionId,
+          uid: shooter.uid,
+          cardId: 'radio-control',
+          timing: 'robot-lasers',
+          register: register as RegisterNumber,
+          heading: 'Use Radio Control?',
+          prompt: `Replace ${target.name}'s remaining registers with your Program?`,
+          tabletopPrompt: 'Use Radio Control for the remaining Program',
+          choices: [
+            {
+              id: 'use',
+              label: 'Transmit remaining Program',
+              description: 'Replace the target’s later registers with your later registers.',
+              cardId: 'radio-control'
+            },
+            {
+              id: 'decline',
+              label: 'Fire normally',
+              description: 'Fire the main laser normally.'
+            }
+          ]
+        }
+      };
+    }
+    addTrace(
+      trace,
+      register,
+      shooter.uid,
+      null,
+      'option-decision-resolved',
+      decision.choiceId === 'use'
+        ? `${shooter.name} armed radio control against ${target.name}.`
+        : `${shooter.name} left radio control inactive.`
+    );
+  }
+
+  for (const shooter of activeSnapshot.filter(
+    ({ poweredDown, options }) =>
       !poweredDown && options.some(({ cardId }) => cardId === 'fire-control')
   )) {
+    if (
+      optionDecisions[`r${register}-laser-${shooter.uid}-radio-control`]
+        ?.choiceId === 'use'
+    ) {
+      continue;
+    }
     const target = firstRobotInLaserPath(shooter, shooter.facing);
     if (!target) continue;
     const targetProgram = programming.players.find(({ uid }) => uid === target.uid);
@@ -1329,10 +1403,12 @@ export function resolveLaserSnapshot(
       !poweredDown && options.some(({ cardId }) => cardId === 'mini-howitzer')
   )) {
     if (
-      optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
+      optionDecisions[`r${register}-laser-${shooter.uid}-radio-control`]
+        ?.choiceId === 'use' ||
+      (optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
         ?.choiceId !== undefined &&
       optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
-        ?.choiceId !== 'decline'
+        ?.choiceId !== 'decline')
     ) {
       continue;
     }
@@ -1400,6 +1476,8 @@ export function resolveLaserSnapshot(
   )) {
     if (
       optionDecisions[`r${register}-laser-${shooter.uid}-mini-howitzer`]
+        ?.choiceId === 'use' ||
+      optionDecisions[`r${register}-laser-${shooter.uid}-radio-control`]
         ?.choiceId === 'use' ||
       (optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
         ?.choiceId !== undefined &&
@@ -1478,6 +1556,8 @@ export function resolveLaserSnapshot(
         ?.choiceId === 'use' ||
       optionDecisions[`r${register}-laser-${shooter.uid}-mini-howitzer`]
         ?.choiceId === 'use' ||
+      optionDecisions[`r${register}-laser-${shooter.uid}-radio-control`]
+        ?.choiceId === 'use' ||
       (optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
         ?.choiceId !== undefined &&
         optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
@@ -1553,6 +1633,8 @@ export function resolveLaserSnapshot(
       optionDecisions[`r${register}-laser-${shooter.uid}-tractor-beam`]
         ?.choiceId === 'use' ||
       optionDecisions[`r${register}-laser-${shooter.uid}-mini-howitzer`]
+        ?.choiceId === 'use' ||
+      optionDecisions[`r${register}-laser-${shooter.uid}-radio-control`]
         ?.choiceId === 'use' ||
       (optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
         ?.choiceId !== undefined &&
@@ -1690,6 +1772,50 @@ export function resolveLaserSnapshot(
         : [])
     ];
     for (const firingDirection of directions) {
+      if (
+        firingDirection === shooter.facing &&
+        optionDecisions[`r${register}-laser-${shooter.uid}-radio-control`]
+          ?.choiceId === 'use'
+      ) {
+        const snapshotTarget = firstRobotInLaserPath(shooter, firingDirection);
+        const target = snapshotTarget
+          ? robots.find(({ uid }) => uid === snapshotTarget.uid)
+          : undefined;
+        if (snapshotTarget && target?.status === 'active') {
+          weaponBeams.push({
+            id: `r${register}-${shooter.uid}-${target.uid}-radio-control`,
+            sourceUid: shooter.uid,
+            targetUid: target.uid,
+            fromX: shooter.x,
+            fromY: shooter.y,
+            toX: snapshotTarget.x,
+            toY: snapshotTarget.y,
+            beamCount: 1
+          });
+          const shooterProgram = programming.players.find(
+            ({ uid }) => uid === shooter.uid
+          );
+          for (let later = register + 1; later <= 5; later += 1) {
+            const cardId = shooterProgram?.registers[later - 1]?.cardId;
+            if (cardId) {
+              weaponProgramOverrides.push({
+                targetUid: target.uid,
+                register: later as RegisterNumber,
+                cardId
+              });
+            }
+          }
+          addTrace(
+            trace,
+            register,
+            shooter.uid,
+            null,
+            'option-effect',
+            `${shooter.name}'s radio control copied registers ${register + 1}-5 to ${target.name}.`
+          );
+        }
+        continue;
+      }
       const fireControlChoice =
         optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
           ?.choiceId;
@@ -2067,7 +2193,8 @@ export function resolveLaserSnapshot(
       ...orderedHits.flatMap(({ beam }) => (beam ? [beam] : []))
     ],
     damageSteps,
-    pendingOptionDecision: null
+    pendingOptionDecision: null,
+    programOverrides: weaponProgramOverrides
   };
 }
 
@@ -2538,6 +2665,7 @@ export function resolveProgrammedTurn(
     frames: []
   };
   const cards = new Map(PROGRAM_CARDS.map((card) => [card.id, card]));
+  const programOverrides = new Map<string, ProgramCard['id']>();
   const effectiveOptionPlans: Record<string, OptionTurnPlan> = Object.fromEntries(
     robots.map(({ uid }) => [
       uid,
@@ -2635,7 +2763,9 @@ export function resolveProgrammedTurn(
   for (let register = 1; register <= 5; register += 1) {
     const queue = programming.players
       .map((player) => {
-        const cardId = player.registers[register - 1].cardId;
+        const cardId =
+          programOverrides.get(`${player.uid}:${register}`) ??
+          player.registers[register - 1].cardId;
         const card = cardId ? cards.get(cardId) : undefined;
         return card ? { uid: player.uid, card } : null;
       })
@@ -2742,6 +2872,9 @@ export function resolveProgrammedTurn(
       effectiveOptionPlans,
       course
     );
+    for (const override of laserResult.programOverrides ?? []) {
+      programOverrides.set(`${override.targetUid}:${override.register}`, override.cardId);
+    }
     if (laserResult.laserTrace.length > 0) {
       playback.frames.push({
         register: register as RegisterNumber,
