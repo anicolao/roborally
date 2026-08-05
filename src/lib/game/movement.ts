@@ -1199,6 +1199,7 @@ interface LaserSnapshotResult {
     targetUid: string;
     register: RegisterNumber;
     cardId: ProgramCard['id'];
+    controllerUid?: string;
   }[];
   programCardsConsumed?: number;
 }
@@ -2057,7 +2058,8 @@ export function resolveLaserSnapshot(
               weaponProgramOverrides.push({
                 targetUid: target.uid,
                 register: later as RegisterNumber,
-                cardId
+                cardId,
+                controllerUid: shooter.uid
               });
             }
           }
@@ -2923,6 +2925,7 @@ export function resolveProgrammedTurn(
   };
   const cards = new Map(PROGRAM_CARDS.map((card) => [card.id, card]));
   const programOverrides = new Map<string, ProgramCard['id']>();
+  const radioControllers = new Map<string, string>();
   const resolutionProgramDrawPile = [...programming.drawPile];
 
   for (const setupPlayer of setup.players) {
@@ -3465,6 +3468,18 @@ export function resolveProgrammedTurn(
       })
       .filter((entry): entry is { uid: string; card: ProgramCard } => entry !== null)
       .sort((left, right) => right.card.priority - left.card.priority);
+    for (const [targetUid, controllerUid] of radioControllers) {
+      if (!programOverrides.has(`${targetUid}:${register}`)) continue;
+      const targetIndex = queue.findIndex(({ uid }) => uid === targetUid);
+      if (targetIndex < 0) continue;
+      const [targetEntry] = queue.splice(targetIndex, 1);
+      const controllerIndex = queue.findIndex(({ uid }) => uid === controllerUid);
+      if (controllerIndex < 0) {
+        queue.splice(targetIndex, 0, targetEntry);
+        continue;
+      }
+      queue.splice(controllerIndex + 1, 0, targetEntry);
+    }
     for (const entry of queue) {
       const cardTraceStart = trace.length;
       const pendingOptionDecision = applyProgramCard(
@@ -3569,6 +3584,9 @@ export function resolveProgrammedTurn(
     );
     for (const override of laserResult.programOverrides ?? []) {
       programOverrides.set(`${override.targetUid}:${override.register}`, override.cardId);
+      if (override.controllerUid) {
+        radioControllers.set(override.targetUid, override.controllerUid);
+      }
     }
     resolutionProgramDrawPile.splice(0, laserResult.programCardsConsumed ?? 0);
     if (laserResult.laserTrace.length > 0) {
