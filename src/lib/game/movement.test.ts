@@ -783,6 +783,89 @@ describe('priority Program movement', () => {
     expect(trace.filter(({ kind }) => kind === 'board-laser')).toHaveLength(2);
   });
 
+  it('uses Power-Down Shield once per incoming direction in each register', () => {
+    const config = riskyExchangeConfig('POWER-DOWN-SHIELD');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'shooter', name: 'Shooter', robotId: 'axle' },
+        { uid: 'target', name: 'Target', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const robots = [
+      raceRobot({
+        uid: 'shooter',
+        name: 'Shooter',
+        x: 1,
+        y: 6,
+        facing: 'east',
+        options: [
+          { cardId: 'double-barrel-laser', spent: 0, storedProgramCardId: null }
+        ]
+      }),
+      raceRobot({
+        uid: 'target',
+        name: 'Target',
+        x: 3,
+        y: 6,
+        poweredDown: true,
+        options: [
+          { cardId: 'power-down-shield', spent: 0, storedProgramCardId: null }
+        ]
+      })
+    ];
+    const trace: ResolutionTraceEntry[] = [];
+
+    const first = resolveLaserSnapshot(
+      robots,
+      1,
+      trace,
+      programming,
+      [],
+      undefined,
+      {
+        'r1-damage-02-target': {
+          decisionId: 'r1-damage-02-target',
+          uid: 'target',
+          choiceId: 'take-damage'
+        }
+      }
+    );
+
+    expect(first.pendingOptionDecision).toBeNull();
+    expect(robots[1].damage).toBe(1);
+    expect(
+      trace.filter(
+        ({ kind, text }) =>
+          kind === 'option-damage-prevented' && text.includes('power-down shield')
+      )
+    ).toHaveLength(1);
+
+    resolveLaserSnapshot(
+      robots,
+      2,
+      trace,
+      programming,
+      [],
+      undefined,
+      {
+        'r2-damage-02-target': {
+          decisionId: 'r2-damage-02-target',
+          uid: 'target',
+          choiceId: 'take-damage'
+        }
+      }
+    );
+    expect(robots[1].damage).toBe(2);
+    expect(
+      trace.filter(
+        ({ kind, text }) =>
+          kind === 'option-damage-prevented' && text.includes('power-down shield')
+      )
+    ).toHaveLength(2);
+  });
+
   it('destroys on tenth damage and repeats all five fully locked cards', () => {
     expect(
       Array.from({ length: 10 }, (_, damage) => lockedRegisterNumbersForDamage(damage))

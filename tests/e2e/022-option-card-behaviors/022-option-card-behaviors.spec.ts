@@ -17,7 +17,10 @@ import {
 } from "../../../src/lib/game/program-manifest";
 import { createProgrammingState } from "../../../src/lib/game/programming";
 import { deriveRaceSetup, raceConfig } from "../../../src/lib/game/setup";
-import { stayActiveInDockOrder } from "../helpers/game-actions";
+import {
+  respondPowerDownsInDockOrder,
+  stayActiveInDockOrder,
+} from "../helpers/game-actions";
 import { TestStepHelper } from "../helpers/test-step-helper";
 
 const players = [
@@ -36,16 +39,83 @@ const passiveGuestOptions = new Set<OptionCardId>([
   "superior-archive-copy",
 ]);
 
+const stationaryActions = new Set<ProgramAction>([
+  "rotate-left",
+  "rotate-right",
+  "u-turn",
+]);
+
+function findStationarySequence(
+  actions: readonly ProgramAction[],
+  finalFacing?: number,
+  visitedFacing?: number,
+  startFacing = 0,
+) {
+  const rotation = (action: ProgramAction) =>
+    action === "rotate-left" ? -1 : action === "rotate-right" ? 1 : 2;
+  const search = (
+    remaining: readonly ProgramAction[],
+    sequence: ProgramAction[],
+    facing: number,
+    visited: boolean,
+  ): ProgramAction[] | null => {
+    if (sequence.length === 5) {
+      return (finalFacing === undefined || facing === finalFacing) &&
+        (visitedFacing === undefined || visited)
+        ? sequence
+        : null;
+    }
+    for (const [index, action] of remaining.entries()) {
+      const nextFacing = (facing + rotation(action) + 4) % 4;
+      const found = search(
+        [...remaining.slice(0, index), ...remaining.slice(index + 1)],
+        [...sequence, action],
+        nextFacing,
+        visited || nextFacing === visitedFacing,
+      );
+      if (found) return found;
+    }
+    return null;
+  };
+  return search(
+    actions.filter((action) => stationaryActions.has(action)),
+    [],
+    startFacing,
+    startFacing === visitedFacing,
+  );
+}
+
+function facingAfter(sequence: readonly ProgramAction[], startFacing = 0) {
+  return sequence.reduce(
+    (facing, action) =>
+      (facing +
+        (action === "rotate-left" ? -1 : action === "rotate-right" ? 1 : 2) +
+        4) %
+      4,
+    startFacing,
+  );
+}
+
+function playerActions(player: { hand: readonly string[] } | undefined) {
+  return (player?.hand ?? []).flatMap((cardId) => {
+    const action = PROGRAM_CARDS.find(({ id }) => id === cardId)?.action;
+    return action ? [action] : [];
+  });
+}
+
 function optionSeed(
   cardId: OptionCardId,
   requiredAction?: ProgramAction | readonly ProgramAction[],
   guestRequiredAction?: ProgramAction | readonly ProgramAction[],
   hostMustBeDockOne = false,
   guestOptionId?: OptionCardId,
-  layout: "dock" | "flag" = "dock",
+  layout: "dock" | "flag" | "shield" = "dock",
+  requireStationaryTurns = false,
 ) {
   for (let index = 0; index < 50_000; index += 1) {
-    const seed = `OPTION-${layout === "flag" ? "FLAG-" : ""}${cardId}-${index}`;
+    const fixturePrefix =
+      layout === "flag" ? "FLAG-" : layout === "shield" ? "SHIELD-" : "";
+    const seed = `OPTION-${fixturePrefix}${cardId}-${index}`;
     const config = raceConfig("option-lab", seed);
     const setup = deriveRaceSetup(players, config);
     if (hostMustBeDockOne && setup.players[0]?.uid !== "host") continue;
@@ -77,18 +147,52 @@ function optionSeed(
     const hasActions = (
       player: typeof host,
       required: ProgramAction | readonly ProgramAction[] | undefined,
-    ) =>
-      !required ||
-      (Array.isArray(required) ? required : [required]).every((action) =>
-        player?.hand.some(
-          (cardId) => PROGRAM_CARDS.find(({ id }) => id === cardId)?.action === action,
-        ),
+    ) => {
+      if (!required) return true;
+      const available = new Map<ProgramAction, number>();
+      for (const cardId of player?.hand ?? []) {
+        const action = PROGRAM_CARDS.find(({ id }) => id === cardId)?.action;
+        if (action) available.set(action, (available.get(action) ?? 0) + 1);
+      }
+      const needed = new Map<ProgramAction, number>();
+      for (const action of Array.isArray(required) ? required : [required]) {
+        needed.set(action, (needed.get(action) ?? 0) + 1);
+      }
+      return [...needed].every(
+        ([action, count]) => (available.get(action) ?? 0) >= count,
       );
+    };
     if (!hasActions(host, requiredAction)) {
       continue;
     }
     if (!hasActions(guest, guestRequiredAction)) {
       continue;
+    }
+    if (requireStationaryTurns) {
+      const hostTurnOne = findStationarySequence(playerActions(host));
+      const guestTurnOne = findStationarySequence(playerActions(guest));
+      if (!hostTurnOne || !guestTurnOne) {
+        continue;
+      }
+      const turnTwo = createProgrammingState(
+        setup,
+        config,
+        { guest: setup.startingDamage },
+        {},
+        2,
+        new Set(["guest"]),
+        optionIdsByUid,
+      );
+      if (
+        !findStationarySequence(
+          playerActions(turnTwo.players[0]),
+          undefined,
+          1,
+          facingAfter(guestTurnOne),
+        )
+      ) {
+        continue;
+      }
     }
     return seed;
   }
@@ -105,11 +209,19 @@ async function chooseProgram(
       ? firstAction
       : [firstAction]
     : []) {
-    await page
+    const candidates = page
       .getByLabel("Your Program hand")
-      .getByRole("button", { name: new RegExp(`^${action} priority`) })
-      .first()
-      .click();
+      .getByRole("button", { name: new RegExp(`^${action} priority`) });
+    let selected = false;
+    for (let index = 0; index < (await candidates.count()); index += 1) {
+      const candidate = candidates.nth(index);
+      if ((await candidate.getAttribute("aria-pressed")) !== "true") {
+        await candidate.click();
+        selected = true;
+        break;
+      }
+    }
+    expect(selected, `an unselected ${action} card is available`).toBe(true);
   }
   const submit = page.getByRole("button", { name: "Submit immutable program" });
   for (
@@ -125,6 +237,30 @@ async function chooseProgram(
   await submit.click();
 }
 
+async function chooseStationaryProgram(
+  page: Page,
+  finalFacing?: number,
+  visitedFacing?: number,
+  startFacing = 0,
+) {
+  const buttons = page.getByLabel("Your Program hand").getByRole("button");
+  const actions: ProgramAction[] = [];
+  for (let index = 0; index < (await buttons.count()); index += 1) {
+    const label = (await buttons.nth(index).getAttribute("aria-label")) ?? "";
+    const action = label.match(/^([^ ]+) priority/)?.[1] as ProgramAction | undefined;
+    if (action) actions.push(action);
+  }
+  const sequence = findStationarySequence(
+    actions,
+    finalFacing,
+    visitedFacing,
+    startFacing,
+  );
+  expect(sequence, "five stationary Program cards satisfy the fixture").not.toBeNull();
+  await chooseProgram(page, sequence ?? undefined);
+  return sequence ?? [];
+}
+
 async function createOptionRace(
   browser: Browser,
   host: Page,
@@ -134,7 +270,9 @@ async function createOptionRace(
   guestRequiredAction?: ProgramAction | readonly ProgramAction[],
   hostMustBeDockOne = false,
   guestOptionId?: OptionCardId,
-  layout: "dock" | "flag" = "dock",
+  layout: "dock" | "flag" | "shield" = "dock",
+  initialHostPowerDown = false,
+  requireStationaryTurns = false,
 ) {
   const cardOrdinal = [...OPTION_CARDS_BY_ID.keys()].indexOf(cardId) + 1;
   const roomCode = `O${testInfo.project.name === "phone" ? "P" : "D"}${String(cardOrdinal).padStart(2, "0")}22`;
@@ -168,6 +306,7 @@ async function createOptionRace(
         hostMustBeDockOne,
         guestOptionId,
         layout,
+        requireStationaryTurns,
       ),
     );
   await host.getByRole("button", { name: "Configure Risky Exchange" }).click();
@@ -175,7 +314,14 @@ async function createOptionRace(
   await host.getByRole("button", { name: "Ready for race" }).click();
   await host.getByRole("button", { name: "Open programming console" }).click();
   await guest.getByRole("button", { name: "Open programming console" }).click();
-  await stayActiveInDockOrder([host, guest]);
+  if (initialHostPowerDown) {
+    await respondPowerDownsInDockOrder([
+      { page: host, powerDownNextTurn: true },
+      { page: guest, powerDownNextTurn: false },
+    ]);
+  } else {
+    await stayActiveInDockOrder([host, guest]);
+  }
   return { guest, guestContext };
 }
 
@@ -611,6 +757,66 @@ test("Superior Archive Copy removes the next re-entry damage", async ({
     );
     await expect(guest.locator(".full-resolution")).toContainText(
       /Ada re-entered .* with 0 damage\./,
+    );
+  } finally {
+    await guestContext.close();
+  }
+});
+
+test("Power-Down Shield prevents one hit from each direction per register", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "power-down-shield",
+    undefined,
+    undefined,
+    true,
+    undefined,
+    "shield",
+    true,
+    true,
+  );
+  try {
+    await chooseStationaryProgram(host);
+    const guestTurnOne = await chooseStationaryProgram(guest);
+    await takeDamageUntilTurnCompletes(host, guest);
+
+    await host.getByRole("button", { name: "Begin Turn 2" }).click();
+    await guest.getByRole("button", { name: "Begin Turn 2" }).click();
+    await stayActiveInDockOrder([host, guest]);
+
+    await chooseStationaryProgram(
+      guest,
+      undefined,
+      1,
+      facingAfter(guestTurnOne),
+    );
+    await expect(
+      host.getByRole("heading", { name: "Turn 2 complete" }),
+    ).toBeVisible();
+    await expect
+      .poll(() =>
+        host
+          .locator(".full-resolution li")
+          .filter({
+            hasText:
+              "Ada's power-down shield prevented one damage arriving from the west.",
+          })
+          .count(),
+      )
+      .toBeGreaterThan(0);
+    await expect(
+      host
+        .getByRole("list", { name: "Robot Life and damage state" })
+        .getByRole("listitem")
+        .filter({ hasText: "Ada" }),
+    ).toContainText("0 Damage");
+    await expect(guest.locator(".full-resolution")).toContainText(
+      "Ada's power-down shield prevented one damage arriving from the west.",
     );
   } finally {
     await guestContext.close();

@@ -995,6 +995,7 @@ interface LaserHit {
   targetUid: string;
   kind: 'board-laser' | 'robot-laser';
   damage: 1 | 2 | 3;
+  direction: Direction;
   beam?: RobotLaserBeam;
 }
 
@@ -1130,7 +1131,8 @@ export function resolveLaserSnapshot(
           sourceUid: null,
           targetUid: target.uid,
           kind: 'board-laser',
-          damage: laser.beamCount
+          damage: laser.beamCount,
+          direction: laser.direction
         });
         break;
       }
@@ -1179,6 +1181,7 @@ export function resolveLaserSnapshot(
           targetUid: target.uid,
           kind: 'robot-laser',
           damage: beamDamage,
+          direction: firingDirection,
           beam: {
             id: `r${register}-${shooter.uid}-${target.uid}-${firingDirection}`,
             sourceUid: shooter.uid,
@@ -1225,6 +1228,7 @@ export function resolveLaserSnapshot(
   }
   const laserTrace = trace.slice(traceStart);
   const damageSteps: LaserDamageStep[] = [];
+  const shieldedDirectionsByUid = new Map<string, Set<Direction>>();
   let damageOrdinal = 0;
   for (const hit of orderedHits) {
     const target = robots.find(({ uid }) => uid === hit.targetUid);
@@ -1233,6 +1237,29 @@ export function resolveLaserSnapshot(
       if (target.status !== 'active') break;
       damageOrdinal += 1;
       const decisionId = `r${register}-damage-${String(damageOrdinal).padStart(2, '0')}-${target.uid}`;
+      const shieldedDirections = shieldedDirectionsByUid.get(target.uid) ?? new Set();
+      if (
+        target.poweredDown &&
+        target.options.some(({ cardId }) => cardId === 'power-down-shield') &&
+        !shieldedDirections.has(hit.direction)
+      ) {
+        shieldedDirections.add(hit.direction);
+        shieldedDirectionsByUid.set(target.uid, shieldedDirections);
+        const damageTraceStart = trace.length;
+        addTrace(
+          trace,
+          register,
+          target.uid,
+          null,
+          'option-damage-prevented',
+          `${target.name}'s power-down shield prevented one damage arriving from the ${opposite[hit.direction]}.`
+        );
+        damageSteps.push({
+          robots: cloneRaceRobots(robots),
+          trace: trace.slice(damageTraceStart)
+        });
+        continue;
+      }
       if (target.options.some(({ cardId }) => cardId === 'ablative-coat')) {
         const damageTraceStart = trace.length;
         dealOneDamage(robots, target, register, trace, programming, optionDeck);
