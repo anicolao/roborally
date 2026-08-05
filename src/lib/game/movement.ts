@@ -1064,6 +1064,7 @@ interface LaserSnapshotResult {
     register: RegisterNumber;
     cardId: ProgramCard['id'];
   }[];
+  programCardsConsumed?: number;
 }
 
 function cloneRaceRobots(source: readonly RaceRobotPosition[]): RaceRobotPosition[] {
@@ -1219,7 +1220,8 @@ export function resolveLaserSnapshot(
   optionDeck?: OptionDeckState,
   optionDecisions: Readonly<Record<string, OptionDecision>> = {},
   optionPlans: Readonly<Record<string, OptionTurnPlan>> = {},
-  course: CompiledCourse = defaultCourse
+  course: CompiledCourse = defaultCourse,
+  availableProgramDrawPile: readonly ProgramCard['id'][] = programming.drawPile
 ): LaserSnapshotResult {
   const activeSnapshot = cloneRaceRobots(
     robots.filter(({ status }) => status === 'active')
@@ -1227,6 +1229,7 @@ export function resolveLaserSnapshot(
   const hits: LaserHit[] = [];
   const weaponBeams: RobotLaserBeam[] = [];
   const weaponProgramOverrides: NonNullable<LaserSnapshotResult['programOverrides']> = [];
+  let programCardsConsumed = 0;
   const traceStart = trace.length;
   const firstRobotInLaserPath = (
     shooter: RaceRobotPosition,
@@ -1248,8 +1251,76 @@ export function resolveLaserSnapshot(
 
   for (const shooter of activeSnapshot.filter(
     ({ poweredDown, options }) =>
+      !poweredDown && options.some(({ cardId }) => cardId === 'scrambler')
+  )) {
+    const target = firstRobotInLaserPath(shooter, shooter.facing);
+    if (!target || register >= 5 || !availableProgramDrawPile[0]) continue;
+    const decisionId = `r${register}-laser-${shooter.uid}-scrambler`;
+    const decision = optionDecisions[decisionId];
+    if (
+      !decision ||
+      decision.uid !== shooter.uid ||
+      !['use', 'decline'].includes(decision.choiceId)
+    ) {
+      addTrace(
+        trace,
+        register,
+        shooter.uid,
+        null,
+        'option-decision-required',
+        `${shooter.name} must decide whether Scrambler replaces ${target.name}'s next Program.`
+      );
+      return {
+        laserTrace: trace.slice(traceStart),
+        laserBeams: [],
+        damageSteps: [],
+        pendingOptionDecision: {
+          decisionId,
+          uid: shooter.uid,
+          cardId: 'scrambler',
+          timing: 'robot-lasers',
+          register: register as RegisterNumber,
+          heading: 'Use Scrambler?',
+          prompt: `Replace ${target.name}'s register ${register + 1} with the top Program card?`,
+          tabletopPrompt: 'Use Scrambler on the next register',
+          choices: [
+            {
+              id: 'use',
+              label: 'Scramble next register',
+              description: 'Replace the target’s next Program with the top deck card.',
+              cardId: 'scrambler'
+            },
+            {
+              id: 'decline',
+              label: 'Fire normally',
+              description: 'Fire the main laser normally.'
+            }
+          ]
+        }
+      };
+    }
+    addTrace(
+      trace,
+      register,
+      shooter.uid,
+      null,
+      'option-decision-resolved',
+      decision.choiceId === 'use'
+        ? `${shooter.name} armed scrambler against ${target.name}.`
+        : `${shooter.name} left scrambler inactive.`
+    );
+  }
+
+  for (const shooter of activeSnapshot.filter(
+    ({ poweredDown, options }) =>
       !poweredDown && options.some(({ cardId }) => cardId === 'radio-control')
   )) {
+    if (
+      optionDecisions[`r${register}-laser-${shooter.uid}-scrambler`]
+        ?.choiceId === 'use'
+    ) {
+      continue;
+    }
     const target = firstRobotInLaserPath(shooter, shooter.facing);
     if (!target || register >= 5) continue;
     const decisionId = `r${register}-laser-${shooter.uid}-radio-control`;
@@ -1313,6 +1384,8 @@ export function resolveLaserSnapshot(
       !poweredDown && options.some(({ cardId }) => cardId === 'fire-control')
   )) {
     if (
+      optionDecisions[`r${register}-laser-${shooter.uid}-scrambler`]
+        ?.choiceId === 'use' ||
       optionDecisions[`r${register}-laser-${shooter.uid}-radio-control`]
         ?.choiceId === 'use'
     ) {
@@ -1403,6 +1476,8 @@ export function resolveLaserSnapshot(
       !poweredDown && options.some(({ cardId }) => cardId === 'mini-howitzer')
   )) {
     if (
+      optionDecisions[`r${register}-laser-${shooter.uid}-scrambler`]
+        ?.choiceId === 'use' ||
       optionDecisions[`r${register}-laser-${shooter.uid}-radio-control`]
         ?.choiceId === 'use' ||
       (optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
@@ -1476,6 +1551,8 @@ export function resolveLaserSnapshot(
   )) {
     if (
       optionDecisions[`r${register}-laser-${shooter.uid}-mini-howitzer`]
+        ?.choiceId === 'use' ||
+      optionDecisions[`r${register}-laser-${shooter.uid}-scrambler`]
         ?.choiceId === 'use' ||
       optionDecisions[`r${register}-laser-${shooter.uid}-radio-control`]
         ?.choiceId === 'use' ||
@@ -1556,6 +1633,8 @@ export function resolveLaserSnapshot(
         ?.choiceId === 'use' ||
       optionDecisions[`r${register}-laser-${shooter.uid}-mini-howitzer`]
         ?.choiceId === 'use' ||
+      optionDecisions[`r${register}-laser-${shooter.uid}-scrambler`]
+        ?.choiceId === 'use' ||
       optionDecisions[`r${register}-laser-${shooter.uid}-radio-control`]
         ?.choiceId === 'use' ||
       (optionDecisions[`r${register}-laser-${shooter.uid}-fire-control`]
@@ -1633,6 +1712,8 @@ export function resolveLaserSnapshot(
       optionDecisions[`r${register}-laser-${shooter.uid}-tractor-beam`]
         ?.choiceId === 'use' ||
       optionDecisions[`r${register}-laser-${shooter.uid}-mini-howitzer`]
+        ?.choiceId === 'use' ||
+      optionDecisions[`r${register}-laser-${shooter.uid}-scrambler`]
         ?.choiceId === 'use' ||
       optionDecisions[`r${register}-laser-${shooter.uid}-radio-control`]
         ?.choiceId === 'use' ||
@@ -1772,6 +1853,45 @@ export function resolveLaserSnapshot(
         : [])
     ];
     for (const firingDirection of directions) {
+      if (
+        firingDirection === shooter.facing &&
+        optionDecisions[`r${register}-laser-${shooter.uid}-scrambler`]
+          ?.choiceId === 'use'
+      ) {
+        const snapshotTarget = firstRobotInLaserPath(shooter, firingDirection);
+        const target = snapshotTarget
+          ? robots.find(({ uid }) => uid === snapshotTarget.uid)
+          : undefined;
+        const replacementCardId = availableProgramDrawPile[programCardsConsumed];
+        if (snapshotTarget && target?.status === 'active' && replacementCardId) {
+          weaponBeams.push({
+            id: `r${register}-${shooter.uid}-${target.uid}-scrambler`,
+            sourceUid: shooter.uid,
+            targetUid: target.uid,
+            fromX: shooter.x,
+            fromY: shooter.y,
+            toX: snapshotTarget.x,
+            toY: snapshotTarget.y,
+            beamCount: 1
+          });
+          weaponProgramOverrides.push({
+            targetUid: target.uid,
+            register: (register + 1) as RegisterNumber,
+            cardId: replacementCardId
+          });
+          programCardsConsumed += 1;
+          addTrace(
+            trace,
+            register,
+            shooter.uid,
+            null,
+            'option-effect',
+            `${shooter.name}'s scrambler replaced ${target.name}'s register ` +
+              `${register + 1} with ${replacementCardId}.`
+          );
+        }
+        continue;
+      }
       if (
         firingDirection === shooter.facing &&
         optionDecisions[`r${register}-laser-${shooter.uid}-radio-control`]
@@ -2194,7 +2314,8 @@ export function resolveLaserSnapshot(
     ],
     damageSteps,
     pendingOptionDecision: null,
-    programOverrides: weaponProgramOverrides
+    programOverrides: weaponProgramOverrides,
+    programCardsConsumed
   };
 }
 
@@ -2666,6 +2787,7 @@ export function resolveProgrammedTurn(
   };
   const cards = new Map(PROGRAM_CARDS.map((card) => [card.id, card]));
   const programOverrides = new Map<string, ProgramCard['id']>();
+  const resolutionProgramDrawPile = [...programming.drawPile];
   const effectiveOptionPlans: Record<string, OptionTurnPlan> = Object.fromEntries(
     robots.map(({ uid }) => [
       uid,
@@ -2870,11 +2992,13 @@ export function resolveProgrammedTurn(
       optionDeck,
       optionDecisions,
       effectiveOptionPlans,
-      course
+      course,
+      resolutionProgramDrawPile
     );
     for (const override of laserResult.programOverrides ?? []) {
       programOverrides.set(`${override.targetUid}:${override.register}`, override.cardId);
     }
+    resolutionProgramDrawPile.splice(0, laserResult.programCardsConsumed ?? 0);
     if (laserResult.laserTrace.length > 0) {
       playback.frames.push({
         register: register as RegisterNumber,

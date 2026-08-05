@@ -1180,3 +1180,45 @@ test("Radio Control replaces every remaining target register", async ({
     await guestContext.close();
   }
 });
+
+test("Scrambler replaces the target next register from the Program deck", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "scrambler",
+    "rotate-right",
+    undefined,
+    true,
+    undefined,
+    "ram",
+  );
+  try {
+    await chooseProgram(host, "rotate-right");
+    await chooseStationaryProgram(guest);
+
+    const decision = host.getByLabel("Option decision");
+    await expect(decision).toContainText("Use Scrambler?");
+    await decision
+      .getByRole("button", { name: "Scramble next register" })
+      .click();
+
+    await expect(host.locator(".full-resolution")).toContainText(
+      /Ada's scrambler replaced Grace's register 2 with program-/,
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      /Ada's scrambler replaced Grace's register 2 with program-/,
+    );
+    await expect(
+      host
+        .getByRole("list", { name: "Robot Life and damage state" })
+        .getByRole("listitem")
+        .filter({ hasText: "Grace" }),
+    ).toContainText("0 Damage");
+  } finally {
+    await guestContext.close();
+  }
+});
