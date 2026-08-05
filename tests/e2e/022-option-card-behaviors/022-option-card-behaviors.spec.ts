@@ -179,26 +179,31 @@ async function createOptionRace(
 async function takeDamageUntilTurnCompletes(host: Page, guest: Page) {
   for (let decision = 0; decision < 20; decision += 1) {
     const complete = host.getByRole("heading", { name: "Turn 1 complete" });
-    const hostChoice = host
-      .getByLabel("Damage prevention choice")
-      .getByRole("button", { name: "Take this damage" });
-    const guestChoice = guest
-      .getByLabel("Damage prevention choice")
-      .getByRole("button", { name: "Take this damage" });
+    const hostWindow = host.getByLabel("Damage prevention choice");
+    await expect
+      .poll(
+        async () => (await complete.isVisible()) || (await hostWindow.isVisible()),
+      )
+      .toBe(true);
+    if (await complete.isVisible()) return;
+    const decisionId = await hostWindow.getAttribute("data-decision-id");
+    expect(decisionId).toBeTruthy();
+    const hostChoice = hostWindow.getByRole("button", { name: "Take this damage" });
+    if (await hostChoice.isVisible()) {
+      await hostChoice.click();
+    } else {
+      await guest
+        .locator(`[data-decision-id="${decisionId}"]`)
+        .getByRole("button", { name: "Take this damage" })
+        .click();
+    }
     await expect
       .poll(
         async () =>
           (await complete.isVisible()) ||
-          (await hostChoice.isVisible()) ||
-          (await guestChoice.isVisible()),
+          (await host.locator(`[data-decision-id="${decisionId}"]`).count()) === 0,
       )
       .toBe(true);
-    if (await complete.isVisible()) return;
-    if (await hostChoice.isVisible()) {
-      await hostChoice.click();
-    } else {
-      await guestChoice.click();
-    }
   }
   throw new Error("Turn 1 did not complete after twenty damage decisions.");
 }
@@ -468,6 +473,38 @@ test("Extra Memory deals one additional Program card", async ({
     await expect(
       guest.getByLabel("Your Program hand").getByRole("button"),
     ).toHaveCount(9);
+  } finally {
+    await guestContext.close();
+  }
+});
+
+test("Double-Barrel Laser deals two damage with the main laser", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "double-barrel-laser",
+    ["move-1", "rotate-right"],
+    ["move-1", "rotate-left"],
+    true,
+  );
+  try {
+    await chooseProgram(host, ["move-1", "rotate-right"]);
+    await chooseProgram(guest, ["move-1", "rotate-left"]);
+
+    await expect(host.getByLabel("Damage prevention choice")).toBeVisible();
+    await expect(
+      host
+        .locator(".full-resolution li")
+        .filter({ hasText: "Ada fired through clear line of sight and hit Grace." }),
+    ).toHaveCount(2);
+    await takeDamageUntilTurnCompletes(host, guest);
+    await expect(guest.locator(".full-resolution")).toContainText(
+      "Grace took one damage and now has 2.",
+    );
   } finally {
     await guestContext.close();
   }
