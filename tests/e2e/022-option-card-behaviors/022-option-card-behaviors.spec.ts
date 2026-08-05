@@ -41,6 +41,7 @@ function optionSeed(
   requiredAction?: ProgramAction | readonly ProgramAction[],
   guestRequiredAction?: ProgramAction | readonly ProgramAction[],
   hostMustBeDockOne = false,
+  guestOptionId?: OptionCardId,
 ) {
   for (let index = 0; index < 50_000; index += 1) {
     const seed = `OPTION-${cardId}-${index}`;
@@ -54,7 +55,13 @@ function optionSeed(
       optionIdsByUid[player.uid] = option ? [option.cardId] : [];
     }
     if (optionIdsByUid.host?.[0] !== cardId) continue;
-    if (!passiveGuestOptions.has(optionIdsByUid.guest?.[0])) continue;
+    if (
+      guestOptionId
+        ? optionIdsByUid.guest?.[0] !== guestOptionId
+        : !passiveGuestOptions.has(optionIdsByUid.guest?.[0])
+    ) {
+      continue;
+    }
     const programming = createProgrammingState(
       setup,
       config,
@@ -125,6 +132,7 @@ async function createOptionRace(
   requiredAction?: ProgramAction | readonly ProgramAction[],
   guestRequiredAction?: ProgramAction | readonly ProgramAction[],
   hostMustBeDockOne = false,
+  guestOptionId?: OptionCardId,
 ) {
   const cardOrdinal = [...OPTION_CARDS_BY_ID.keys()].indexOf(cardId) + 1;
   const roomCode = `O${testInfo.project.name === "phone" ? "P" : "D"}${String(cardOrdinal).padStart(2, "0")}22`;
@@ -156,6 +164,7 @@ async function createOptionRace(
         requiredAction,
         guestRequiredAction,
         hostMustBeDockOne,
+        guestOptionId,
       ),
     );
   await host.getByRole("button", { name: "Configure Risky Exchange" }).click();
@@ -165,6 +174,33 @@ async function createOptionRace(
   await guest.getByRole("button", { name: "Open programming console" }).click();
   await stayActiveInDockOrder([host, guest]);
   return { guest, guestContext };
+}
+
+async function takeDamageUntilTurnCompletes(host: Page, guest: Page) {
+  for (let decision = 0; decision < 20; decision += 1) {
+    const complete = host.getByRole("heading", { name: "Turn 1 complete" });
+    const hostChoice = host
+      .getByLabel("Damage prevention choice")
+      .getByRole("button", { name: "Take this damage" });
+    const guestChoice = guest
+      .getByLabel("Damage prevention choice")
+      .getByRole("button", { name: "Take this damage" });
+    await expect
+      .poll(
+        async () =>
+          (await complete.isVisible()) ||
+          (await hostChoice.isVisible()) ||
+          (await guestChoice.isVisible()),
+      )
+      .toBe(true);
+    if (await complete.isVisible()) return;
+    if (await hostChoice.isVisible()) {
+      await hostChoice.click();
+    } else {
+      await guestChoice.click();
+    }
+  }
+  throw new Error("Turn 1 did not complete after twenty damage decisions.");
 }
 
 test("Brakes asks at Move 1 execution and may move zero spaces", async ({
@@ -374,6 +410,42 @@ test("Ablative Coat automatically absorbs damage before any player choice", asyn
     await expect(guest.locator(".full-resolution")).toContainText(
       "Ada's ablative coat absorbed one damage",
     );
+  } finally {
+    await guestContext.close();
+  }
+});
+
+test("Circuit Breaker forces next-turn power down at three damage", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "circuit-breaker",
+    ["move-1", "rotate-right", "back-up"],
+    ["move-1", "rotate-left", "back-up"],
+    true,
+    "double-barrel-laser",
+  );
+  try {
+    await chooseProgram(host, ["move-1", "rotate-right", "back-up"]);
+    await chooseProgram(guest, ["move-1", "rotate-left", "back-up"]);
+    await takeDamageUntilTurnCompletes(host, guest);
+
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada's circuit breaker forced power down next turn.",
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      "Ada's circuit breaker forced power down next turn.",
+    );
+    await expect(
+      host
+        .getByRole("list", { name: "Robot Life and damage state" })
+        .getByRole("listitem")
+        .filter({ hasText: "Ada" }),
+    ).toContainText(/(?:3|4|5|6|7|8|9) Damage/);
   } finally {
     await guestContext.close();
   }
