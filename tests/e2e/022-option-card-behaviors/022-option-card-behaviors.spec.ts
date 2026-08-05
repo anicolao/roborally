@@ -1312,3 +1312,40 @@ test("Dual Processor pairs an unused Rotate card with movement", async ({
     await guestContext.close();
   }
 });
+
+test("Conditional Program stores and substitutes an unused Program card", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "conditional-program",
+  );
+  try {
+    await chooseProgram(host);
+    await chooseProgram(guest);
+
+    const store = host.getByLabel("Option decision");
+    await expect(store).toContainText("Store Conditional Program?");
+    const storeCard = store.getByRole("button", { name: /^Store / }).first();
+    await expect(storeCard).toBeVisible();
+    await storeCard.click();
+
+    const substitute = host.getByLabel("Option decision");
+    await expect(substitute).toContainText("Substitute Conditional Program?");
+    await substitute
+      .getByRole("button", { name: "Substitute stored card" })
+      .click();
+
+    await expect(host.locator(".full-resolution")).toContainText(
+      /Ada substituted .* into register 1./,
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      /Ada substituted .* into register 1./,
+    );
+  } finally {
+    await guestContext.close();
+  }
+});

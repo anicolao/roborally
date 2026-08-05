@@ -124,7 +124,12 @@ export interface PendingOptionDecision {
   decisionId: string;
   uid: string;
   cardId: OptionCardId | null;
-  timing: 'before-register' | 'damage' | 'program-movement' | 'robot-lasers';
+  timing:
+    | 'before-register'
+    | 'damage'
+    | 'programming'
+    | 'program-movement'
+    | 'robot-lasers';
   register: RegisterNumber;
   heading: string;
   prompt: string;
@@ -2933,6 +2938,102 @@ export function resolveProgrammedTurn(
 
   for (const robot of robots.filter(
     ({ status, options }) =>
+      status === 'active' && options.some(({ cardId }) => cardId === 'conditional-program')
+  )) {
+    const player = programming.players.find(({ uid }) => uid === robot.uid);
+    const unusedCards = (player?.unusedCardIds ?? []).flatMap((cardId) => {
+      const programCard = cards.get(cardId);
+      return programCard ? [programCard] : [];
+    });
+    const conditional = robot.options.find(
+      ({ cardId }) => cardId === 'conditional-program'
+    )!;
+    conditional.storedProgramCardId = null;
+    if (unusedCards.length === 0) continue;
+    const decisionId = `turn-${programming.turnNumber}-conditional-program-store-${robot.uid}`;
+    const decision = optionDecisions[decisionId];
+    const validChoiceIds = new Set([
+      'decline',
+      ...unusedCards.map(({ id }) => `store:${id}`)
+    ]);
+    if (
+      !decision ||
+      decision.uid !== robot.uid ||
+      !validChoiceIds.has(decision.choiceId)
+    ) {
+      addTrace(
+        trace,
+        1,
+        robot.uid,
+        null,
+        'option-decision-required',
+        `${robot.name} may store one unused Program on Conditional Program.`
+      );
+      return {
+        courseId: setup.courseId,
+        turnNumber: programming.turnNumber,
+        phase: 'awaiting-option-decision',
+        robots,
+        trace,
+        optionDeck,
+        nextOptionChoiceUid: null,
+        pendingOptionDecision: {
+          decisionId,
+          uid: robot.uid,
+          cardId: 'conditional-program',
+          timing: 'programming',
+          register: 1,
+          heading: 'Store Conditional Program?',
+          prompt: 'Choose one unused Program card to hold face down for this turn.',
+          tabletopPrompt: 'Choose a Program card for Conditional Program',
+          choices: [
+            ...unusedCards.map((programCard) => ({
+              id: `store:${programCard.id}`,
+              label: `Store ${programCard.action} ${programCard.priority}`,
+              description: 'Hold this unused card for possible substitution this turn.',
+              cardId: 'conditional-program' as const
+            })),
+            {
+              id: 'decline',
+              label: 'Store no card',
+              description: 'Do not use Conditional Program this turn.'
+            }
+          ]
+        },
+        nextReentryUid: null,
+        winnerUids: [],
+        runnersUpUids: [],
+        summary: null,
+        playback,
+        initialOptionDeck: cloneOptionDeck(
+          initialOptionDeck ?? createOptionDeck(`standalone-turn-${programming.turnNumber}`)
+        )
+      };
+    }
+    if (decision.choiceId.startsWith('store:')) {
+      conditional.storedProgramCardId = decision.choiceId.slice('store:'.length);
+      addTrace(
+        trace,
+        1,
+        robot.uid,
+        null,
+        'option-decision-resolved',
+        `${robot.name} stored ${conditional.storedProgramCardId} on Conditional Program.`
+      );
+    } else {
+      addTrace(
+        trace,
+        1,
+        robot.uid,
+        null,
+        'option-decision-resolved',
+        `${robot.name} stored no card on Conditional Program.`
+      );
+    }
+  }
+
+  for (const robot of robots.filter(
+    ({ status, options }) =>
       status === 'active' &&
       options.some(({ cardId }) => cardId === 'gyroscopic-stabilizer')
   )) {
@@ -3014,6 +3115,101 @@ export function resolveProgrammedTurn(
   }
 
   for (let register = 1; register <= 5; register += 1) {
+    for (const robot of robots.filter(
+      ({ status, options }) =>
+        status === 'active' &&
+        options.some(
+          ({ cardId, storedProgramCardId }) =>
+            cardId === 'conditional-program' && storedProgramCardId
+        )
+    )) {
+      const conditional = robot.options.find(
+        ({ cardId }) => cardId === 'conditional-program'
+      )!;
+      const storedCardId = conditional.storedProgramCardId as ProgramCard['id'];
+      const storedCard = cards.get(storedCardId);
+      if (!storedCard) continue;
+      const decisionId = `r${register}-before-${robot.uid}-conditional-program`;
+      const decision = optionDecisions[decisionId];
+      if (
+        !decision ||
+        decision.uid !== robot.uid ||
+        !['use', 'decline'].includes(decision.choiceId)
+      ) {
+        addTrace(
+          trace,
+          register,
+          robot.uid,
+          null,
+          'option-decision-required',
+          `${robot.name} must decide whether to substitute Conditional Program before register ${register}.`
+        );
+        return {
+          courseId: setup.courseId,
+          turnNumber: programming.turnNumber,
+          phase: 'awaiting-option-decision',
+          robots,
+          trace,
+          optionDeck,
+          nextOptionChoiceUid: null,
+          pendingOptionDecision: {
+            decisionId,
+            uid: robot.uid,
+            cardId: 'conditional-program',
+            timing: 'before-register',
+            register: register as RegisterNumber,
+            heading: 'Substitute Conditional Program?',
+            prompt:
+              `Replace register ${register} with stored ${storedCard.action} ` +
+              `${storedCard.priority}?`,
+            tabletopPrompt: `Use Conditional Program in register ${register}`,
+            choices: [
+              {
+                id: 'use',
+                label: 'Substitute stored card',
+                description: 'Discard the programmed card and reveal the stored card instead.',
+                cardId: 'conditional-program'
+              },
+              {
+                id: 'decline',
+                label: 'Keep programmed card',
+                description: 'Keep the stored card available for a later register.'
+              }
+            ]
+          },
+          nextReentryUid: null,
+          winnerUids: [],
+          runnersUpUids: [],
+          summary: null,
+          playback,
+          initialOptionDeck: cloneOptionDeck(
+            initialOptionDeck ?? createOptionDeck(`standalone-turn-${programming.turnNumber}`)
+          )
+        };
+      }
+      if (decision.choiceId === 'use') {
+        programOverrides.set(`${robot.uid}:${register}`, storedCardId);
+        conditional.storedProgramCardId = null;
+        addTrace(
+          trace,
+          register,
+          robot.uid,
+          null,
+          'option-decision-resolved',
+          `${robot.name} substituted ${storedCard.action} ${storedCard.priority} into register ${register}.`
+        );
+      } else if (register === 5) {
+        conditional.storedProgramCardId = null;
+        addTrace(
+          trace,
+          register,
+          robot.uid,
+          null,
+          'option-decision-resolved',
+          `${robot.name} discarded the unused Conditional Program card at turn end.`
+        );
+      }
+    }
     const queue = programming.players
       .map((player) => {
         const cardId =

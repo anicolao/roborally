@@ -1872,6 +1872,91 @@ describe('priority Program movement', () => {
     expect(dual).toMatchObject({ x: 3, y: 6, facing: 'east' });
   });
 
+  it('stores and substitutes an unused Conditional Program card', () => {
+    const config = riskyExchangeConfig('CONDITIONAL-RUNTIME');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'conditional', name: 'Conditional', robotId: 'axle' },
+        { uid: 'other', name: 'Other', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const rotations = PROGRAM_CARDS.filter(({ action }) => action === 'rotate-right').slice(
+      0,
+      10
+    );
+    for (const [playerIndex, player] of programming.players.entries()) {
+      player.registers.forEach((candidate, index) => {
+        candidate.cardId = rotations[playerIndex * 5 + index].id;
+      });
+      player.submitted = true;
+    }
+    const storedCard = card('move-3');
+    programming.players.find(({ uid }) => uid === 'conditional')!.unusedCardIds = [
+      storedCard.id
+    ];
+    programming.phase = 'programmed';
+    const robots = createRaceRobotPositions(setup);
+    robots.find(({ uid }) => uid === 'conditional')!.options.push({
+      cardId: 'conditional-program',
+      spent: 0,
+      storedProgramCardId: null
+    });
+
+    const storePending = resolveProgrammedTurn(programming, setup, robots)!;
+    expect(storePending.pendingOptionDecision).toMatchObject({
+      decisionId: 'turn-1-conditional-program-store-conditional',
+      timing: 'programming'
+    });
+    const storeDecisionId = storePending.pendingOptionDecision!.decisionId;
+    const substitutePending = resolveProgrammedTurn(
+      programming,
+      setup,
+      robots,
+      undefined,
+      {},
+      {
+        [storeDecisionId]: {
+          decisionId: storeDecisionId,
+          uid: 'conditional',
+          choiceId: `store:${storedCard.id}`
+        }
+      }
+    )!;
+    expect(substitutePending.pendingOptionDecision).toMatchObject({
+      decisionId: 'r1-before-conditional-conditional-program',
+      timing: 'before-register'
+    });
+    const substituteDecisionId = substitutePending.pendingOptionDecision!.decisionId;
+    const resolved = resolveProgrammedTurn(
+      programming,
+      setup,
+      robots,
+      undefined,
+      {},
+      {
+        [storeDecisionId]: {
+          decisionId: storeDecisionId,
+          uid: 'conditional',
+          choiceId: `store:${storedCard.id}`
+        },
+        [substituteDecisionId]: {
+          decisionId: substituteDecisionId,
+          uid: 'conditional',
+          choiceId: 'use'
+        }
+      }
+    )!;
+    expect(resolved.trace).toContainEqual(
+      expect.objectContaining({
+        kind: 'reveal',
+        actorUid: 'conditional',
+        cardId: storedCard.id
+      })
+    );
+  });
+
   it('applies armor, laser, circuit-breaker, and archive-copy hooks', () => {
     const config = riskyExchangeConfig('OPTION-HOOKS');
     const setup = deriveRaceSetup(
