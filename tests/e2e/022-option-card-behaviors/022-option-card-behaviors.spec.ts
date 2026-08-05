@@ -222,3 +222,46 @@ test("Brakes asks at Move 1 execution and may move zero spaces", async ({
     await guestContext.close();
   }
 });
+
+test("Fourth Gear asks at Move 3 execution and may move four spaces", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "fourth-gear",
+    "move-3",
+  );
+  try {
+    await chooseProgram(host, "move-3");
+    await chooseProgram(guest);
+
+    const decision = host.getByLabel("Option decision");
+    await expect(decision).toBeVisible();
+    await expect(decision).toContainText("Use Fourth Gear?");
+    await expect(
+      decision.getByRole("button", { name: "Use Fourth Gear" }),
+    ).toBeVisible();
+    await expect(
+      decision.getByRole("button", { name: "Move normally" }),
+    ).toBeVisible();
+    await expect(guest.getByLabel("Option decision")).toContainText(
+      "Waiting for Ada",
+    );
+
+    await decision.getByRole("button", { name: "Use Fourth Gear" }).click();
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada used fourth gear and will move four spaces.",
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      "Ada used fourth gear and will move four spaces.",
+    );
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada completed step 4",
+    );
+  } finally {
+    await guestContext.close();
+  }
+});
