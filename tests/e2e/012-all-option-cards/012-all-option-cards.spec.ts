@@ -33,15 +33,18 @@ test('all 26 reviewed Option behaviors are inspectable in product', async (
     const catalog = host.getByLabel('2005 Option catalog');
     await catalog.getByText('26-card Option catalog').click();
     await expect(catalog.locator('li')).toHaveCount(26);
+    await expect(catalog.locator('[data-card-id]')).toHaveCount(26);
     for (const card of OPTION_CARDS) {
       const entry = catalog.locator(`[data-option-id="${card.id}"]`);
       await entry.scrollIntoViewIfNeeded();
       await expect(entry).toContainText(card.name);
       await expect(entry).toContainText(card.kind);
       await expect(entry).toContainText(card.summary);
+      await expect(entry.locator('.illustration')).toHaveAttribute(
+        'src',
+        new RegExp(`/assets/options/${card.id}-poc\\.webp$`)
+      );
     }
-    await catalog.getByText('26-card Option catalog').click();
-
     const steps = new TestStepHelper(host, testInfo);
     steps.setMetadata(
       'Inspect all 26 executable Option cards',
@@ -49,11 +52,13 @@ test('all 26 reviewed Option behaviors are inspectable in product', async (
     );
     await steps.step('complete-executable-option-catalog', {
       description: 'The reviewed 2005 Option deck is complete and inspectable',
+      resetScroll: true,
       verifications: [
         {
-          spec: 'Exactly 26 uniquely identified card behaviors are rendered',
+          spec: 'Exactly 26 uniquely identified graphical card behaviors are rendered',
           check: async () => {
             await expect(catalog.locator('li')).toHaveCount(26);
+            await expect(catalog.locator('[data-card-id]')).toHaveCount(26);
           }
         },
         {
@@ -72,6 +77,7 @@ test('all 26 reviewed Option behaviors are inspectable in product', async (
         }
       ]
     });
+    await catalog.getByText('26-card Option catalog').click();
     steps.generateDocs();
   } finally {
     await guestContext.close();

@@ -111,15 +111,15 @@ test('face-up Options use immutable Dock-order decisions', async (
       description: 'Successive crossed-site cleanup draws are public and leave the deck without replacement',
       verifications: [
         {
-          spec: 'Ada and Grace each own one visibly named Option',
+          spec: 'Ada and Grace each own one visibly named graphical Option',
           check: async () => {
             const robots = host.getByRole('list', { name: 'Robot Life and damage state' });
-            await expect(robots.getByRole('listitem').filter({ hasText: 'Ada' })).not.toContainText(
-              'Options none'
-            );
-            await expect(robots.getByRole('listitem').filter({ hasText: 'Grace' })).not.toContainText(
-              'Options none'
-            );
+            await expect(
+              robots.getByRole('listitem').filter({ hasText: 'Ada' }).locator('[data-card-id]')
+            ).toHaveCount(1);
+            await expect(
+              robots.getByRole('listitem').filter({ hasText: 'Grace' }).locator('[data-card-id]')
+            ).toHaveCount(1);
           }
         },
         {
@@ -142,6 +142,9 @@ test('face-up Options use immutable Dock-order decisions', async (
     await expect(host.getByLabel('Ordered Option decision window')).toContainText(
       'Commit Option choices'
     );
+    await expect(
+      host.getByLabel('Ordered Option decision window').locator('[data-card-id]').first()
+    ).toBeVisible();
     await expect(guest.getByLabel('Ordered Option decision window')).toContainText(
       'Waiting for Ada'
     );
@@ -166,10 +169,10 @@ test('face-up Options use immutable Dock-order decisions', async (
           }
         },
         {
-          spec: 'Unspent Options remain face up after a pass',
+          spec: 'Unspent graphical Options remain face up after a pass',
           check: async () => {
             const robots = host.getByRole('list', { name: 'Robot Life and damage state' });
-            await expect(robots).not.toContainText('Options noneOptions none');
+            await expect(robots.locator('[data-card-id]')).toHaveCount(2);
           }
         }
       ]

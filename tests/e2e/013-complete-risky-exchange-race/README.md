@@ -8,7 +8,7 @@ Two ordinary browser clients play twelve hand-constrained turns through crossed-
 
 **Verifications:**
 
-- [x] Successive crossed-site draws are retained
+- [x] Successive crossed-site draws are retained as graphical cards
 
 ## Ada announces a shutdown as part of the production race
 
