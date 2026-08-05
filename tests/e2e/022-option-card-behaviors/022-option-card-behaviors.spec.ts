@@ -450,3 +450,25 @@ test("Circuit Breaker forces next-turn power down at three damage", async ({
     await guestContext.close();
   }
 });
+
+test("Extra Memory deals one additional Program card", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "extra-memory",
+  );
+  try {
+    await expect(
+      host.getByLabel("Your Program hand").getByRole("button"),
+    ).toHaveCount(10);
+    await expect(
+      guest.getByLabel("Your Program hand").getByRole("button"),
+    ).toHaveCount(9);
+  } finally {
+    await guestContext.close();
+  }
+});
