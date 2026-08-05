@@ -471,6 +471,14 @@ function projectNextProgramming(state: RoomState) {
       options.map(({ cardId }) => cardId)
     ])
   );
+  const storedProgramCardIdsByUid = Object.fromEntries(
+    nextRobots.map(({ uid, options }) => [
+      uid,
+      (options.find(({ cardId }) => cardId === 'flywheel')?.storedProgramCardId as
+        | ProgramCard['id']
+        | null) ?? null
+    ])
+  );
   state.nextProgramming = createProgrammingState(
     state.setup,
     state.configuration,
@@ -478,7 +486,8 @@ function projectNextProgramming(state: RoomState) {
     lockedRegistersByUid,
     state.resolution.turnNumber + 1,
     eligibleUids,
-    optionIdsByUid
+    optionIdsByUid,
+    storedProgramCardIdsByUid
   );
 }
 

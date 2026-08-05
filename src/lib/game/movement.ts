@@ -2941,9 +2941,19 @@ export function resolveProgrammedTurn(
       status === 'active' && options.some(({ cardId }) => cardId === 'conditional-program')
   )) {
     const player = programming.players.find(({ uid }) => uid === robot.uid);
+    const storedByAnotherOption = new Set(
+      Object.values(optionDecisions).flatMap((decision) =>
+        decision.uid === robot.uid &&
+        decision.choiceId.startsWith('store:') &&
+        decision.decisionId !==
+          `turn-${programming.turnNumber}-conditional-program-store-${robot.uid}`
+          ? [decision.choiceId.slice('store:'.length)]
+          : []
+      )
+    );
     const unusedCards = (player?.unusedCardIds ?? []).flatMap((cardId) => {
       const programCard = cards.get(cardId);
-      return programCard ? [programCard] : [];
+      return programCard && !storedByAnotherOption.has(cardId) ? [programCard] : [];
     });
     const conditional = robot.options.find(
       ({ cardId }) => cardId === 'conditional-program'
@@ -3028,6 +3038,113 @@ export function resolveProgrammedTurn(
         null,
         'option-decision-resolved',
         `${robot.name} stored no card on Conditional Program.`
+      );
+    }
+  }
+
+  for (const robot of robots.filter(
+    ({ status, options }) =>
+      status === 'active' && options.some(({ cardId }) => cardId === 'flywheel')
+  )) {
+    const player = programming.players.find(({ uid }) => uid === robot.uid);
+    const decisionId = `turn-${programming.turnNumber}-flywheel-store-${robot.uid}`;
+    const storedByAnotherOption = new Set(
+      Object.values(optionDecisions).flatMap((decision) =>
+        decision.uid === robot.uid &&
+        decision.choiceId.startsWith('store:') &&
+        decision.decisionId !== decisionId
+          ? [decision.choiceId.slice('store:'.length)]
+          : []
+      )
+    );
+    const movementCards = (player?.unusedCardIds ?? []).flatMap((cardId) => {
+      const programCard = cards.get(cardId);
+      return programCard &&
+        ['move-1', 'move-2', 'move-3', 'back-up'].includes(programCard.action) &&
+        !storedByAnotherOption.has(cardId)
+        ? [programCard]
+        : [];
+    });
+    const flywheel = robot.options.find(({ cardId }) => cardId === 'flywheel')!;
+    flywheel.storedProgramCardId = null;
+    if (movementCards.length === 0) continue;
+    const decision = optionDecisions[decisionId];
+    const validChoiceIds = new Set([
+      'decline',
+      ...movementCards.map(({ id }) => `store:${id}`)
+    ]);
+    if (
+      !decision ||
+      decision.uid !== robot.uid ||
+      !validChoiceIds.has(decision.choiceId)
+    ) {
+      addTrace(
+        trace,
+        1,
+        robot.uid,
+        null,
+        'option-decision-required',
+        `${robot.name} may store one unused movement Program on Flywheel.`
+      );
+      return {
+        courseId: setup.courseId,
+        turnNumber: programming.turnNumber,
+        phase: 'awaiting-option-decision',
+        robots,
+        trace,
+        optionDeck,
+        nextOptionChoiceUid: null,
+        pendingOptionDecision: {
+          decisionId,
+          uid: robot.uid,
+          cardId: 'flywheel',
+          timing: 'programming',
+          register: 1,
+          heading: 'Store a Flywheel card?',
+          prompt: 'Choose one unused movement Program to add to a later hand.',
+          tabletopPrompt: 'Choose a movement Program for Flywheel',
+          choices: [
+            ...movementCards.map((programCard) => ({
+              id: `store:${programCard.id}`,
+              label: `Store ${programCard.action} ${programCard.priority}`,
+              description: 'Reserve this movement card for your next hand.',
+              cardId: 'flywheel' as const
+            })),
+            {
+              id: 'decline',
+              label: 'Store no card',
+              description: 'Do not store a movement card this turn.'
+            }
+          ]
+        },
+        nextReentryUid: null,
+        winnerUids: [],
+        runnersUpUids: [],
+        summary: null,
+        playback,
+        initialOptionDeck: cloneOptionDeck(
+          initialOptionDeck ?? createOptionDeck(`standalone-turn-${programming.turnNumber}`)
+        )
+      };
+    }
+    if (decision.choiceId.startsWith('store:')) {
+      flywheel.storedProgramCardId = decision.choiceId.slice('store:'.length);
+      addTrace(
+        trace,
+        1,
+        robot.uid,
+        null,
+        'option-decision-resolved',
+        `${robot.name} stored ${flywheel.storedProgramCardId} on Flywheel for a later hand.`
+      );
+    } else {
+      addTrace(
+        trace,
+        1,
+        robot.uid,
+        null,
+        'option-decision-resolved',
+        `${robot.name} stored no card on Flywheel.`
       );
     }
   }

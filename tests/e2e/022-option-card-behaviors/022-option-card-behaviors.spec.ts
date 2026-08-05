@@ -195,6 +195,18 @@ function optionSeed(
         continue;
       }
     }
+    if (cardId === "flywheel") {
+      const hostActions = playerActions(host);
+      if (
+        hostActions.filter((action) => stationaryActions.has(action)).length < 5 ||
+        !hostActions.some((action) =>
+          ["move-1", "move-2", "move-3", "back-up"].includes(action),
+        ) ||
+        !findStationarySequence(playerActions(guest))
+      ) {
+        continue;
+      }
+    }
     if (!hasActions(guest, guestRequiredAction)) {
       continue;
     }
@@ -1344,6 +1356,48 @@ test("Conditional Program stores and substitutes an unused Program card", async 
     );
     await expect(guest.locator(".full-resolution")).toContainText(
       /Ada substituted .* into register 1./,
+    );
+  } finally {
+    await guestContext.close();
+  }
+});
+
+test("Flywheel stores an unused movement card for the next hand", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "flywheel",
+  );
+  try {
+    await chooseStationaryProgram(host);
+    await chooseStationaryProgram(guest);
+
+    const store = host.getByLabel("Option decision");
+    await expect(store).toContainText("Store a Flywheel card?");
+    const storeCard = store.getByRole("button", { name: /^Store / }).first();
+    await expect(storeCard).toBeVisible();
+    await storeCard.click();
+    await takeDamageUntilTurnCompletes(host, guest);
+
+    const hostState = host
+      .getByRole("list", { name: "Robot Life and damage state" })
+      .getByRole("listitem")
+      .filter({ hasText: "Ada" });
+    const damageText = (await hostState.textContent()) ?? "";
+    const damage = Number(damageText.match(/(\d+) Damage/)?.[1] ?? 0);
+    await host.getByRole("button", { name: "Begin Turn 2" }).click();
+    await guest.getByRole("button", { name: "Begin Turn 2" }).click();
+    await stayActiveInDockOrder([host, guest]);
+
+    await expect(
+      host.getByLabel("Your Program hand").getByRole("button"),
+    ).toHaveCount(10 - damage);
+    await expect(host.locator(".full-resolution")).toContainText(
+      /Ada stored program-.* on Flywheel for a later hand./,
     );
   } finally {
     await guestContext.close();

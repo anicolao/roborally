@@ -93,7 +93,22 @@ async function closeResolutionInterrupts(host: Page, guest: Page, turn: number) 
     for (const page of [host, guest]) {
       const takeDamage = page.getByRole('button', { name: 'Take this damage' });
       if (await takeDamage.isVisible()) {
+        const decisionId = await page.getByLabel('Damage prevention choice').getAttribute('data-decision-id');
         await takeDamage.click();
+        if (decisionId) {
+          await expect(page.locator(`[data-decision-id="${decisionId}"]`)).toHaveCount(0);
+        }
+        await finishSyntheticPlayback([host, guest]);
+        break;
+      }
+      const optionDecision = page.getByLabel('Option decision');
+      const optionChoice = optionDecision.getByRole('button').last();
+      if (await optionChoice.isVisible()) {
+        const decisionId = await optionDecision.getAttribute('data-decision-id');
+        await optionChoice.click();
+        if (decisionId) {
+          await expect(page.locator(`[data-decision-id="${decisionId}"]`)).toHaveCount(0);
+        }
         await finishSyntheticPlayback([host, guest]);
         break;
       }
@@ -118,7 +133,23 @@ async function closeResolutionInterrupts(host: Page, guest: Page, turn: number) 
         return;
       }
     }
-    await host.waitForTimeout(100);
+    if (await host.evaluate(() =>
+      (window.__roborallyE2ePlaybackClock?.pending?.() ?? 0) > 0
+    )) {
+      await finishSyntheticPlayback([host, guest]);
+      continue;
+    }
+    await expect.poll(async () =>
+      (await completed.isVisible()) ||
+      (await Promise.all([host, guest].map(async (page) =>
+        (await page.locator('[data-decision-id]').count()) > 0 ||
+        (await page.getByLabel('Destroyed robot Option loss').count()) > 0 ||
+        (await page.getByLabel('Re-entry cell and facing').count()) > 0
+      ))).some(Boolean) ||
+      (await host.evaluate(() =>
+        (window.__roborallyE2ePlaybackClock?.pending?.() ?? 0) > 0
+      ))
+    ).toBe(true);
   }
   await expect(completed).toBeVisible({ timeout: 10_000 });
 }

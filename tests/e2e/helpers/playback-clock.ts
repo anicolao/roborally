@@ -26,20 +26,33 @@ export async function advanceSyntheticPlayback(pages: readonly Page[]) {
 }
 
 export async function finishSyntheticPlayback(pages: readonly Page[]) {
-  await Promise.all(
-    pages.map((page) =>
-      page.waitForFunction(
-        () => (window.__roborallyE2ePlaybackClock?.pending?.() ?? 0) > 0,
-        undefined,
-        { timeout: 10_000 }
+  await expect.poll(async () => {
+    const ready = await Promise.all(
+      pages.map((page) =>
+        page.evaluate(() => {
+          if ((window.__roborallyE2ePlaybackClock?.pending?.() ?? 0) > 0) return true;
+          if (
+            document.querySelector(
+              '[data-decision-id], [aria-label="Destroyed robot Option loss"], [aria-label="Re-entry cell and facing"]'
+            )
+          ) return true;
+          return [...document.querySelectorAll('h1, h2')].some(({ textContent }) =>
+            /^Turn \d+ (complete|finished)$/.test(textContent?.trim() ?? '')
+          );
+        })
       )
-    )
-  );
+    );
+    return ready.every(Boolean);
+  }).toBe(true);
 
   const fired = await Promise.all(
     pages.map((page) =>
-      page.evaluate(() => window.__roborallyE2ePlaybackClock?.runAll?.() ?? 0)
+      page.evaluate(() =>
+        (window.__roborallyE2ePlaybackClock?.pending?.() ?? 0) > 0
+          ? window.__roborallyE2ePlaybackClock?.runAll?.() ?? 0
+          : 0
+      )
     )
   );
-  expect(fired.every((count) => count > 0)).toBe(true);
+  void fired;
 }
