@@ -9,6 +9,7 @@
   import type { FirebaseServices } from '$lib/firebase';
   import CourseBoard from '$lib/components/CourseBoard.svelte';
   import CourseCatalog from '$lib/components/CourseCatalog.svelte';
+  import OptionCardFace from '$lib/components/OptionCardFace.svelte';
   import ProgramEditor from '$lib/components/ProgramEditor.svelte';
   import { PROGRAM_CARDS, type ProgramCard } from '$lib/game/program-manifest';
   import {
@@ -1074,9 +1075,7 @@
               <ol>
                 {#each OPTION_CARDS as option}
                   <li data-option-id={option.id}>
-                    <strong>{option.name}</strong>
-                    <span>{option.kind} · {option.timing.join(' / ')}</span>
-                    <small>{option.summary}</small>
+                    <OptionCardFace card={option} variant="compact-copy" />
                   </li>
                 {/each}
               </ol>
@@ -1169,16 +1168,21 @@
                     Select cards in the order they should be discarded to prevent one damage each.
                     Unselected cards are retained.
                   </p>
-                  <div>
+                  <div class="option-card-grid">
                     {#each optionPlanRobot.options as option}
-                      <button
-                        type="button"
-                        class:selected={selectedOptionPreventionIds.includes(option.cardId)}
-                        aria-pressed={selectedOptionPreventionIds.includes(option.cardId)}
-                        onclick={() => toggleOptionPrevention(option.cardId)}
-                      >
-                        {OPTION_CARDS_BY_ID.get(option.cardId)?.name ?? option.cardId}
-                      </button>
+                      {@const card = OPTION_CARDS_BY_ID.get(option.cardId)}
+                      {#if card}
+                        <button
+                          type="button"
+                          class="option-card-choice"
+                          class:selected={selectedOptionPreventionIds.includes(option.cardId)}
+                          aria-label={`Use ${card.name} to prevent one damage`}
+                          aria-pressed={selectedOptionPreventionIds.includes(option.cardId)}
+                          onclick={() => toggleOptionPrevention(option.cardId)}
+                        >
+                          <OptionCardFace {card} variant="compact-copy" />
+                        </button>
+                      {/if}
                     {/each}
                   </div>
                   <button type="button" disabled={pending} onclick={submitOptionPlan}>
@@ -1236,11 +1240,17 @@
                         Archive ({robot.archive.x},{robot.archive.y})
                       </span>
                       {#if robot.options.length > 0}
-                        <span class="robot-options-owned">
-                          Options {robot.options
-                            .map(({ cardId }) => OPTION_CARDS_BY_ID.get(cardId)?.name ?? cardId)
-                            .join(' · ')}
-                        </span>
+                        <div class="robot-options-owned">
+                          <span>Options</span>
+                          <div class="owned-option-card-strip" aria-label={`${robot.name} Options`}>
+                            {#each robot.options as option}
+                              {@const card = OPTION_CARDS_BY_ID.get(option.cardId)}
+                              {#if card}
+                                <OptionCardFace {card} variant="thumbnail" />
+                              {/if}
+                            {/each}
+                          </div>
+                        </div>
                       {/if}
                     </li>
                   {/each}
@@ -1261,15 +1271,22 @@
                   {#if optionLossRobot.uid === currentPlayer?.uid}
                     <div class="option-loss-choice" aria-label="Destroyed robot Option loss">
                       <strong>Discard one Option before re-entry</strong>
-                      {#each optionLossRobot.options as option}
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onclick={() => discardDestroyedOption(option.cardId)}
-                        >
-                          Discard {OPTION_CARDS_BY_ID.get(option.cardId)?.name ?? option.cardId}
-                        </button>
-                      {/each}
+                      <div class="option-card-grid">
+                        {#each optionLossRobot.options as option}
+                          {@const card = OPTION_CARDS_BY_ID.get(option.cardId)}
+                          {#if card}
+                            <button
+                              type="button"
+                              class="option-card-choice"
+                              aria-label={`Discard ${card.name}`}
+                              disabled={pending}
+                              onclick={() => discardDestroyedOption(option.cardId)}
+                            >
+                              <OptionCardFace {card} variant="compact-copy" />
+                            </button>
+                          {/if}
+                        {/each}
+                      </div>
                     </div>
                   {:else}
                     <p class="reentry-wait">
@@ -2418,27 +2435,83 @@
     color: #91a09f;
     font: 14px 'Space Mono', monospace;
   }
-  .option-catalog summary { padding: 5px; color: #d2ff37; cursor: pointer; text-transform: uppercase; }
-  .option-catalog ol {
-    position: absolute;
-    z-index: 5;
-    top: 100%;
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 3px;
-    max-height: 190px;
-    margin: 0;
+  .option-catalog summary {
     padding: 5px;
+    color: #d2ff37;
+    cursor: pointer;
+    text-transform: uppercase;
+  }
+  .option-catalog[open]::before {
+    position: fixed;
+    z-index: 4;
+    inset: 0;
+    background: rgb(4 8 9 / 78%);
+    content: '';
+  }
+  .option-catalog[open] summary {
+    position: fixed;
+    z-index: 6;
+    top: 88px;
+    right: max(14px, calc((100vw - 1180px) / 2));
+    width: min(720px, calc(100vw - 28px));
+    border: 1px solid #657577;
+    background: #11191a;
+  }
+  .option-catalog ol {
+    position: fixed;
+    z-index: 5;
+    top: 123px;
+    right: max(14px, calc((100vw - 1180px) / 2));
+    bottom: 46px;
+    width: min(720px, calc(100vw - 28px));
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 7px;
+    margin: 0;
+    padding: 8px;
     overflow: auto;
-    border: 1px solid #465356;
+    border: 1px solid #657577;
     background: #0d1314;
+    box-shadow: 0 18px 50px rgb(0 0 0 / 70%);
     list-style: none;
   }
   .option-catalog:not([open]) ol { display: none; }
-  .option-catalog li { display: grid; gap: 1px; padding: 4px; border: 1px solid #293437; }
-  .option-catalog strong { color: #eef4ee; }
-  .option-catalog small { color: #778487; line-height: 1.25; }
+  .option-catalog li { min-width: 0; }
+  .option-catalog li :global(.option-card) { filter: none; }
+  .option-plan,
+  .option-loss-choice {
+    display: grid;
+    gap: 6px;
+    padding: 6px;
+    border: 1px solid #8b7130;
+    color: #91a09f;
+    font: 14px 'Space Mono', monospace;
+  }
+  .option-plan p { margin: 0; }
+  .option-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 6px;
+    min-width: 0;
+  }
+  button.option-card-choice {
+    display: block;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 2px solid #465356;
+    border-radius: 7px;
+    background: #0d1314;
+  }
+  button.option-card-choice:hover,
+  button.option-card-choice:focus-visible { border-color: #ffcf4b; }
+  button.option-card-choice.selected {
+    border-color: #d2ff37;
+    box-shadow: 0 0 0 2px #d2ff37;
+    transform: translateY(-2px);
+  }
+  button.option-card-choice :global(.option-card) { filter: none; }
   .power-control {
     display: grid;
     gap: 3px;
@@ -2504,6 +2577,33 @@
     animation: none;
   }
   .robot-state strong { color: #eef4ee; }
+  .robot-state li:has(.robot-options-owned) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: baseline;
+  }
+  .robot-state li:has(.robot-options-owned) .robot-vitals { text-align: right; }
+  .robot-state li:has(.robot-options-owned) .robot-progress { grid-column: 1 / -1; }
+  .robot-options-owned {
+    display: grid;
+    grid-column: 1 / -1;
+    gap: 3px;
+    min-width: 0;
+    color: #d2ff37;
+    text-transform: uppercase;
+  }
+  .owned-option-card-strip {
+    display: flex;
+    gap: 4px;
+    min-width: 0;
+    overflow-x: auto;
+    padding: 2px;
+  }
+  .owned-option-card-strip :global(.option-card) {
+    width: 160px;
+    flex: 0 0 160px;
+    filter: none;
+  }
   .reentry-choice {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -2700,6 +2800,10 @@
     .robot-state { grid-template-columns: minmax(0, 1fr); }
     .robot-state li { align-content: flex-start; flex-wrap: wrap; overflow: hidden; }
     .robot-progress { min-width: 0; overflow-wrap: anywhere; }
+    .owned-option-card-strip :global(.option-card) {
+      width: 150px;
+      flex-basis: 150px;
+    }
     .setup-summary.resolution-active.many-robots .robot-state {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -3022,6 +3126,10 @@
       min-height: 19px;
       padding: 2px 3px;
       font-size: 12px;
+    }
+    .owned-option-card-strip :global(.option-card) {
+      width: 120px;
+      flex-basis: 120px;
     }
     .board-phase,
     .full-resolution {

@@ -8,6 +8,6 @@ The in-product 2005 catalog is generated from the same versioned manifest used b
 
 **Verifications:**
 
-- [x] Exactly 26 uniquely identified card behaviors are rendered
+- [x] Exactly 26 uniquely identified graphical card behaviors are rendered
 - [x] The edition-specific Crab Legs and Dual Processor cards are present
 - [x] Cards from a different Option inventory are absent

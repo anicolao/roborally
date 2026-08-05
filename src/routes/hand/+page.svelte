@@ -6,6 +6,7 @@
   import { base } from '$app/paths';
   import { onDestroy, onMount } from 'svelte';
   import { initializeFirebase, type FirebaseServices } from '$lib/firebase';
+  import OptionCardFace from '$lib/components/OptionCardFace.svelte';
   import ProgramEditor from '$lib/components/ProgramEditor.svelte';
   import * as RoomService from '$lib/room-service';
   import type { ProgramCard } from '$lib/game/program-manifest';
@@ -423,11 +424,19 @@
         <section class="effect-control" aria-label="Destroyed robot Option loss">
           <h2>Discard one Option</h2>
           <p>Your destroyed robot must discard one Option before it can re-enter.</p>
-          <div>
+          <div class="option-card-grid">
             {#each optionLossRobot.options as option}
-              <button onclick={() => discardDestroyedOption(option.cardId)} disabled={pending}>
-                DISCARD {OPTION_CARDS_BY_ID.get(option.cardId)?.name ?? option.cardId}
-              </button>
+              {@const card = OPTION_CARDS_BY_ID.get(option.cardId)}
+              {#if card}
+                <button
+                  class="option-card-choice"
+                  aria-label={`Discard ${card.name}`}
+                  onclick={() => discardDestroyedOption(option.cardId)}
+                  disabled={pending}
+                >
+                  <OptionCardFace {card} variant="compact-copy" />
+                </button>
+              {/if}
             {/each}
           </div>
         </section>
@@ -458,13 +467,20 @@
         <section class="effect-control" aria-label="Turn Option plan">
           <h2>Commit Option choices</h2>
           <p>Select Options to discard in order to prevent one damage each. Unselected cards are retained.</p>
-          <div>
+          <div class="option-card-grid">
             {#each optionPlanRobot.options as option}
-              <button
-                class:selected={selectedOptionPreventionIds.includes(option.cardId)}
-                aria-pressed={selectedOptionPreventionIds.includes(option.cardId)}
-                onclick={() => toggleOptionPrevention(option.cardId)}
-              >{OPTION_CARDS_BY_ID.get(option.cardId)?.name ?? option.cardId}</button>
+              {@const card = OPTION_CARDS_BY_ID.get(option.cardId)}
+              {#if card}
+                <button
+                  class="option-card-choice"
+                  class:selected={selectedOptionPreventionIds.includes(option.cardId)}
+                  aria-label={`Use ${card.name} to prevent one damage`}
+                  aria-pressed={selectedOptionPreventionIds.includes(option.cardId)}
+                  onclick={() => toggleOptionPrevention(option.cardId)}
+                >
+                  <OptionCardFace {card} variant="compact-copy" />
+                </button>
+              {/if}
             {/each}
           </div>
           <button onclick={submitOptionPlan} disabled={pending}>COMMIT OPTION PLAN</button>
@@ -642,6 +658,27 @@
   .effect-control > div { display: grid; gap: 8px; margin-bottom: 10px; }
   .effect-control > button { width: 100%; }
   .effect-control button.selected { color: #111; background: #ffcf4b; border-color: #ffcf4b; }
+  .effect-control > .option-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  button.option-card-choice {
+    display: block;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 2px solid #657577;
+    border-radius: 7px;
+    background: #0d1314;
+  }
+  button.option-card-choice:hover,
+  button.option-card-choice:focus-visible { border-color: #ffcf4b; }
+  button.option-card-choice.selected {
+    border-color: #d2ff37;
+    box-shadow: 0 0 0 2px #d2ff37;
+    transform: translateY(-2px);
+  }
+  button.option-card-choice :global(.option-card) { filter: none; }
   .effect-control .check-control { display: flex; align-items: center; text-transform: none; }
   .effect-control .check-control input { width: 24px; height: 24px; }
 

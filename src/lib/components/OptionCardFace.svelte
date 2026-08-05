@@ -12,7 +12,7 @@
     onfitchange
   }: {
     card: OptionCard;
-    variant?: 'standard' | 'compact-copy';
+    variant?: 'standard' | 'compact-copy' | 'thumbnail';
     onfitchange?: (fits: boolean) => void;
   } = $props();
 
@@ -38,7 +38,7 @@
   }
 
   onMount(() => {
-    if (!copyPanel || !titlePanel) return;
+    if (!onfitchange || !copyPanel || !titlePanel) return;
     const observer = new ResizeObserver(reportFit);
     observer.observe(copyPanel);
     observer.observe(titlePanel);
@@ -52,13 +52,14 @@
 <span
   role="img"
   class:compact-copy={variant === 'compact-copy'}
+  class:thumbnail={variant === 'thumbnail'}
   class="option-card"
   aria-label={`${card.name}. ${card.summary} ${card.kind}. ${timingLabel}. ${behaviorLabel}.`}
   data-card-id={card.id}
 >
   <img
     class="chassis"
-    src={`${base}/assets/options/${variant === 'compact-copy' ? 'option-card-compact-chassis-poc.webp' : 'option-card-chassis-poc.webp'}`}
+    src={`${base}/assets/options/${variant === 'standard' ? 'option-card-chassis-poc.webp' : 'option-card-compact-chassis-poc.webp'}`}
     alt=""
     draggable="false"
   />
@@ -237,6 +238,25 @@
     inset: 1%;
     width: 98%;
     height: 98%;
+  }
+
+  .thumbnail .illustration-well {
+    top: 22%;
+    left: 5%;
+    width: 90%;
+    height: 66%;
+  }
+
+  .thumbnail .illustration {
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .thumbnail .copy,
+  .thumbnail .footer-kind,
+  .thumbnail .footer-timing {
+    display: none;
   }
 
   .compact-copy .copy {

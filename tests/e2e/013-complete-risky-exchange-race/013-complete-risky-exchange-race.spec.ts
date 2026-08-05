@@ -194,11 +194,15 @@ test('a production Risky Exchange race uses the complete rules loop', async (
           description: 'Both robots carry public face-up Options into the long race',
           verifications: [
             {
-              spec: 'Successive crossed-site draws are retained',
+              spec: 'Successive crossed-site draws are retained as graphical cards',
               check: async () => {
                 const robots = host.getByRole('list', { name: 'Robot Life and damage state' });
-                await expect(robots.getByRole('listitem').filter({ hasText: 'Ada' })).toContainText('Options');
-                await expect(robots.getByRole('listitem').filter({ hasText: 'Grace' })).toContainText('Options');
+                await expect(
+                  robots.getByRole('listitem').filter({ hasText: 'Ada' }).locator('[data-card-id]')
+                ).toHaveCount(1);
+                await expect(
+                  robots.getByRole('listitem').filter({ hasText: 'Grace' }).locator('[data-card-id]')
+                ).toHaveCount(1);
               }
             }
           ]

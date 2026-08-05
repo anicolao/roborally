@@ -8,7 +8,7 @@ Two ordinary clients reach the crossed repair site on successive turns, draw fro
 
 **Verifications:**
 
-- [x] Ada and Grace each own one visibly named Option
+- [x] Ada and Grace each own one visibly named graphical Option
 - [x] The observer sees the same face-up ownership
 
 ## Two simultaneous owners close a replay-safe finite barrier in original Dock order
@@ -18,4 +18,4 @@ Two ordinary clients reach the crossed repair site on successive turns, draw fro
 **Verifications:**
 
 - [x] Both clients converge only after Ada then Grace commit
-- [x] Unspent Options remain face up after a pass
+- [x] Unspent graphical Options remain face up after a pass
