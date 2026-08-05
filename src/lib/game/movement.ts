@@ -381,7 +381,7 @@ function translateOneCell(
   register: number,
   card: ProgramCard | null,
   trace: ResolutionTraceEntry[],
-  source: 'program' | 'pusher' = 'program',
+  source: 'program' | 'pusher' | 'weapon' = 'program',
   course: CompiledCourse = defaultCourse,
   programming?: ProgrammingState,
   optionDeck?: OptionDeckState,
@@ -466,10 +466,19 @@ function translateOneCell(
       register,
       moving.uid,
       card,
-      moving.uid === actor.uid ? (source === 'pusher' ? 'pusher' : 'move') : 'pushed',
+      moving.uid === actor.uid
+        ? source === 'pusher'
+          ? 'pusher'
+          : source === 'weapon'
+            ? 'pushed'
+            : 'move'
+        : 'pushed',
       moving.uid === actor.uid && source === 'pusher'
         ? `${moving.name} was moved ${direction} by a register ${register} pusher to ` +
           `(${moving.x},${moving.y}).`
+        : moving.uid === actor.uid && source === 'weapon'
+          ? `${moving.name} was pushed ${direction} by an Option weapon to ` +
+            `(${moving.x},${moving.y}).`
         : moving.uid === actor.uid
         ? `${moving.name} completed step ${stepNumber} at (${moving.x},${moving.y}) ` +
             `facing ${moving.facing}.`
@@ -1206,14 +1215,102 @@ export function resolveLaserSnapshot(
   optionPlans: Readonly<Record<string, OptionTurnPlan>> = {},
   course: CompiledCourse = defaultCourse
 ): LaserSnapshotResult {
-  const activeSnapshot = robots.filter(({ status }) => status === 'active');
+  const activeSnapshot = cloneRaceRobots(
+    robots.filter(({ status }) => status === 'active')
+  );
   const hits: LaserHit[] = [];
+  const weaponBeams: RobotLaserBeam[] = [];
   const traceStart = trace.length;
+  const firstRobotInLaserPath = (
+    shooter: RaceRobotPosition,
+    direction: Direction
+  ) => {
+    const [dx, dy] = steps[direction];
+    let cursorX = shooter.x;
+    let cursorY = shooter.y;
+    while (courseContains(cursorX, cursorY, course)) {
+      if (movementBlockedByWall(cursorX, cursorY, direction, course)) return null;
+      cursorX += dx;
+      cursorY += dy;
+      if (!courseContains(cursorX, cursorY, course)) return null;
+      const target = activeRobotAt(activeSnapshot, cursorX, cursorY, shooter.uid);
+      if (target) return target;
+    }
+    return null;
+  };
+
+  for (const shooter of activeSnapshot.filter(
+    ({ poweredDown, options }) =>
+      !poweredDown && options.some(({ cardId }) => cardId === 'pressor-beam')
+  )) {
+    const target = firstRobotInLaserPath(shooter, shooter.facing);
+    if (!target) continue;
+    const decisionId = `r${register}-laser-${shooter.uid}-pressor-beam`;
+    const decision = optionDecisions[decisionId];
+    if (
+      !decision ||
+      decision.uid !== shooter.uid ||
+      !['use', 'decline'].includes(decision.choiceId)
+    ) {
+      addTrace(
+        trace,
+        register,
+        shooter.uid,
+        null,
+        'option-decision-required',
+        `${shooter.name} must decide whether to replace its main laser with Pressor Beam.`
+      );
+      return {
+        laserTrace: trace.slice(traceStart),
+        laserBeams: [],
+        damageSteps: [],
+        pendingOptionDecision: {
+          decisionId,
+          uid: shooter.uid,
+          cardId: 'pressor-beam',
+          timing: 'robot-lasers',
+          register: register as RegisterNumber,
+          heading: 'Use Pressor Beam?',
+          prompt: `Push ${target.name} one space away instead of firing the main laser?`,
+          tabletopPrompt: 'Use Pressor Beam for this register',
+          choices: [
+            {
+              id: 'use',
+              label: 'Push with Pressor Beam',
+              description: 'Replace the main laser with a one-space push away.',
+              cardId: 'pressor-beam'
+            },
+            {
+              id: 'decline',
+              label: 'Fire normally',
+              description: 'Fire the main laser normally.'
+            }
+          ]
+        }
+      };
+    }
+    addTrace(
+      trace,
+      register,
+      shooter.uid,
+      null,
+      'option-decision-resolved',
+      decision.choiceId === 'use'
+        ? `${shooter.name} armed pressor beam against ${target.name}.`
+        : `${shooter.name} left pressor beam inactive.`
+    );
+  }
 
   for (const shooter of activeSnapshot.filter(
     ({ poweredDown, options }) =>
       !poweredDown && options.some(({ cardId }) => cardId === 'high-power-laser')
   )) {
+    if (
+      optionDecisions[`r${register}-laser-${shooter.uid}-pressor-beam`]
+        ?.choiceId === 'use'
+    ) {
+      continue;
+    }
     const [dx, dy] = steps[shooter.facing];
     let cursorX = shooter.x;
     let cursorY = shooter.y;
@@ -1343,6 +1440,48 @@ export function resolveLaserSnapshot(
         : [])
     ];
     for (const firingDirection of directions) {
+      if (
+        firingDirection === shooter.facing &&
+        optionDecisions[`r${register}-laser-${shooter.uid}-pressor-beam`]
+          ?.choiceId === 'use'
+      ) {
+        const snapshotTarget = firstRobotInLaserPath(shooter, firingDirection);
+        const target = snapshotTarget
+          ? robots.find(({ uid }) => uid === snapshotTarget.uid)
+          : undefined;
+        if (snapshotTarget && target?.status === 'active') {
+          weaponBeams.push({
+            id: `r${register}-${shooter.uid}-${target.uid}-pressor-beam`,
+            sourceUid: shooter.uid,
+            targetUid: target.uid,
+            fromX: shooter.x,
+            fromY: shooter.y,
+            toX: snapshotTarget.x,
+            toY: snapshotTarget.y,
+            beamCount: 1
+          });
+          addTrace(
+            trace,
+            register,
+            shooter.uid,
+            null,
+            'option-effect',
+            `${shooter.name}'s pressor beam pushed ${target.name} one space ${firingDirection}.`
+          );
+          translateOneCell(
+            robots,
+            target,
+            firingDirection,
+            1,
+            register,
+            null,
+            trace,
+            'weapon',
+            course
+          );
+        }
+        continue;
+      }
       let cursorX = shooter.x;
       let cursorY = shooter.y;
       const [dx, dy] = steps[firingDirection];
@@ -1470,7 +1609,10 @@ export function resolveLaserSnapshot(
         });
         return {
           laserTrace,
-          laserBeams: orderedHits.flatMap(({ beam }) => (beam ? [beam] : [])),
+          laserBeams: [
+            ...weaponBeams,
+            ...orderedHits.flatMap(({ beam }) => (beam ? [beam] : []))
+          ],
           damageSteps,
           pendingOptionDecision
         };
@@ -1483,7 +1625,10 @@ export function resolveLaserSnapshot(
   }
   return {
     laserTrace,
-    laserBeams: orderedHits.flatMap(({ beam }) => (beam ? [beam] : [])),
+    laserBeams: [
+      ...weaponBeams,
+      ...orderedHits.flatMap(({ beam }) => (beam ? [beam] : []))
+    ],
     damageSteps,
     pendingOptionDecision: null
   };
