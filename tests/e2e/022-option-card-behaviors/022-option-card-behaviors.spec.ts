@@ -1138,3 +1138,45 @@ test("Fire Control locks a named register instead of dealing damage", async ({
     await guestContext.close();
   }
 });
+
+test("Radio Control replaces every remaining target register", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "radio-control",
+    "rotate-right",
+    undefined,
+    true,
+    undefined,
+    "ram",
+  );
+  try {
+    await chooseProgram(host, "rotate-right");
+    await chooseStationaryProgram(guest);
+
+    const decision = host.getByLabel("Option decision");
+    await expect(decision).toContainText("Use Radio Control?");
+    await decision
+      .getByRole("button", { name: "Transmit remaining Program" })
+      .click();
+
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada's radio control copied registers 2-5 to Grace.",
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      "Ada's radio control copied registers 2-5 to Grace.",
+    );
+    await expect(
+      host
+        .getByRole("list", { name: "Robot Life and damage state" })
+        .getByRole("listitem")
+        .filter({ hasText: "Grace" }),
+    ).toContainText("0 Damage");
+  } finally {
+    await guestContext.close();
+  }
+});

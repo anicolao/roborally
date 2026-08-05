@@ -964,6 +964,55 @@ describe('priority Program movement', () => {
     expect(optionDeck.discardPile).toContain('rear-laser');
   });
 
+  it('uses Radio Control to replace every remaining target register', () => {
+    const config = riskyExchangeConfig('RADIO-CONTROL');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'shooter', name: 'Shooter', robotId: 'axle' },
+        { uid: 'target', name: 'Target', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const shooterProgram = programming.players.find(({ uid }) => uid === 'shooter')!;
+    const copiedCards = PROGRAM_CARDS.filter(({ action }) => action === 'rotate-right').slice(
+      0,
+      5
+    );
+    shooterProgram.registers.forEach((candidate, index) => {
+      candidate.cardId = copiedCards[index].id;
+    });
+    const robots = [
+      raceRobot({
+        uid: 'shooter',
+        name: 'Shooter',
+        x: 1,
+        y: 6,
+        facing: 'east',
+        options: [{ cardId: 'radio-control', spent: 0, storedProgramCardId: null }]
+      }),
+      raceRobot({ uid: 'target', name: 'Target', x: 3, y: 6 })
+    ];
+    const decisionId = 'r1-laser-shooter-radio-control';
+
+    const resolved = resolveLaserSnapshot(robots, 1, [], programming, [], undefined, {
+      [decisionId]: {
+        decisionId,
+        uid: 'shooter',
+        choiceId: 'use'
+      }
+    });
+    expect(resolved.pendingOptionDecision).toBeNull();
+    expect(resolved.programOverrides).toEqual(
+      ([2, 3, 4, 5] as const).map((register) => ({
+        targetUid: 'target',
+        register,
+        cardId: copiedCards[register - 1].id
+      }))
+    );
+    expect(robots[1].damage).toBe(0);
+  });
+
   it('uses Ramming Gear damage before a blocked push and the shared damage choice', () => {
     const config = riskyExchangeConfig('RAMMING-GEAR');
     const setup = deriveRaceSetup(
