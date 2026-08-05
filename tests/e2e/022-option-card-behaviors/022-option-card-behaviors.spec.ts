@@ -509,3 +509,33 @@ test("Double-Barrel Laser deals two damage with the main laser", async ({
     await guestContext.close();
   }
 });
+
+test("Rear Laser fires behind the robot as an additional weapon", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "rear-laser",
+    ["move-1", "rotate-left"],
+    ["move-1", "rotate-right"],
+    true,
+  );
+  try {
+    await chooseProgram(host, ["move-1", "rotate-left"]);
+    await chooseProgram(guest, ["move-1", "rotate-right"]);
+
+    await expect(host.getByLabel("Damage prevention choice")).toBeVisible();
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada fired through clear line of sight and hit Grace.",
+    );
+    await takeDamageUntilTurnCompletes(host, guest);
+    await expect(guest.locator(".full-resolution")).toContainText(
+      "Ada fired through clear line of sight and hit Grace.",
+    );
+  } finally {
+    await guestContext.close();
+  }
+});
