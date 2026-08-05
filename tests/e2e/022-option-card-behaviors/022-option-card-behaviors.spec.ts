@@ -42,9 +42,10 @@ function optionSeed(
   guestRequiredAction?: ProgramAction | readonly ProgramAction[],
   hostMustBeDockOne = false,
   guestOptionId?: OptionCardId,
+  layout: "dock" | "flag" = "dock",
 ) {
   for (let index = 0; index < 50_000; index += 1) {
-    const seed = `OPTION-${cardId}-${index}`;
+    const seed = `OPTION-${layout === "flag" ? "FLAG-" : ""}${cardId}-${index}`;
     const config = raceConfig("option-lab", seed);
     const setup = deriveRaceSetup(players, config);
     if (hostMustBeDockOne && setup.players[0]?.uid !== "host") continue;
@@ -133,6 +134,7 @@ async function createOptionRace(
   guestRequiredAction?: ProgramAction | readonly ProgramAction[],
   hostMustBeDockOne = false,
   guestOptionId?: OptionCardId,
+  layout: "dock" | "flag" = "dock",
 ) {
   const cardOrdinal = [...OPTION_CARDS_BY_ID.keys()].indexOf(cardId) + 1;
   const roomCode = `O${testInfo.project.name === "phone" ? "P" : "D"}${String(cardOrdinal).padStart(2, "0")}22`;
@@ -165,6 +167,7 @@ async function createOptionRace(
         guestRequiredAction,
         hostMustBeDockOne,
         guestOptionId,
+        layout,
       ),
     );
   await host.getByRole("button", { name: "Configure Risky Exchange" }).click();
@@ -535,6 +538,42 @@ test("Rear Laser fires behind the robot as an additional weapon", async ({
     await expect(guest.locator(".full-resolution")).toContainText(
       "Ada fired through clear line of sight and hit Grace.",
     );
+  } finally {
+    await guestContext.close();
+  }
+});
+
+test("Mechanical Arm touches an adjacent flag through an open edge", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "mechanical-arm",
+    "rotate-right",
+    undefined,
+    true,
+    undefined,
+    "flag",
+  );
+  try {
+    await chooseProgram(host, "rotate-right");
+    await chooseProgram(guest);
+
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada touched Flag 1 in order",
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      "Ada touched Flag 1 in order",
+    );
+    await expect(
+      host
+        .getByRole("list", { name: "Robot Life and damage state" })
+        .getByRole("listitem")
+        .filter({ hasText: "Ada" }),
+    ).toContainText("Flags 1");
   } finally {
     await guestContext.close();
   }
