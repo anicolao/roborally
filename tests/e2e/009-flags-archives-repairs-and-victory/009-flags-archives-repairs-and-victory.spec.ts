@@ -268,11 +268,7 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
     await finishDialog.getByRole('button', { name: 'REMATCH · CHOOSE COURSE' }).click();
     await expect(table.locator('[data-e2e-tabletop]')).toHaveAttribute(
       'data-room-code',
-      /^[A-Z0-9]{6}$/
-    );
-    await expect(table.locator('[data-e2e-tabletop]')).not.toHaveAttribute(
-      'data-room-code',
-      roomCode
+      rematchCode
     );
     const rematchRoomCode = await table.locator('[data-e2e-tabletop]').getAttribute('data-room-code');
     expect(rematchRoomCode).toBe(rematchCode);
