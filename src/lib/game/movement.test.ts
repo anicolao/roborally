@@ -1013,6 +1013,45 @@ describe('priority Program movement', () => {
     expect(robots[1].damage).toBe(0);
   });
 
+  it('uses Scrambler to replace the target next register from the Program deck', () => {
+    const config = riskyExchangeConfig('SCRAMBLER');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'shooter', name: 'Shooter', robotId: 'axle' },
+        { uid: 'target', name: 'Target', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const replacementCardId = programming.drawPile[0];
+    const robots = [
+      raceRobot({
+        uid: 'shooter',
+        name: 'Shooter',
+        x: 1,
+        y: 6,
+        facing: 'east',
+        options: [{ cardId: 'scrambler', spent: 0, storedProgramCardId: null }]
+      }),
+      raceRobot({ uid: 'target', name: 'Target', x: 3, y: 6 })
+    ];
+    const decisionId = 'r1-laser-shooter-scrambler';
+
+    const resolved = resolveLaserSnapshot(robots, 1, [], programming, [], undefined, {
+      [decisionId]: {
+        decisionId,
+        uid: 'shooter',
+        choiceId: 'use'
+      }
+    });
+    expect(resolved.pendingOptionDecision).toBeNull();
+    expect(resolved.programOverrides).toEqual([
+      { targetUid: 'target', register: 2, cardId: replacementCardId }
+    ]);
+    expect(resolved.programCardsConsumed).toBe(1);
+    expect(robots[1].damage).toBe(0);
+  });
+
   it('uses Ramming Gear damage before a blocked push and the shared damage choice', () => {
     const config = riskyExchangeConfig('RAMMING-GEAR');
     const setup = deriveRaceSetup(
