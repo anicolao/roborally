@@ -124,7 +124,7 @@ export interface PendingOptionDecision {
   decisionId: string;
   uid: string;
   cardId: OptionCardId | null;
-  timing: 'before-register' | 'damage' | 'program-movement';
+  timing: 'before-register' | 'damage' | 'program-movement' | 'robot-lasers';
   register: RegisterNumber;
   heading: string;
   prompt: string;
@@ -1210,6 +1210,84 @@ export function resolveLaserSnapshot(
   const hits: LaserHit[] = [];
   const traceStart = trace.length;
 
+  for (const shooter of activeSnapshot.filter(
+    ({ poweredDown, options }) =>
+      !poweredDown && options.some(({ cardId }) => cardId === 'high-power-laser')
+  )) {
+    const [dx, dy] = steps[shooter.facing];
+    let cursorX = shooter.x;
+    let cursorY = shooter.y;
+    let obstruction = false;
+    while (courseContains(cursorX, cursorY, course)) {
+      if (movementBlockedByWall(cursorX, cursorY, shooter.facing, course)) {
+        obstruction = true;
+        break;
+      }
+      cursorX += dx;
+      cursorY += dy;
+      if (!courseContains(cursorX, cursorY, course)) break;
+      if (activeRobotAt(activeSnapshot, cursorX, cursorY, shooter.uid)) {
+        obstruction = true;
+        break;
+      }
+    }
+    if (!obstruction) continue;
+    const decisionId = `r${register}-laser-${shooter.uid}-high-power-laser`;
+    const decision = optionDecisions[decisionId];
+    if (
+      !decision ||
+      decision.uid !== shooter.uid ||
+      !['use', 'decline'].includes(decision.choiceId)
+    ) {
+      addTrace(
+        trace,
+        register,
+        shooter.uid,
+        null,
+        'option-decision-required',
+        `${shooter.name} must decide whether its main laser passes one obstruction.`
+      );
+      return {
+        laserTrace: trace.slice(traceStart),
+        laserBeams: [],
+        damageSteps: [],
+        pendingOptionDecision: {
+          decisionId,
+          uid: shooter.uid,
+          cardId: 'high-power-laser',
+          timing: 'robot-lasers',
+          register: register as RegisterNumber,
+          heading: 'Use High-Power Laser?',
+          prompt: 'Let the main laser pass through the first wall or robot in its path?',
+          tabletopPrompt: 'Use High-Power Laser for this register',
+          choices: [
+            {
+              id: 'use',
+              label: 'Pass the obstruction',
+              description: 'The main laser passes one wall or robot; a passed robot is hit.',
+              cardId: 'high-power-laser'
+            },
+            {
+              id: 'decline',
+              label: 'Fire normally',
+              description: 'The main laser stops at the first wall or robot.'
+            }
+          ]
+        }
+      };
+    }
+    addTrace(
+      trace,
+      register,
+      shooter.uid,
+      null,
+      'option-decision-resolved',
+      decision.choiceId === 'use'
+        ? `${shooter.name} used high-power laser to pass one obstruction.`
+        : `${shooter.name} fired its main laser normally.`
+    );
+  }
+
   const laserSegments = cells.flatMap((cell) =>
     cell.elements
       .filter(
@@ -1270,10 +1348,8 @@ export function resolveLaserSnapshot(
       const [dx, dy] = steps[firingDirection];
       let passBudget =
         shooter.options.some(({ cardId }) => cardId === 'high-power-laser') &&
-        optionPlanFor(optionPlans, shooter.uid).activations.some(
-          ({ cardId, register: activeRegister }) =>
-            cardId === 'high-power-laser' && activeRegister === register
-        )
+        optionDecisions[`r${register}-laser-${shooter.uid}-high-power-laser`]
+          ?.choiceId === 'use'
           ? 1
           : 0;
       const beamDamage = shooter.options.some(
