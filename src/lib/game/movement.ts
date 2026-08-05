@@ -13,7 +13,7 @@ import {
   type OptionTurnPlan,
   type OwnedOption
 } from './options';
-import type { ProgrammingState } from './programming';
+import { recompileDecisionId, type ProgrammingState } from './programming';
 import type { PlayableCourseId, RaceSetup } from './setup';
 import { applyOptionEffect } from './option-effects';
 import { scenarioResolutionRules, type ScenarioResolutionRules } from './course-rules';
@@ -2924,6 +2924,45 @@ export function resolveProgrammedTurn(
   const cards = new Map(PROGRAM_CARDS.map((card) => [card.id, card]));
   const programOverrides = new Map<string, ProgramCard['id']>();
   const resolutionProgramDrawPile = [...programming.drawPile];
+
+  for (const setupPlayer of setup.players) {
+    const decisionId = recompileDecisionId(programming.turnNumber, setupPlayer.uid);
+    if (!optionDecisions[decisionId]) continue;
+    const robot = robots.find(({ uid }) => uid === setupPlayer.uid);
+    if (!robot || robot.status !== 'active') continue;
+    const pendingOptionDecision = resolveOptionDamage(
+      robots,
+      robot,
+      1,
+      trace,
+      programming,
+      optionDeck,
+      optionDecisions,
+      decisionId,
+      'Recompile damage'
+    );
+    if (pendingOptionDecision) {
+      return {
+        courseId: setup.courseId,
+        turnNumber: programming.turnNumber,
+        phase: 'awaiting-option-decision',
+        robots,
+        trace,
+        optionDeck,
+        nextOptionChoiceUid: null,
+        pendingOptionDecision,
+        nextReentryUid: null,
+        winnerUids: [],
+        runnersUpUids: [],
+        summary: null,
+        playback,
+        initialOptionDeck: cloneOptionDeck(
+          initialOptionDeck ?? createOptionDeck(`standalone-turn-${programming.turnNumber}`)
+        )
+      };
+    }
+  }
+  playback.initialRobots = cloneRaceRobots(robots);
   const effectiveOptionPlans: Record<string, OptionTurnPlan> = Object.fromEntries(
     robots.map(({ uid }) => [
       uid,

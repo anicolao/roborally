@@ -13,7 +13,8 @@
   import {
     REGISTER_COUNT,
     draftCardIdsInRegisterOrder,
-    draftSlotsForPlayer
+    draftSlotsForPlayer,
+    recompileDecisionId
   } from '$lib/game/programming';
   import { OPTION_CARDS_BY_ID, type OptionCardId } from '$lib/game/option-manifest';
   import { legalReentryChoices } from '$lib/game/movement';
@@ -23,6 +24,7 @@
     emptyRoomState,
     normalizeRoomCode,
     normalizePlayerName,
+    programmingOptionCardIds,
     type RobotId,
     type RoomState
   } from '$lib/room-model';
@@ -63,6 +65,14 @@
   $: openSlots = programming?.registers.filter((register) => !register.locked).length ?? 5;
   $: selected = programming ? draftCardIdsInRegisterOrder(programming, draftSlots) : [];
   $: turnId = activeProgramming?.turnId ?? 'turn-001';
+  $: recompileOptionCardIds = activeProgramming
+    ? programmingOptionCardIds(state, activeProgramming, uid)
+    : [];
+  $: recompileUsed = !!activeProgramming && state.optionDecisions.some(
+    ({ turnId: decisionTurnId, decisionId }) =>
+      decisionTurnId === activeProgramming.turnId &&
+      decisionId === recompileDecisionId(activeProgramming.turnNumber, uid)
+  );
   $: currentPlayerReady = !!player && state.readyPlayerUids.includes(player.uid);
   $: canRespondPowerDown = !!player && state.pendingPowerDownUid === player.uid;
   $: reentryChoices = player && state.resolution
@@ -346,6 +356,35 @@
     await RoomService.submitProgram(services.db, services.user, roomCode, cardIds, turnId);
     draftDirty = false;
   }
+
+  async function recompile(choiceId: string) {
+    if (!services || !activeProgramming || !programming || pending) return;
+    pending = true;
+    error = '';
+    try {
+      await draftWriteQueue;
+      await RoomService.chooseEffect(
+        services.db,
+        services.user,
+        roomCode,
+        {
+          kind: 'option-decision',
+          decisionId: recompileDecisionId(activeProgramming.turnNumber, uid),
+          uid,
+          choiceId
+        },
+        activeProgramming.turnId
+      );
+      draftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
+      draftDirty = false;
+      draftWriteQueue = Promise.resolve();
+    } catch (nextError) {
+      console.error(nextError);
+      error = 'Your Recompile choice could not be written.';
+    } finally {
+      pending = false;
+    }
+  }
 </script>
 
 <svelte:head><title>Robo Rally · Private controller</title></svelte:head>
@@ -518,8 +557,11 @@
             instructionsVisible={false}
             submitLabel="Lock program"
             submittedMessage="Program locked. Watch the tabletop for execution."
+            {recompileOptionCardIds}
+            {recompileUsed}
             ondraftchange={persistDraft}
             onprogramsubmit={submit}
+            onrecompile={recompile}
           />
         {/key}
       </section>

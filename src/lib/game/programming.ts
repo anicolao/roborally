@@ -6,6 +6,10 @@ export const PROGRAMMING_DURATION_MS = 30_000;
 export const REGISTER_COUNT = 5;
 export type TurnId = `turn-${string}`;
 
+export function recompileDecisionId(turnNumber: number, uid: string) {
+  return `turn-${turnNumber}-recompile-${uid}`;
+}
+
 export interface ProgramRegister {
   cardId: ProgramCard['id'] | null;
   locked: boolean;
@@ -242,6 +246,32 @@ export function updateProgramDraft(
   }
   player.draftCardIds = positionalCardIds;
   player.draftSlots = nextSlots;
+  return state;
+}
+
+export function recompileProgramHand(
+  current: ProgrammingState,
+  actorUid: string,
+  seed: string
+): ProgrammingState {
+  const state = cloneState(current);
+  const player = state.players.find(({ uid }) => uid === actorUid);
+  if (state.phase !== 'programming' || !player || player.submitted) {
+    state.diagnostics.push(`invalid-recompile:${actorUid}`);
+    return state;
+  }
+
+  const pool = [...state.drawPile, ...player.hand];
+  const random = createPrng(`${seed}:${state.turnId}:recompile:${actorUid}`);
+  for (let index = pool.length - 1; index > 0; index -= 1) {
+    const selected = Math.floor(random() * (index + 1));
+    [pool[index], pool[selected]] = [pool[selected], pool[index]];
+  }
+  const handSize = player.hand.length;
+  player.hand = pool.splice(0, handSize);
+  player.draftCardIds = [];
+  player.draftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
+  state.drawPile = pool;
   return state;
 }
 

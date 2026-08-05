@@ -1434,3 +1434,48 @@ test("Abort Switch replaces the current and all later registers", async ({
     await guestContext.close();
   }
 });
+
+test("Recompile redeals the private hand and resolves its damage choice", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "recompile",
+  );
+  try {
+    const hand = host.getByLabel("Your Program hand").getByRole("button");
+    const labels = async () =>
+      Promise.all(
+        Array.from({ length: await hand.count() }, (_, index) =>
+          hand.nth(index).getAttribute("aria-label"),
+        ),
+      );
+    const originalHand = await labels();
+    await hand.first().click();
+    await host.getByRole("button", { name: "Recompile hand" }).click();
+    const choice = host.getByLabel("Recompile damage choice");
+    await expect(choice).toContainText("Resolve Recompile damage");
+    await choice.getByRole("button", { name: "Take this damage" }).click();
+
+    await expect(host.getByRole("button", { name: "Recompile hand" })).toHaveCount(0);
+    await expect(host.getByRole("button", { name: /^Register 1, empty/ })).toBeVisible();
+    await expect.poll(labels).not.toEqual(originalHand);
+
+    await chooseProgram(host);
+    await chooseProgram(guest);
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada chose not to discard an Option from Recompile damage.",
+    );
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada took one damage and now has 1.",
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      "Ada took one damage and now has 1.",
+    );
+  } finally {
+    await guestContext.close();
+  }
+});
