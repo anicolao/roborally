@@ -74,9 +74,9 @@
   $: optionLossRobot = state.resolution?.robots.find(
     (candidate) => candidate.uid === state.resolution?.nextOptionChoiceUid
   );
-  $: pendingDamageChoice = state.resolution?.pendingDamageChoice ?? null;
-  $: pendingDamageRobot = state.resolution?.robots.find(
-    (candidate) => candidate.uid === pendingDamageChoice?.uid
+  $: pendingOptionDecision = state.resolution?.pendingOptionDecision ?? null;
+  $: pendingOptionRobot = state.resolution?.robots.find(
+    (candidate) => candidate.uid === pendingOptionDecision?.uid
   );
 
   onMount(async () => {
@@ -133,10 +133,10 @@
         const programmingIsAhead =
           !!nextActiveProgramming &&
           (!next.resolution || nextActiveProgramming.turnNumber > next.resolution.turnNumber);
-        status = pendingDamageChoice?.uid === uid
-          ? 'Choose whether to prevent the incoming damage.'
-          : pendingDamageChoice
-            ? `Waiting for ${pendingDamageRobot?.name ?? 'the next robot'} to resolve damage.`
+        status = pendingOptionDecision?.uid === uid
+          ? `Choose: ${pendingOptionDecision.heading}.`
+          : pendingOptionDecision
+            ? `Waiting for ${pendingOptionRobot?.name ?? 'the next robot'} to resolve an Option.`
           : programmingIsAhead
           ? `Choose five registers privately for turn ${nextActiveProgramming.turnNumber}.`
           : next.resolution
@@ -241,8 +241,8 @@
     }
   }
 
-  async function answerDamagePrevention(cardId: OptionCardId | null) {
-    if (!services || !activeProgramming || !pendingDamageChoice || pending) return;
+  async function answerOptionDecision(choiceId: string) {
+    if (!services || !activeProgramming || !pendingOptionDecision || pending) return;
     pending = true;
     error = '';
     try {
@@ -251,16 +251,16 @@
         services.user,
         roomCode,
         {
-          kind: 'damage-prevention',
-          decisionId: pendingDamageChoice.decisionId,
+          kind: 'option-decision',
+          decisionId: pendingOptionDecision.decisionId,
           uid: services.user.uid,
-          cardId
+          choiceId
         },
         activeProgramming.turnId
       );
     } catch (nextError) {
       console.error(nextError);
-      error = 'Your damage prevention choice could not be written.';
+      error = 'Your Option decision could not be written.';
     } finally {
       pending = false;
     }
@@ -407,40 +407,61 @@
         <button onclick={beginNextTurn}>BEGIN TURN {state.nextProgramming.turnNumber}</button>
       </section>
     {:else if programming}
-      {#if pendingDamageChoice?.uid === player.uid && pendingDamageRobot}
+      {#if pendingOptionDecision?.uid === player.uid && pendingOptionRobot}
         <section
           class="effect-control damage-choice"
-          aria-label="Damage prevention choice"
-          data-decision-id={pendingDamageChoice.decisionId}
+          aria-label={pendingOptionDecision.timing === 'damage'
+            ? 'Damage prevention choice'
+            : 'Option decision'}
+          data-decision-id={pendingOptionDecision.decisionId}
         >
-          <h2>Laser damage incoming</h2>
-          <p>
-            Damage {pendingDamageChoice.damagePoint} of {pendingDamageChoice.damageTotal} is about
-            to hit {pendingDamageRobot.name}. Choose now: discard one Option or take the damage.
-          </p>
+          <h2>{pendingOptionDecision.heading}</h2>
+          <p>{pendingOptionDecision.prompt}</p>
           <div class="option-card-grid">
-            {#each pendingDamageRobot.options.filter(({ cardId }) => pendingDamageChoice?.eligibleCardIds.includes(cardId)) as option}
-              {@const card = OPTION_CARDS_BY_ID.get(option.cardId)}
+            {#each pendingOptionDecision.choices.filter((choice) => choice.cardId) as choice}
+              {@const card = choice.cardId ? OPTION_CARDS_BY_ID.get(choice.cardId) : null}
               {#if card}
                 <button
                   class="option-card-choice"
-                  aria-label={`Discard ${card.name} to prevent this damage`}
-                  onclick={() => answerDamagePrevention(option.cardId)}
+                  aria-label={choice.label}
+                  title={choice.description}
+                  onclick={() => answerOptionDecision(choice.id)}
                   disabled={pending}
                 >
                   <OptionCardFace {card} variant="thumbnail" />
+                  {#if pendingOptionDecision.timing !== 'damage'}
+                    <span>{choice.label}</span>
+                  {/if}
                 </button>
               {/if}
             {/each}
+            {#if pendingOptionDecision.timing !== 'damage'}
+              {#each pendingOptionDecision.choices.filter((choice) => !choice.cardId) as choice}
+                <button
+                  class="take-damage"
+                  title={choice.description}
+                  onclick={() => answerOptionDecision(choice.id)}
+                  disabled={pending}
+                >{choice.label}</button>
+              {/each}
+            {/if}
           </div>
-          <button class="take-damage" onclick={() => answerDamagePrevention(null)} disabled={pending}>
-            TAKE THIS DAMAGE
-          </button>
+          {#if pendingOptionDecision.timing === 'damage'}
+            {@const takeDamage = pendingOptionDecision.choices.find(({ id }) => id === 'take-damage')}
+            {#if takeDamage}
+              <button
+                class="take-damage"
+                title={takeDamage.description}
+                onclick={() => answerOptionDecision(takeDamage.id)}
+                disabled={pending}
+              >{takeDamage.label}</button>
+            {/if}
+          {/if}
         </section>
-      {:else if pendingDamageChoice}
+      {:else if pendingOptionDecision}
         <section class="effect-control damage-wait" aria-label="Damage decision status">
-          <h2>Damage decision</h2>
-          <p>Waiting for {pendingDamageRobot?.name ?? 'the next player'} in original Dock order.</p>
+          <h2>Option decision</h2>
+          <p>Waiting for {pendingOptionRobot?.name ?? 'the next player'} in original Dock order.</p>
         </section>
       {:else if optionLossRobot?.uid === player.uid}
         <section class="effect-control" aria-label="Destroyed robot Option loss">
@@ -676,6 +697,15 @@
   button.option-card-choice:hover,
   button.option-card-choice:focus-visible { border-color: #ffcf4b; }
   button.option-card-choice :global(.option-card) { filter: none; }
+  button.option-card-choice > span {
+    display: block;
+    padding: 8px 5px;
+    color: #101718;
+    background: #d2ff37;
+    font: 700 15px 'Space Mono', monospace;
+    text-align: center;
+    text-transform: uppercase;
+  }
   .effect-control .check-control { display: flex; align-items: center; text-transform: none; }
   .effect-control .check-control input { width: 24px; height: 24px; }
 

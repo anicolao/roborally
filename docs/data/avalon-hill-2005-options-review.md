@@ -74,6 +74,10 @@ window:
 5. destruction loss names one owned Option before re-entry;
 6. simultaneous choices are requested and applied in original Dock order.
 
-An omitted or timed-out choice means “do not use” for optional effects. Mandatory
-effects require no interruption and are applied by the reducer. Every payload,
-stored card, and once-per-turn use is immutable reducer state.
+Every run-time choice is an `option-decision` event naming the reducer-generated
+decision and one of its finite legal choice IDs. The reducer pauses at that
+exact timing window and replays from immutable turn-start state after the
+prompted owner responds. An omitted choice leaves resolution paused; explicit
+“do not use” choices continue optional effects. Mandatory effects require no
+interruption and are applied by the reducer. Every payload, stored card, and
+once-per-turn use is immutable reducer state.
