@@ -1185,6 +1185,76 @@ describe('priority Program movement', () => {
     expect(stable.facing).toBe('north');
   });
 
+  it('asks for Gyroscopic Stabilizer at execution and persists it for the turn', () => {
+    const config = riskyExchangeConfig('GYROSCOPE-RUNTIME');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'stable', name: 'Stable', robotId: 'axle' },
+        { uid: 'other', name: 'Other', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const rotations = PROGRAM_CARDS.filter(({ action }) => action === 'rotate-right').slice(
+      0,
+      10
+    );
+    for (const [playerIndex, player] of programming.players.entries()) {
+      player.registers.forEach((register, registerIndex) => {
+        register.cardId = rotations[playerIndex * 5 + registerIndex].id;
+      });
+      player.submitted = true;
+    }
+    programming.phase = 'programmed';
+    const initial = [
+      raceRobot({
+        uid: 'stable',
+        name: 'Stable',
+        x: 4,
+        y: 4,
+        options: [
+          { cardId: 'gyroscopic-stabilizer', spent: 0, storedProgramCardId: null }
+        ]
+      }),
+      raceRobot({ uid: 'other', name: 'Other', x: 1, y: 3 })
+    ];
+
+    const pending = resolveProgrammedTurn(programming, setup, initial)!;
+    expect(pending.pendingOptionDecision).toMatchObject({
+      decisionId: 'turn-1-gyroscopic-stabilizer-stable',
+      uid: 'stable',
+      timing: 'before-register'
+    });
+
+    const decisionId = pending.pendingOptionDecision!.decisionId;
+    const resolved = resolveProgrammedTurn(
+      programming,
+      setup,
+      initial,
+      undefined,
+      {},
+      {
+        [decisionId]: {
+          decisionId,
+          uid: 'stable',
+          choiceId: 'use'
+        }
+      }
+    )!;
+    expect(resolved.pendingOptionDecision).toBeNull();
+    expect(resolved.trace).toContainEqual(
+      expect.objectContaining({
+        kind: 'option-decision-resolved',
+        text: 'Stable activated gyroscopic stabilizer for this turn.'
+      })
+    );
+    expect(
+      resolved.trace.filter(({ text }) =>
+        text.includes('gyroscopic stabilizer ignored the gear rotation')
+      )
+    ).toHaveLength(5);
+  });
+
   it('pauses Brakes at Move 1 execution and replays the persisted choice', () => {
     const createMover = () =>
       raceRobot({

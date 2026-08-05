@@ -124,7 +124,7 @@ export interface PendingOptionDecision {
   decisionId: string;
   uid: string;
   cardId: OptionCardId | null;
-  timing: 'damage' | 'program-movement';
+  timing: 'before-register' | 'damage' | 'program-movement';
   register: RegisterNumber;
   heading: string;
   prompt: string;
@@ -1880,6 +1880,99 @@ export function resolveProgrammedTurn(
     frames: []
   };
   const cards = new Map(PROGRAM_CARDS.map((card) => [card.id, card]));
+  const effectiveOptionPlans: Record<string, OptionTurnPlan> = Object.fromEntries(
+    robots.map(({ uid }) => [
+      uid,
+      {
+        kind: 'option-plan' as const,
+        activations: optionPlanFor(optionPlans, uid).activations.filter(
+          ({ cardId }) => cardId !== 'gyroscopic-stabilizer'
+        )
+      }
+    ])
+  );
+
+  for (const robot of robots.filter(
+    ({ status, options }) =>
+      status === 'active' &&
+      options.some(({ cardId }) => cardId === 'gyroscopic-stabilizer')
+  )) {
+    const decisionId = `turn-${programming.turnNumber}-gyroscopic-stabilizer-${robot.uid}`;
+    const decision = optionDecisions[decisionId];
+    if (
+      !decision ||
+      decision.uid !== robot.uid ||
+      !['use', 'decline'].includes(decision.choiceId)
+    ) {
+      addTrace(
+        trace,
+        1,
+        robot.uid,
+        null,
+        'option-decision-required',
+        `${robot.name} must decide whether to stabilize against factory rotations this turn.`
+      );
+      return {
+        courseId: setup.courseId,
+        turnNumber: programming.turnNumber,
+        phase: 'awaiting-option-decision',
+        robots,
+        trace,
+        optionDeck,
+        nextOptionChoiceUid: null,
+        pendingOptionDecision: {
+          decisionId,
+          uid: robot.uid,
+          cardId: 'gyroscopic-stabilizer',
+          timing: 'before-register',
+          register: 1,
+          heading: 'Use Gyroscopic Stabilizer?',
+          prompt: 'Ignore gear and curving-conveyor rotations throughout this turn?',
+          tabletopPrompt: 'Use Gyroscopic Stabilizer for this turn',
+          choices: [
+            {
+              id: 'use',
+              label: 'Stabilize this turn',
+              description: 'Ignore every gear and curving-conveyor rotation this turn.',
+              cardId: 'gyroscopic-stabilizer'
+            },
+            {
+              id: 'decline',
+              label: 'Allow factory rotation',
+              description: 'Gears and curving conveyors rotate normally.'
+            }
+          ]
+        },
+        nextReentryUid: null,
+        winnerUids: [],
+        runnersUpUids: [],
+        summary: null,
+        playback,
+        initialOptionDeck: cloneOptionDeck(
+          initialOptionDeck ?? createOptionDeck(`standalone-turn-${programming.turnNumber}`)
+        )
+      };
+    }
+    addTrace(
+      trace,
+      1,
+      robot.uid,
+      null,
+      'option-decision-resolved',
+      decision.choiceId === 'use'
+        ? `${robot.name} activated gyroscopic stabilizer for this turn.`
+        : `${robot.name} left gyroscopic stabilizer inactive this turn.`
+    );
+    if (decision.choiceId === 'use') {
+      effectiveOptionPlans[robot.uid].activations.push({
+        cardId: 'gyroscopic-stabilizer',
+        register: null,
+        mode: 'activate',
+        targetUid: null,
+        targetOptionId: null
+      });
+    }
+  }
 
   for (let register = 1; register <= 5; register += 1) {
     const queue = programming.players
@@ -1898,7 +1991,7 @@ export function resolveProgrammedTurn(
         entry.card,
         register,
         trace,
-        optionPlanFor(optionPlans, entry.uid),
+        optionPlanFor(effectiveOptionPlans, entry.uid),
         course,
         optionDecisions,
         programming,
@@ -1936,7 +2029,7 @@ export function resolveProgrammedTurn(
     }
 
     const expressTraceStart = trace.length;
-    resolveExpressConveyors(robots, register, trace, courseCells, optionPlans, course);
+    resolveExpressConveyors(robots, register, trace, courseCells, effectiveOptionPlans, course);
     playback.frames.push({
       register: register as RegisterNumber,
       stage: 'express-conveyors',
@@ -1947,7 +2040,7 @@ export function resolveProgrammedTurn(
     });
 
     const conveyorTraceStart = trace.length;
-    resolveNormalConveyors(robots, register, trace, courseCells, optionPlans, course);
+    resolveNormalConveyors(robots, register, trace, courseCells, effectiveOptionPlans, course);
     playback.frames.push({
       register: register as RegisterNumber,
       stage: 'conveyors',
@@ -1958,7 +2051,7 @@ export function resolveProgrammedTurn(
     });
 
     const pusherTraceStart = trace.length;
-    resolvePushers(robots, register, trace, courseCells, optionPlans, course);
+    resolvePushers(robots, register, trace, courseCells, effectiveOptionPlans, course);
     playback.frames.push({
       register: register as RegisterNumber,
       stage: 'pushers',
@@ -1969,7 +2062,7 @@ export function resolveProgrammedTurn(
     });
 
     const gearTraceStart = trace.length;
-    resolveGears(robots, register, trace, courseCells, optionPlans);
+    resolveGears(robots, register, trace, courseCells, effectiveOptionPlans);
     playback.frames.push({
       register: register as RegisterNumber,
       stage: 'gears',
@@ -1988,7 +2081,7 @@ export function resolveProgrammedTurn(
       courseCells,
       optionDeck,
       optionDecisions,
-      optionPlans,
+      effectiveOptionPlans,
       course
     );
     if (laserResult.laserTrace.length > 0) {

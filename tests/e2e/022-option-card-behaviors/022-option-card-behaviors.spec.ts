@@ -109,13 +109,15 @@ function optionSeed(
   guestRequiredAction?: ProgramAction | readonly ProgramAction[],
   hostMustBeDockOne = false,
   guestOptionId?: OptionCardId,
-  layout: "dock" | "flag" | "ram" | "shield" = "dock",
+  layout: "dock" | "flag" | "gyro" | "ram" | "shield" = "dock",
   requireStationaryTurns = false,
 ) {
   for (let index = 0; index < 50_000; index += 1) {
     const fixturePrefix =
       layout === "flag"
         ? "FLAG-"
+        : layout === "gyro"
+          ? "GYRO-"
         : layout === "ram"
           ? "RAM-"
           : layout === "shield"
@@ -279,7 +281,7 @@ async function createOptionRace(
   guestRequiredAction?: ProgramAction | readonly ProgramAction[],
   hostMustBeDockOne = false,
   guestOptionId?: OptionCardId,
-  layout: "dock" | "flag" | "ram" | "shield" = "dock",
+  layout: "dock" | "flag" | "gyro" | "ram" | "shield" = "dock",
   initialHostPowerDown = false,
   requireStationaryTurns = false,
 ) {
@@ -864,6 +866,48 @@ test("Ramming Gear damages the robot it pushes", async ({
         .getByRole("listitem")
         .filter({ hasText: "Grace" }),
     ).toContainText(/(?:2|3|4|5|6|7|8|9) Damage/);
+  } finally {
+    await guestContext.close();
+  }
+});
+
+test("Gyroscopic Stabilizer asks once and ignores factory rotation all turn", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "gyroscopic-stabilizer",
+    "rotate-right",
+    undefined,
+    true,
+    undefined,
+    "gyro",
+  );
+  try {
+    await chooseProgram(host, "rotate-right");
+    await chooseProgram(guest);
+
+    const decision = host.getByLabel("Option decision");
+    await expect(decision).toContainText("Use Gyroscopic Stabilizer?");
+    await expect(guest.getByLabel("Option decision")).toContainText(
+      "Waiting for Ada",
+    );
+    await decision
+      .getByRole("button", { name: "Stabilize this turn" })
+      .click();
+
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada activated gyroscopic stabilizer for this turn.",
+    );
+    await expect(host.locator(".full-resolution")).toContainText(
+      "Ada's gyroscopic stabilizer ignored the gear rotation.",
+    );
+    await expect(guest.locator(".full-resolution")).toContainText(
+      "Ada's gyroscopic stabilizer ignored the gear rotation.",
+    );
   } finally {
     await guestContext.close();
   }
