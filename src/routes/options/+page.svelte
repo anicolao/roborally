@@ -3,17 +3,17 @@
   import '@fontsource/atkinson-hyperlegible/700.css';
   import '@fontsource/space-mono/400.css';
   import OptionCardFace from '$lib/components/OptionCardFace.svelte';
+  import {
+    OPTION_CARD_PRESENTATIONS,
+    type OptionCardSize
+  } from '$lib/components/option-card-presentation';
   import { OPTION_CARDS } from '$lib/game/option-manifest';
 
-  const sizes = [
-    { id: 'large', label: 'Large', width: 720, height: 480, use: 'Focused inspection' },
-    { id: 'medium', label: 'Medium', width: 480, height: 320, use: 'Ordinary game UI' },
-    { id: 'small', label: 'Small', width: 320, height: 213, use: 'Dense tabletop UI' }
-  ] as const;
-
-  let cardSize = $state<(typeof sizes)[number]['id']>('medium');
+  let cardSize = $state<OptionCardSize>('medium');
   let fitByCard = $state<Record<string, boolean | null>>({});
-  const selectedSize = $derived(sizes.find(({ id }) => id === cardSize) ?? sizes[1]);
+  const selectedSize = $derived(
+    OPTION_CARD_PRESENTATIONS.find(({ id }) => id === cardSize) ?? OPTION_CARD_PRESENTATIONS[1]
+  );
   const measuredCount = $derived(
     OPTION_CARDS.filter(({ id }) => typeof fitByCard[id] === 'boolean').length
   );
@@ -46,7 +46,7 @@
 
     <fieldset class="size-selector">
       <legend>Card size</legend>
-      {#each sizes as size}
+      {#each OPTION_CARD_PRESENTATIONS as size}
         <label>
           <input
             type="radio"
@@ -109,7 +109,7 @@
           <div class="card-stage">
             <OptionCardFace
               {card}
-              variant={cardSize === 'small' ? 'compact-copy' : 'standard'}
+              size={cardSize}
               onfitchange={(fits) => (fitByCard[card.id] = fits)}
             />
           </div>
@@ -262,6 +262,7 @@
   }
 
   .inventory {
+    overflow-x: auto;
     padding: clamp(1rem, 4vw, 3rem);
     border: 1px solid #344346;
     border-radius: 1rem;
