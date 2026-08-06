@@ -445,107 +445,106 @@
         <p>Watch the tabletop finish its playback, then open your next private Program hand.</p>
         <button onclick={beginNextTurn}>BEGIN TURN {state.nextProgramming.turnNumber}</button>
       </section>
-    {:else if programming}
-      {#if pendingOptionDecision?.uid === player.uid && pendingOptionRobot}
-        <section
-          class="effect-control damage-choice"
-          aria-label={pendingOptionDecision.timing === 'damage'
-            ? 'Damage prevention choice'
-            : 'Option decision'}
-          data-decision-id={pendingOptionDecision.decisionId}
-        >
-          <h2>{pendingOptionDecision.heading}</h2>
-          <p>{pendingOptionDecision.prompt}</p>
-          <div class="option-card-grid">
-            {#each pendingOptionDecision.choices.filter((choice) => choice.cardId) as choice}
-              {@const card = choice.cardId ? OPTION_CARDS_BY_ID.get(choice.cardId) : null}
-              {#if card}
-                <button
-                  class="option-card-choice"
-                  aria-label={choice.label}
-                  title={choice.description}
-                  onclick={() => answerOptionDecision(choice.id)}
-                  disabled={pending}
-                >
-                  <OptionCardFace {card} variant="thumbnail" />
-                  {#if pendingOptionDecision.timing !== 'damage'}
-                    <span>{choice.label}</span>
-                  {/if}
-                </button>
-              {/if}
-            {/each}
-            {#if pendingOptionDecision.timing !== 'damage'}
-              {#each pendingOptionDecision.choices.filter((choice) => !choice.cardId) as choice}
-                <button
-                  class="take-damage"
-                  title={choice.description}
-                  onclick={() => answerOptionDecision(choice.id)}
-                  disabled={pending}
-                >{choice.label}</button>
-              {/each}
+    {:else if pendingOptionDecision?.uid === player.uid && pendingOptionRobot}
+      <section
+        class="effect-control damage-choice"
+        aria-label={pendingOptionDecision.timing === 'damage'
+          ? 'Damage prevention choice'
+          : 'Option decision'}
+        data-decision-id={pendingOptionDecision.decisionId}
+      >
+        <h2>{pendingOptionDecision.heading}</h2>
+        <p>{pendingOptionDecision.prompt}</p>
+        <div class="option-card-grid">
+          {#each pendingOptionDecision.choices.filter((choice) => choice.cardId) as choice}
+            {@const card = choice.cardId ? OPTION_CARDS_BY_ID.get(choice.cardId) : null}
+            {#if card}
+              <button
+                class="option-card-choice"
+                aria-label={choice.label}
+                title={choice.description}
+                onclick={() => answerOptionDecision(choice.id)}
+                disabled={pending}
+              >
+                <OptionCardFace {card} variant="thumbnail" />
+                {#if pendingOptionDecision.timing !== 'damage'}
+                  <span>{choice.label}</span>
+                {/if}
+              </button>
             {/if}
-          </div>
-          {#if pendingOptionDecision.timing === 'damage'}
-            {@const takeDamage = pendingOptionDecision.choices.find(({ id }) => id === 'take-damage')}
-            {#if takeDamage}
+          {/each}
+          {#if pendingOptionDecision.timing !== 'damage'}
+            {#each pendingOptionDecision.choices.filter((choice) => !choice.cardId) as choice}
               <button
                 class="take-damage"
-                title={takeDamage.description}
-                onclick={() => answerOptionDecision(takeDamage.id)}
+                title={choice.description}
+                onclick={() => answerOptionDecision(choice.id)}
                 disabled={pending}
-              >{takeDamage.label}</button>
-            {/if}
-          {/if}
-        </section>
-      {:else if pendingOptionDecision}
-        <section class="effect-control damage-wait" aria-label="Damage decision status">
-          <h2>Option decision</h2>
-          <p>Waiting for {pendingOptionRobot?.name ?? 'the next player'} in original Dock order.</p>
-        </section>
-      {:else if optionLossRobot?.uid === player.uid}
-        <section class="effect-control" aria-label="Destroyed robot Option loss">
-          <h2>Discard one Option</h2>
-          <p>Your destroyed robot must discard one Option before it can re-enter.</p>
-          <div class="option-card-grid">
-            {#each optionLossRobot.options as option}
-              {@const card = OPTION_CARDS_BY_ID.get(option.cardId)}
-              {#if card}
-                <button
-                  class="option-card-choice"
-                  aria-label={`Discard ${card.name}`}
-                  onclick={() => discardDestroyedOption(option.cardId)}
-                  disabled={pending}
-                >
-                  <OptionCardFace {card} variant="compact-copy" />
-                </button>
-              {/if}
+              >{choice.label}</button>
             {/each}
-          </div>
-        </section>
-      {:else if reentryChoices.length > 0}
-        <section class="effect-control" aria-label="Robot re-entry choice">
-          <h2>Re-enter your robot</h2>
-          <p>Choose a legal cell and facing. The race continues after every destroyed robot returns.</p>
-          <label>
-            Re-entry cell and facing
-            <select bind:value={selectedReentryChoice} onchange={persistReentryDraft}>
-              <option value="">Choose a legal placement</option>
-              {#each reentryChoices as choice}
-                <option value={`${choice.x},${choice.y},${choice.facing}`}>
-                  ({choice.x},{choice.y}) facing {choice.facing}
-                </option>
-              {/each}
-            </select>
-          </label>
-          {#if reentryRobot?.powerDownNextTurn}
-            <label class="check-control">
-              <input type="checkbox" bind:checked={reentryPoweredDown} onchange={persistReentryDraft} />
-              Re-enter powered down
-            </label>
           {/if}
-          <button onclick={submitReentryChoice} disabled={pending || !selectedReentryChoice}>CONFIRM RE-ENTRY</button>
-        </section>
-      {/if}
+        </div>
+        {#if pendingOptionDecision.timing === 'damage'}
+          {@const takeDamage = pendingOptionDecision.choices.find(({ id }) => id === 'take-damage')}
+          {#if takeDamage}
+            <button
+              class="take-damage"
+              title={takeDamage.description}
+              onclick={() => answerOptionDecision(takeDamage.id)}
+              disabled={pending}
+            >{takeDamage.label}</button>
+          {/if}
+        {/if}
+      </section>
+    {:else if pendingOptionDecision}
+      <section class="effect-control damage-wait" aria-label="Damage decision status">
+        <h2>Option decision</h2>
+        <p>Waiting for {pendingOptionRobot?.name ?? 'the next player'} in original Dock order.</p>
+      </section>
+    {:else if optionLossRobot?.uid === player.uid}
+      <section class="effect-control" aria-label="Destroyed robot Option loss">
+        <h2>Discard one Option</h2>
+        <p>Your destroyed robot must discard one Option before it can re-enter.</p>
+        <div class="option-card-grid">
+          {#each optionLossRobot.options as option}
+            {@const card = OPTION_CARDS_BY_ID.get(option.cardId)}
+            {#if card}
+              <button
+                class="option-card-choice"
+                aria-label={`Discard ${card.name}`}
+                onclick={() => discardDestroyedOption(option.cardId)}
+                disabled={pending}
+              >
+                <OptionCardFace {card} variant="compact-copy" />
+              </button>
+            {/if}
+          {/each}
+        </div>
+      </section>
+    {:else if reentryChoices.length > 0}
+      <section class="effect-control" aria-label="Robot re-entry choice">
+        <h2>Re-enter your robot</h2>
+        <p>Choose a legal cell and facing. The race continues after every destroyed robot returns.</p>
+        <label>
+          Re-entry cell and facing
+          <select bind:value={selectedReentryChoice} onchange={persistReentryDraft}>
+            <option value="">Choose a legal placement</option>
+            {#each reentryChoices as choice}
+              <option value={`${choice.x},${choice.y},${choice.facing}`}>
+                ({choice.x},{choice.y}) facing {choice.facing}
+              </option>
+            {/each}
+          </select>
+        </label>
+        {#if reentryRobot?.powerDownNextTurn}
+          <label class="check-control">
+            <input type="checkbox" bind:checked={reentryPoweredDown} onchange={persistReentryDraft} />
+            Re-enter powered down
+          </label>
+        {/if}
+        <button onclick={submitReentryChoice} disabled={pending || !selectedReentryChoice}>CONFIRM RE-ENTRY</button>
+      </section>
+    {:else if programming}
       <section class="private-programming">
         <p>These choices remain private. The tabletop reveals cards only when execution begins.</p>
         {#key turnId}

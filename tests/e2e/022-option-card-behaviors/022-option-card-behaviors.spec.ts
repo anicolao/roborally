@@ -327,9 +327,10 @@ async function createOptionRace(
   layout: "beam" | "dock" | "flag" | "gyro" | "ram" | "shield" = "dock",
   initialHostPowerDown = false,
   requireStationaryTurns = false,
+  roomSuffix = "22",
 ) {
   const cardOrdinal = [...OPTION_CARDS_BY_ID.keys()].indexOf(cardId) + 1;
-  const roomCode = `O${testInfo.project.name === "phone" ? "P" : "D"}${String(cardOrdinal).padStart(2, "0")}22`;
+  const roomCode = `O${testInfo.project.name === "phone" ? "P" : "D"}${String(cardOrdinal).padStart(2, "0")}${roomSuffix}`;
   const guestContext: BrowserContext = await browser.newContext();
   const guest = await guestContext.newPage();
   await host.goto(
@@ -376,7 +377,7 @@ async function createOptionRace(
   } else {
     await stayActiveInDockOrder([host, guest]);
   }
-  return { guest, guestContext };
+  return { guest, guestContext, roomCode };
 }
 
 async function takeDamageUntilTurnCompletes(host: Page, guest: Page) {
@@ -872,6 +873,65 @@ test("Power-Down Shield prevents one hit from each direction per register", asyn
     await expect(guest.locator(".full-resolution")).toContainText(
       "Ada's power-down shield prevented one damage arriving from the west.",
     );
+  } finally {
+    await guestContext.close();
+  }
+});
+
+test("powered-down private controller can resolve incoming damage", async ({
+  browser,
+  page: host,
+}, testInfo) => {
+  const { guest, guestContext, roomCode } = await createOptionRace(
+    browser,
+    host,
+    testInfo,
+    "extra-memory",
+    undefined,
+    undefined,
+    true,
+    undefined,
+    "shield",
+    true,
+    true,
+    "23",
+  );
+  try {
+    await chooseStationaryProgram(host);
+    const guestTurnOne = await chooseStationaryProgram(guest);
+    await takeDamageUntilTurnCompletes(host, guest);
+
+    await guest.getByRole("button", { name: "Begin Turn 2" }).click();
+    await host.goto(`/hand/?room=${roomCode}&seat=1`);
+    await expect(host.getByRole("heading", { name: "Ada" })).toBeVisible();
+    await host.getByRole("button", { name: "BEGIN TURN 2" }).click();
+    await expect(host.getByRole("heading", { name: "Program deck" })).toHaveCount(0);
+
+    await chooseStationaryProgram(
+      guest,
+      undefined,
+      1,
+      facingAfter(guestTurnOne),
+    );
+    await expect(host.getByRole("heading", { name: "Next-turn power" })).toBeVisible();
+    await host.getByRole("button", { name: "STAY ACTIVE" }).click();
+    await guest.getByRole("button", { name: "Stay active" }).click();
+
+    const decision = host.getByLabel("Damage prevention choice");
+    await expect(decision).toBeVisible();
+    await expect(decision).toContainText("Laser damage 1 of 1 incoming");
+    await expect(
+      decision.getByRole("button", {
+        name: "Discard Extra Memory to prevent this damage",
+      }),
+    ).toBeVisible();
+    await expect(
+      decision.getByRole("button", { name: "Take this damage" }),
+    ).toBeVisible();
+    const decisionId = await decision.getAttribute("data-decision-id");
+    expect(decisionId).toBeTruthy();
+    await decision.getByRole("button", { name: "Take this damage" }).click();
+    await expect.poll(() => decision.getAttribute("data-decision-id")).not.toBe(decisionId);
   } finally {
     await guestContext.close();
   }
