@@ -1262,7 +1262,7 @@
                             {#each robot.options as option}
                               {@const card = OPTION_CARDS_BY_ID.get(option.cardId)}
                               {#if card}
-                                <OptionCardFace {card} variant="thumbnail" />
+                                <OptionCardFace {card} variant="compact-copy" />
                               {/if}
                             {/each}
                           </div>
@@ -1306,7 +1306,7 @@
                               disabled={pending}
                               onclick={() => answerOptionDecision(choice.id)}
                             >
-                              <OptionCardFace {card} variant="thumbnail" />
+                              <OptionCardFace {card} variant="compact-copy" />
                               {#if pendingOptionDecision.timing !== 'damage'}
                                 <span>{choice.label}</span>
                               {/if}
@@ -2584,7 +2584,7 @@
   .damage-choice > strong { color: #ffcf4b; }
   .damage-choice .take-damage { border-color: #ff4a4a; }
   .damage-choice .option-card-grid {
-    grid-template-columns: repeat(auto-fit, minmax(130px, 200px));
+    grid-template-columns: minmax(0, 1fr);
   }
   .option-card-grid {
     display: grid;
@@ -2702,8 +2702,8 @@
     padding: 2px;
   }
   .owned-option-card-strip :global(.option-card) {
-    width: 160px;
-    flex: 0 0 160px;
+    width: 240px;
+    flex: 0 0 240px;
     filter: none;
   }
   .reentry-choice {
@@ -2903,8 +2903,8 @@
     .robot-state li { align-content: flex-start; flex-wrap: wrap; overflow: hidden; }
     .robot-progress { min-width: 0; overflow-wrap: anywhere; }
     .owned-option-card-strip :global(.option-card) {
-      width: 150px;
-      flex-basis: 150px;
+      width: 220px;
+      flex-basis: 220px;
     }
     .setup-summary.resolution-active.many-robots .robot-state {
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3230,8 +3230,8 @@
       font-size: 12px;
     }
     .owned-option-card-strip :global(.option-card) {
-      width: 120px;
-      flex-basis: 120px;
+      width: 200px;
+      flex-basis: 200px;
     }
     .board-phase,
     .full-resolution {

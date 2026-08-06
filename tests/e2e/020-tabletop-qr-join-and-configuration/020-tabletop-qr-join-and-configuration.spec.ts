@@ -453,6 +453,14 @@ test('the tabletop owns configuration and seat QR codes open private controllers
       'data-stage',
       'program-card'
     );
+    const playbackCopies = table.getByTestId('tabletop-register-playback').locator('.playback-copy');
+    await expect(playbackCopies).toHaveCount(2);
+    await expect(
+      table.getByTestId('tabletop-register-playback').locator('[data-table-facing="west"]')
+    ).toHaveCount(1);
+    await expect(
+      table.getByTestId('tabletop-register-playback').locator('[data-table-facing="east"]')
+    ).toHaveCount(1);
     for (
       let advance = 0;
       advance < 100 && (await table.locator('.program-card.revealed').count()) < 10;
@@ -463,13 +471,23 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expect(table.locator('.program-card.revealed')).toHaveCount(10);
     await steps.step('animated-program-execution', {
       description: 'The tabletop reveals both Programs during staged register playback',
-      status: 'skip',
       verifications: [
         {
-          spec: 'All ten Program cards are face up while register playback remains visible',
+          spec: 'Mirrored playback rails remain in the course gutters without covering the board',
           check: async () => {
             await expect(table.locator('.program-card.revealed')).toHaveCount(10);
-            await expect(table.getByTestId('tabletop-register-playback')).toBeVisible();
+            const board = await courseBoard.boundingBox();
+            const wrap = await table.locator('.course-wrap').boundingBox();
+            const near = await playbackCopies.nth(0).boundingBox();
+            const far = await playbackCopies.nth(1).boundingBox();
+            expect(board).not.toBeNull();
+            expect(wrap).not.toBeNull();
+            expect(near).not.toBeNull();
+            expect(far).not.toBeNull();
+            expect(near!.x + near!.width).toBeLessThanOrEqual(board!.x + 1);
+            expect(far!.x).toBeGreaterThanOrEqual(board!.x + board!.width - 1);
+            expect(near!.x).toBeGreaterThanOrEqual(wrap!.x - 1);
+            expect(far!.x + far!.width).toBeLessThanOrEqual(wrap!.x + wrap!.width + 1);
             await expect(firstPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toHaveCount(0);
             await expect(secondPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toHaveCount(0);
           }
