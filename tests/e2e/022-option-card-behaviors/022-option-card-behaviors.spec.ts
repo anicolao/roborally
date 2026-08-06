@@ -758,10 +758,12 @@ test("Mechanical Arm touches an adjacent flag through an open edge", async ({
     true,
     undefined,
     "flag",
+    false,
+    true,
   );
   try {
-    await chooseProgram(host, "rotate-right");
-    await chooseProgram(guest);
+    await chooseStationaryProgram(host);
+    await chooseStationaryProgram(guest);
 
     await expect(host.locator(".full-resolution")).toContainText(
       "Ada touched Flag 1 in order",
@@ -775,6 +777,15 @@ test("Mechanical Arm touches an adjacent flag through an open edge", async ({
         .getByRole("listitem")
         .filter({ hasText: "Ada" }),
     ).toContainText("Flags 1");
+    await expect(
+      host
+        .getByRole("list", { name: "Robot Life and damage state" })
+        .getByRole("listitem")
+        .filter({ hasText: "Ada" }),
+    ).toContainText("Archive (6,15)");
+    await expect(host.locator(".full-resolution")).not.toContainText(
+      "Ada moved its Archive marker",
+    );
   } finally {
     await guestContext.close();
   }

@@ -909,6 +909,35 @@ function elementAt(
     ?.elements.find((element) => element.kind === kind);
 }
 
+function mechanicalArmReaches(
+  robot: RaceRobotPosition,
+  x: number,
+  y: number,
+  course: CompiledCourse
+) {
+  const dx = x - robot.x;
+  const dy = y - robot.y;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) !== 1) return false;
+  if (dx === 0) {
+    return !movementBlockedByWall(robot.x, robot.y, dy < 0 ? 'north' : 'south', course);
+  }
+  if (dy === 0) {
+    return !movementBlockedByWall(robot.x, robot.y, dx < 0 ? 'west' : 'east', course);
+  }
+  const horizontal = dx < 0 ? 'west' : 'east';
+  const vertical = dy < 0 ? 'north' : 'south';
+  return (
+    (!movementBlockedByWall(robot.x, robot.y, horizontal, course) &&
+      !movementBlockedByWall(robot.x + dx, robot.y, vertical, course)) ||
+    (!movementBlockedByWall(robot.x, robot.y, vertical, course) &&
+      !movementBlockedByWall(robot.x, robot.y + dy, horizontal, course))
+  );
+}
+
+function hasMechanicalArm(robot: RaceRobotPosition) {
+  return robot.options.some(({ cardId }) => cardId === 'mechanical-arm');
+}
+
 function resolveConveyorSubstep(
   robots: RaceRobotPosition[],
   register: number,
@@ -2470,43 +2499,18 @@ export function resolveFlagsAndArchives(
   const finishers: string[] = [];
   for (const robot of robots) {
     if (robot.status !== 'active') continue;
-    const flag =
-      flags.find(({ x, y }) => x === robot.x && y === robot.y) ??
-      (robot.options.some(({ cardId }) => cardId === 'mechanical-arm')
-        ? flags.find(({ x, y }) => {
-            const dx = x - robot.x;
-            const dy = y - robot.y;
-            if (Math.max(Math.abs(dx), Math.abs(dy)) !== 1) return false;
-            if (dx === 0) {
-              return !movementBlockedByWall(
-                robot.x,
-                robot.y,
-                dy < 0 ? 'north' : 'south',
-                course
-              );
-            }
-            if (dy === 0) {
-              return !movementBlockedByWall(
-                robot.x,
-                robot.y,
-                dx < 0 ? 'west' : 'east',
-                course
-              );
-            }
-            const horizontal = dx < 0 ? 'west' : 'east';
-            const vertical = dy < 0 ? 'north' : 'south';
-            return (
-              (!movementBlockedByWall(robot.x, robot.y, horizontal, course) &&
-                !movementBlockedByWall(robot.x + dx, robot.y, vertical, course)) ||
-              (!movementBlockedByWall(robot.x, robot.y, vertical, course) &&
-                !movementBlockedByWall(robot.x, robot.y + dy, horizontal, course))
-            );
-          })
+    const occupiedFlag = flags.find(({ x, y }) => x === robot.x && y === robot.y);
+    const touchedFlag =
+      occupiedFlag ??
+      (hasMechanicalArm(robot)
+        ? flags.find(({ x, y }) => mechanicalArmReaches(robot, x, y, course))
         : undefined);
     const repair = elementAt(cells, robot.x, robot.y, 'repair') as
       | Extract<BoardElement, { kind: 'repair' }>
       | undefined;
-    if (flag || repair) {
+    // Mechanical Arm can touch an adjacent feature, but the robot does not
+    // occupy that feature's square. Archive movement requires occupation.
+    if (occupiedFlag || repair) {
       robot.archive = { x: robot.x, y: robot.y };
       addTrace(
         trace,
@@ -2517,17 +2521,17 @@ export function resolveFlagsAndArchives(
         `${robot.name} moved its Archive marker to (${robot.x},${robot.y}).`
       );
     }
-    if (!flag || flag.number !== robot.nextFlag) continue;
-    robot.touchedFlags.push(flag.number);
+    if (!touchedFlag || touchedFlag.number !== robot.nextFlag) continue;
+    robot.touchedFlags.push(touchedFlag.number);
     const finalFlag = Math.max(...flags.map(({ number }) => number));
-    robot.nextFlag = flag.number === finalFlag ? null : flag.number + 1;
+    robot.nextFlag = touchedFlag.number === finalFlag ? null : touchedFlag.number + 1;
     addTrace(
       trace,
       register,
       robot.uid,
       null,
       'flag-touched',
-      `${robot.name} touched Flag ${flag.number} in order${
+      `${robot.name} touched Flag ${touchedFlag.number} in order${
         robot.nextFlag ? `; Flag ${robot.nextFlag} is next` : ''
       }.`
     );
@@ -2542,7 +2546,7 @@ export function resolveFlagsAndArchives(
         robot.uid,
         null,
         'option-drawn',
-        `${robot.name} drew ${option.cardId.replaceAll('-', ' ')} for touching Flag ${flag.number}.`
+        `${robot.name} drew ${option.cardId.replaceAll('-', ' ')} for touching Flag ${touchedFlag.number}.`
       );
     }
   }
@@ -2560,7 +2564,22 @@ export function resolveRepairCleanup(
 ) {
   for (const robot of robots) {
     if (robot.status !== 'active') continue;
-    const repair = elementAt(cells, robot.x, robot.y, 'repair') as
+    const occupiedRepairCell = cells.find(
+      (cell) =>
+        cell.x === robot.x &&
+        cell.y === robot.y &&
+        cell.elements.some(({ kind }) => kind === 'repair')
+    );
+    const repairCell =
+      occupiedRepairCell ??
+      (hasMechanicalArm(robot)
+        ? cells.find(
+            (cell) =>
+              cell.elements.some(({ kind }) => kind === 'repair') &&
+              mechanicalArmReaches(robot, cell.x, cell.y, course)
+          )
+        : undefined);
+    const repair = repairCell?.elements.find(({ kind }) => kind === 'repair') as
       | Extract<BoardElement, { kind: 'repair' }>
       | undefined;
     if (!repair) continue;
@@ -2574,7 +2593,9 @@ export function resolveRepairCleanup(
         null,
         'repair',
         `${robot.name} repaired from ${priorDamage} to ${robot.damage} damage at ` +
-          `(${robot.x},${robot.y}).`
+          `(${repairCell!.x},${repairCell!.y})${
+            occupiedRepairCell ? '' : ' using Mechanical Arm'
+          }.`
       );
       const retainedRegisters = new Set(lockedRegisterNumbersForDamage(robot.damage));
       const unlocked = robot.lockedRegisters.filter(

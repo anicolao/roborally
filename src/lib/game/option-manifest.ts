@@ -200,7 +200,7 @@ export const OPTION_CARDS = Object.freeze([
     timing: ['register-end'],
     optional: false,
     payload: null,
-    summary: 'Touches an adjacent diagonal or orthogonal flag or archive through no wall.'
+    summary: 'Touches an adjacent diagonal or orthogonal flag or repair site through no wall.'
   },
   {
     id: 'mini-howitzer',

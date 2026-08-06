@@ -344,6 +344,11 @@ Out-of-order flags still move the Archive but do not advance progress. The
 course's final flag ends Program resolution immediately and freezes all tied
 winners, optional runners-up, and final robot standings for the race epoch.
 
+Mechanical Arm lets a robot touch an adjacent flag or repair site through an
+open edge. That remote touch grants the flag, repair, or Option benefit, but it
+does not move the Archive marker: the robot did not end the phase on that
+feature's square.
+
 ## Cleanup
 
 After register 5:
