@@ -29,7 +29,7 @@ The shared display creates a fresh room, exposes eight position-specific QR join
 
 **Verifications:**
 
-- [x] All ten Program cards are face up while register playback remains visible
+- [x] Mirrored playback rails remain in the course gutters without covering the board
 
 ## A private controller handles its next-turn power choice without a Program hand
 

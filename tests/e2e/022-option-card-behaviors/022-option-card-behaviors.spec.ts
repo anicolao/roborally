@@ -920,6 +920,9 @@ test("powered-down private controller can resolve incoming damage", async ({
     const decision = host.getByLabel("Damage prevention choice");
     await expect(decision).toBeVisible();
     await expect(decision).toContainText("Laser damage 1 of 1 incoming");
+    await expect(decision.locator('[data-card-id="extra-memory"]')).toContainText(
+      OPTION_CARDS_BY_ID.get("extra-memory")!.summary,
+    );
     await expect(
       decision.getByRole("button", {
         name: "Discard Extra Memory to prevent this damage",
@@ -1213,6 +1216,12 @@ test("Fire Control locks a named register instead of dealing damage", async ({
 
     const decision = host.getByLabel("Option decision");
     await expect(decision).toContainText("Use Fire Control?");
+    await expect(
+      host.locator('.owned-option-card-strip [data-card-id="fire-control"]'),
+    ).toContainText(OPTION_CARDS_BY_ID.get("fire-control")!.summary);
+    await expect(decision.locator('[data-card-id="fire-control"]').first()).toContainText(
+      OPTION_CARDS_BY_ID.get("fire-control")!.summary,
+    );
     await expect(
       decision.getByRole("button", { name: "Lock register 1" }),
     ).toBeVisible();

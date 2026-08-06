@@ -367,21 +367,6 @@
       {#key playbackCountdown}<strong>{playbackCountdown}</strong>{/key}
       <span>Movement incoming</span>
     </div>
-  {:else if playbackPhase === 'register' && playbackRegister}
-    <div
-      class="register-playback"
-      role="status"
-      aria-live="polite"
-      data-testid="tabletop-register-playback"
-      data-register={playbackRegister}
-      data-stage={playbackStage}
-      data-frame={playbackFrameIndex}
-      data-production-duration-ms={playbackProductionDurationMs}
-    >
-      <strong>REGISTER {playbackRegister} / {playbackStageLabel}</strong>
-      <span>{latestPlaybackEntry?.text ?? `${playbackStageLabel} resolved with no movement`}</span>
-      <i style={`--playback-progress:${playbackFrameIndex / playbackFrameCount}`}></i>
-    </div>
   {/if}
 
   {#if !playbackIsActive && state.resolution?.pendingOptionDecision && pendingOptionRobot}
@@ -511,7 +496,10 @@
       </article>
     {/each}
 
-    <div class="course-wrap">
+    <div
+      class:playback-active={playbackPhase === 'register' && !!playbackRegister}
+      class="course-wrap"
+    >
       {#if state.setup}
         <CourseBoard
           setup={state.setup}
@@ -521,6 +509,36 @@
           laserBeams={playbackLaserBeams}
           presentationOnly
         />
+        {#if playbackPhase === 'register' && playbackRegister}
+          <div
+            class:side-facing={tabletopLayout === 'side-seats'}
+            class="course-playback"
+            role="status"
+            aria-live="polite"
+            data-testid="tabletop-register-playback"
+            data-register={playbackRegister}
+            data-stage={playbackStage}
+            data-frame={playbackFrameIndex}
+            data-production-duration-ms={playbackProductionDurationMs}
+          >
+            {#each ['near', 'far'] as position}
+              <div
+                class:near={position === 'near'}
+                class:far={position === 'far'}
+                class="playback-copy"
+                aria-hidden={position === 'far'}
+                data-table-facing={tabletopLayout === 'side-seats'
+                  ? position === 'near' ? 'west' : 'east'
+                  : position === 'near' ? 'north' : 'south'}
+              >
+                <strong>REGISTER {playbackRegister}</strong>
+                <b>{playbackStageLabel}</b>
+                <span>{latestPlaybackEntry?.text ?? `${playbackStageLabel} resolved with no movement`}</span>
+                <i style={`--playback-progress:${playbackFrameIndex / playbackFrameCount}`}></i>
+              </div>
+            {/each}
+          </div>
+        {/if}
       {:else}
         <div class="course-control" aria-label="Tabletop race configuration">
           <div>
@@ -584,10 +602,6 @@
   .program-countdown small { color: #d2ff37; font-size: clamp(18px, 3vw, 38px); letter-spacing: .12em; }
   .program-countdown strong { color: #eef4ee; font-size: clamp(150px, 35vw, 420px); line-height: .9; text-shadow: 0 0 45px #d2ff3788; }
   .program-countdown span { color: #ffcf4b; font-size: clamp(22px, 4vw, 50px); }
-  .register-playback { position: fixed; z-index: 40; top: 20px; left: 50%; display: grid; width: min(90vw, 1100px); gap: 7px; padding: 14px 20px; border: 2px solid #d2ff37; border-radius: 10px; color: #eef4ee; background: #0b1212ee; box-shadow: 0 10px 35px #000b; font-family: 'Space Mono', monospace; transform: translateX(-50%); }
-  .register-playback strong { color: #d2ff37; font-size: clamp(16px, 2vw, 28px); text-transform: uppercase; }
-  .register-playback span { overflow: hidden; font-size: clamp(14px, 1.5vw, 20px); text-overflow: ellipsis; white-space: nowrap; }
-  .register-playback i { display: block; height: 5px; background: linear-gradient(90deg, #d2ff37 0 calc(var(--playback-progress) * 100%), #344043 calc(var(--playback-progress) * 100%) 100%); }
   .damage-prompt {
     position: fixed;
     z-index: 45;
@@ -620,10 +634,99 @@
   .table { position: relative; display: grid; width: 100%; height: 100%; min-width: 0; min-height: 0; gap: clamp(4px, 1vw, 12px); margin: 0; }
   .table.top-bottom-seats { grid-template-columns: repeat(4, minmax(78px, 1fr)); grid-template-rows: clamp(120px, 20vh, 190px) minmax(0, 1fr) clamp(120px, 20vh, 190px); }
   .table.side-seats { grid-template-columns: clamp(78px, 18vw, 260px) minmax(0, 1fr) clamp(78px, 18vw, 260px); grid-template-rows: repeat(4, minmax(0, 1fr)); }
-  .course-wrap { z-index: 1; min-width: 0; min-height: 0; overflow: hidden; padding: 4px; border: 2px solid #6f7e7f; border-radius: 16px; background: #090d0e; box-shadow: 0 16px 50px #050707aa; }
+  .course-wrap {
+    --playback-gutter-width: clamp(38px, 8vw, 140px);
+    container-type: size;
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    padding: 4px;
+    border: 2px solid #6f7e7f;
+    border-radius: 16px;
+    background: #090d0e;
+    box-shadow: 0 16px 50px #050707aa;
+  }
   .top-bottom-seats .course-wrap { grid-column: 1 / -1; grid-row: 2; }
   .side-seats .course-wrap { grid-column: 2; grid-row: 1 / -1; }
   .course-wrap :global(.course-panel), .course-wrap :global(.board-viewport) { height: 100%; }
+  .course-wrap.playback-active :global(.course-panel.presentation-only) {
+    padding-inline: var(--playback-gutter-width);
+  }
+  .course-playback {
+    position: absolute;
+    z-index: 3;
+    inset: 4px;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .playback-copy {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    display: grid;
+    width: var(--playback-gutter-width);
+    min-width: 0;
+    grid-template-rows: auto auto minmax(0, 1fr) 7px;
+    align-content: start;
+    gap: clamp(5px, 1vh, 12px);
+    padding: clamp(7px, 1vw, 14px);
+    border: 2px solid #d2ff37;
+    border-radius: 8px;
+    color: #eef4ee;
+    background: #0b1212f2;
+    box-shadow: 0 0 24px #000a;
+    font-family: 'Space Mono', monospace;
+  }
+  .playback-copy.near { left: 0; }
+  .playback-copy.far { right: 0; transform: rotate(180deg); }
+  .playback-copy strong {
+    color: #d2ff37;
+    font-size: clamp(14px, 1.5vw, 24px);
+    line-height: 1;
+    text-transform: uppercase;
+  }
+  .playback-copy b {
+    color: #ffcf4b;
+    font-size: clamp(11px, 1vw, 17px);
+    line-height: 1.12;
+    text-transform: uppercase;
+  }
+  .playback-copy span {
+    overflow: hidden;
+    font-size: clamp(11px, .9vw, 16px);
+    line-height: 1.18;
+    overflow-wrap: anywhere;
+  }
+  .playback-copy i {
+    display: block;
+    align-self: end;
+    background: linear-gradient(90deg, #d2ff37 0 calc(var(--playback-progress) * 100%), #344043 calc(var(--playback-progress) * 100%) 100%);
+  }
+  .course-playback.side-facing .playback-copy {
+    top: 0;
+    bottom: auto;
+    width: 100cqh;
+    height: var(--playback-gutter-width);
+    grid-template-columns: auto minmax(0, auto) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 7px;
+    align-items: center;
+  }
+  .course-playback.side-facing .playback-copy.near {
+    left: var(--playback-gutter-width);
+    transform: rotate(90deg);
+    transform-origin: top left;
+  }
+  .course-playback.side-facing .playback-copy.far {
+    top: 100%;
+    right: auto;
+    left: calc(100% - var(--playback-gutter-width));
+    transform: rotate(-90deg);
+    transform-origin: top left;
+  }
+  .course-playback.side-facing .playback-copy span { white-space: nowrap; text-overflow: ellipsis; }
+  .course-playback.side-facing .playback-copy i { grid-column: 1 / -1; }
   .seat { z-index: 2; display: grid; gap: 4px; align-content: start; min-width: 0; min-height: 0; overflow: hidden; padding: clamp(4px, 1vw, 12px); border: 2px solid #4b5a5c; border-radius: 10px; background: #11191aee; box-shadow: 0 7px 18px #05070799; }
   .seat.open { border-color: #7e9130; }
   .top-bottom-seats .seat-1 { grid-column: 1; grid-row: 1; } .top-bottom-seats .seat-2 { grid-column: 2; grid-row: 1; } .top-bottom-seats .seat-3 { grid-column: 3; grid-row: 1; } .top-bottom-seats .seat-4 { grid-column: 4; grid-row: 1; }

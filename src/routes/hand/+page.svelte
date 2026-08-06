@@ -466,7 +466,7 @@
                 onclick={() => answerOptionDecision(choice.id)}
                 disabled={pending}
               >
-                <OptionCardFace {card} variant="thumbnail" />
+                <OptionCardFace {card} variant="compact-copy" />
                 {#if pendingOptionDecision.timing !== 'damage'}
                   <span>{choice.label}</span>
                 {/if}
@@ -723,7 +723,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .effect-control.damage-choice > .option-card-grid {
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
   button.option-card-choice {
     display: block;

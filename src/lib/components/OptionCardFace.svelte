@@ -12,7 +12,7 @@
     onfitchange
   }: {
     card: OptionCard;
-    variant?: 'standard' | 'compact-copy' | 'thumbnail';
+    variant?: 'standard' | 'compact-copy';
     onfitchange?: (fits: boolean) => void;
   } = $props();
 
@@ -52,7 +52,6 @@
 <span
   role="img"
   class:compact-copy={variant === 'compact-copy'}
-  class:thumbnail={variant === 'thumbnail'}
   class="option-card"
   aria-label={`${card.name}. ${card.summary} ${card.kind}. ${timingLabel}. ${behaviorLabel}.`}
   data-card-id={card.id}
@@ -238,25 +237,6 @@
     inset: 1%;
     width: 98%;
     height: 98%;
-  }
-
-  .thumbnail .illustration-well {
-    top: 22%;
-    left: 5%;
-    width: 90%;
-    height: 66%;
-  }
-
-  .thumbnail .illustration {
-    inset: 0;
-    width: 100%;
-    height: 100%;
-  }
-
-  .thumbnail .copy,
-  .thumbnail .footer-kind,
-  .thumbnail .footer-timing {
-    display: none;
   }
 
   .compact-copy .copy {
