@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext } from '@playwright/test';
+import { OPTION_CARD_PRESENTATIONS } from '../../../src/lib/components/option-card-presentation';
 import { OPTION_CARDS } from '../../../src/lib/game/option-manifest';
 import { TestStepHelper } from '../helpers/test-step-helper';
 
@@ -11,6 +12,20 @@ test('all 26 reviewed Option behaviors are inspectable in product', async (
   const guest = await guestContext.newPage();
 
   try {
+    await host.goto('/options');
+    for (const presentation of OPTION_CARD_PRESENTATIONS) {
+      await host.getByRole('radio', { name: new RegExp(presentation.label) }).check();
+      const renderedCards = host.locator('.inventory [data-card-id]');
+      await expect(renderedCards).toHaveCount(OPTION_CARDS.length);
+      await expect(renderedCards.first()).toHaveAttribute('data-option-size', presentation.id);
+      await expect(host.getByText('All card content fits this layout')).toBeVisible();
+      const dimensions = await renderedCards.first().evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return { width: bounds.width, height: bounds.height };
+      });
+      expect(dimensions).toEqual({ width: presentation.width, height: presentation.height });
+    }
+
     await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}`);
     await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
     await host.getByRole('button', { name: 'Create race' }).click();
@@ -34,6 +49,10 @@ test('all 26 reviewed Option behaviors are inspectable in product', async (
     await catalog.getByText('26-card Option catalog').click();
     await expect(catalog.locator('li')).toHaveCount(26);
     await expect(catalog.locator('[data-card-id]')).toHaveCount(26);
+    await expect(catalog.locator('[data-card-id]').first()).toHaveAttribute(
+      'data-option-size',
+      'small'
+    );
     for (const card of OPTION_CARDS) {
       const entry = catalog.locator(`[data-option-id="${card.id}"]`);
       await entry.scrollIntoViewIfNeeded();
@@ -45,6 +64,21 @@ test('all 26 reviewed Option behaviors are inspectable in product', async (
         new RegExp(`/assets/options/${card.id}-poc\\.webp$`)
       );
     }
+    const presentationDefects = await catalog.locator('[data-card-id]').evaluateAll((cards) =>
+      cards.flatMap((card) => {
+        const summary = card.querySelector<HTMLElement>('.continuation p');
+        const panels = card.querySelectorAll<HTMLElement>('.title, .copy, .continuation');
+        const clips = [...panels].some(
+          (panel) =>
+            panel.scrollHeight > panel.clientHeight + 1 ||
+            panel.scrollWidth > panel.clientWidth + 1
+        );
+        return clips || !summary || getComputedStyle(summary).textTransform !== 'none'
+          ? [card.getAttribute('data-card-id')]
+          : [];
+      })
+    );
+    expect(presentationDefects).toEqual([]);
     const steps = new TestStepHelper(host, testInfo);
     steps.setMetadata(
       'Inspect all 26 executable Option cards',
@@ -59,6 +93,7 @@ test('all 26 reviewed Option behaviors are inspectable in product', async (
           check: async () => {
             await expect(catalog.locator('li')).toHaveCount(26);
             await expect(catalog.locator('[data-card-id]')).toHaveCount(26);
+            await expect(catalog.locator('[data-option-size="small"]')).toHaveCount(26);
           }
         },
         {

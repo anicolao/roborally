@@ -466,7 +466,7 @@
                 onclick={() => answerOptionDecision(choice.id)}
                 disabled={pending}
               >
-                <OptionCardFace {card} variant="compact-copy" />
+                <OptionCardFace {card} size="small" />
                 {#if pendingOptionDecision.timing !== 'damage'}
                   <span>{choice.label}</span>
                 {/if}
@@ -515,7 +515,7 @@
                 onclick={() => discardDestroyedOption(option.cardId)}
                 disabled={pending}
               >
-                <OptionCardFace {card} variant="compact-copy" />
+                <OptionCardFace {card} size="small" />
               </button>
             {/if}
           {/each}
@@ -726,7 +726,8 @@
     grid-template-columns: minmax(0, 1fr);
   }
   button.option-card-choice {
-    display: block;
+    display: grid;
+    justify-items: center;
     min-width: 0;
     min-height: 0;
     padding: 0;
@@ -737,9 +738,9 @@
   }
   button.option-card-choice:hover,
   button.option-card-choice:focus-visible { border-color: #ffcf4b; }
-  button.option-card-choice :global(.option-card) { filter: none; }
   button.option-card-choice > span {
     display: block;
+    width: 100%;
     padding: 8px 5px;
     color: #101718;
     background: #d2ff37;

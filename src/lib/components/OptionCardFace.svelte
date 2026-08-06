@@ -5,14 +5,18 @@
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import type { OptionCard } from '$lib/game/option-manifest';
+  import {
+    optionCardPresentation,
+    type OptionCardSize
+  } from '$lib/components/option-card-presentation';
 
   let {
     card,
-    variant = 'standard',
+    size = 'medium',
     onfitchange
   }: {
     card: OptionCard;
-    variant?: 'standard' | 'compact-copy';
+    size?: OptionCardSize;
     onfitchange?: (fits: boolean) => void;
   } = $props();
 
@@ -23,6 +27,8 @@
   const timingLabel = $derived(card.timing.map((timing) => timing.replaceAll('-', ' ')).join(' · '));
   const behaviorLabel = $derived(card.optional ? 'Optional' : 'Automatic');
   const payloadLabel = $derived(card.payload === null ? null : `Capacity ${card.payload}`);
+  const presentation = $derived(optionCardPresentation(size));
+  const compactCopy = $derived(presentation.layout === 'compact-copy');
 
   function reportFit() {
     if (!copyPanel || !titlePanel) return;
@@ -51,14 +57,16 @@
 
 <span
   role="img"
-  class:compact-copy={variant === 'compact-copy'}
+  class:compact-copy={compactCopy}
   class="option-card"
   aria-label={`${card.name}. ${card.summary} ${card.kind}. ${timingLabel}. ${behaviorLabel}.`}
   data-card-id={card.id}
+  data-option-size={presentation.id}
+  style={`--option-card-width:${presentation.width}px;--option-card-height:${presentation.height}px`}
 >
   <img
     class="chassis"
-    src={`${base}/assets/options/${variant === 'standard' ? 'option-card-chassis-poc.webp' : 'option-card-compact-chassis-poc.webp'}`}
+    src={`${base}/assets/options/${compactCopy ? 'option-card-compact-chassis-poc.webp' : 'option-card-chassis-poc.webp'}`}
     alt=""
     draggable="false"
   />
@@ -75,7 +83,7 @@
   </span>
 
   <div class="copy" bind:this={copyPanel}>
-    {#if variant === 'standard'}
+    {#if !compactCopy}
       <p>{card.summary}</p>
       <dl>
         <div>
@@ -121,7 +129,7 @@
     {/if}
   </div>
 
-  {#if variant === 'compact-copy'}
+  {#if compactCopy}
     <div class="continuation" bind:this={continuationPanel}>
       <p>{card.summary}</p>
     </div>
@@ -136,9 +144,10 @@
     container-type: inline-size;
     position: relative;
     display: block;
+    flex: 0 0 auto;
     isolation: isolate;
-    width: 100%;
-    aspect-ratio: 3 / 2;
+    width: var(--option-card-width);
+    height: var(--option-card-height);
     overflow: hidden;
     border-radius: 1.2cqw;
     color: #f5f5e9;
@@ -278,6 +287,7 @@
     font-size: clamp(13px, 2.6cqw, 20px);
     font-weight: 700;
     line-height: 1.18;
+    text-transform: none;
   }
 
   dl {

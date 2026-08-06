@@ -1122,7 +1122,7 @@
               <ol>
                 {#each OPTION_CARDS as option}
                   <li data-option-id={option.id}>
-                    <OptionCardFace card={option} variant="compact-copy" />
+                    <OptionCardFace card={option} size="small" />
                   </li>
                 {/each}
               </ol>
@@ -1262,7 +1262,7 @@
                             {#each robot.options as option}
                               {@const card = OPTION_CARDS_BY_ID.get(option.cardId)}
                               {#if card}
-                                <OptionCardFace {card} variant="compact-copy" />
+                                <OptionCardFace {card} size="small" />
                               {/if}
                             {/each}
                           </div>
@@ -1306,7 +1306,7 @@
                               disabled={pending}
                               onclick={() => answerOptionDecision(choice.id)}
                             >
-                              <OptionCardFace {card} variant="compact-copy" />
+                              <OptionCardFace {card} size="small" />
                               {#if pendingOptionDecision.timing !== 'damage'}
                                 <span>{choice.label}</span>
                               {/if}
@@ -1361,7 +1361,7 @@
                               disabled={pending}
                               onclick={() => discardDestroyedOption(option.cardId)}
                             >
-                              <OptionCardFace {card} variant="compact-copy" />
+                              <OptionCardFace {card} size="small" />
                             </button>
                           {/if}
                         {/each}
@@ -2544,7 +2544,7 @@
     bottom: 46px;
     width: min(720px, calc(100vw - 28px));
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     gap: 7px;
     margin: 0;
     padding: 8px;
@@ -2556,7 +2556,6 @@
   }
   .option-catalog:not([open]) ol { display: none; }
   .option-catalog li { min-width: 0; }
-  .option-catalog li :global(.option-card) { filter: none; }
   .damage-choice,
   .option-loss-choice {
     display: grid;
@@ -2593,7 +2592,8 @@
     min-width: 0;
   }
   button.option-card-choice {
-    display: block;
+    display: grid;
+    justify-items: center;
     min-width: 0;
     min-height: 0;
     padding: 0;
@@ -2604,9 +2604,9 @@
   }
   button.option-card-choice:hover,
   button.option-card-choice:focus-visible { border-color: #ffcf4b; }
-  button.option-card-choice :global(.option-card) { filter: none; }
   button.option-card-choice > span {
     display: block;
+    width: 100%;
     padding: 8px 5px;
     color: #101718;
     background: #d2ff37;
@@ -2700,11 +2700,6 @@
     min-width: 0;
     overflow-x: auto;
     padding: 2px;
-  }
-  .owned-option-card-strip :global(.option-card) {
-    width: 240px;
-    flex: 0 0 240px;
-    filter: none;
   }
   .reentry-choice {
     display: grid;
@@ -2902,10 +2897,6 @@
     .robot-state { grid-template-columns: minmax(0, 1fr); }
     .robot-state li { align-content: flex-start; flex-wrap: wrap; overflow: hidden; }
     .robot-progress { min-width: 0; overflow-wrap: anywhere; }
-    .owned-option-card-strip :global(.option-card) {
-      width: 220px;
-      flex-basis: 220px;
-    }
     .setup-summary.resolution-active.many-robots .robot-state {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -3228,10 +3219,6 @@
       min-height: 19px;
       padding: 2px 3px;
       font-size: 12px;
-    }
-    .owned-option-card-strip :global(.option-card) {
-      width: 200px;
-      flex-basis: 200px;
     }
     .board-phase,
     .full-resolution {

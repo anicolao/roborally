@@ -920,9 +920,23 @@ test("powered-down private controller can resolve incoming damage", async ({
     const decision = host.getByLabel("Damage prevention choice");
     await expect(decision).toBeVisible();
     await expect(decision).toContainText("Laser damage 1 of 1 incoming");
-    await expect(decision.locator('[data-card-id="extra-memory"]')).toContainText(
-      OPTION_CARDS_BY_ID.get("extra-memory")!.summary,
-    );
+    const optionCard = decision.locator('[data-card-id="extra-memory"]');
+    await expect(optionCard).toContainText(OPTION_CARDS_BY_ID.get("extra-memory")!.summary);
+    await expect(optionCard).toHaveAttribute("data-option-size", "small");
+    expect(
+      await optionCard.evaluate((card) => {
+        const summary = card.querySelector<HTMLElement>(".continuation p");
+        const panels = card.querySelectorAll<HTMLElement>(".title, .copy, .continuation");
+        return {
+          textTransform: summary ? getComputedStyle(summary).textTransform : null,
+          clips: [...panels].some(
+            (panel) =>
+              panel.scrollHeight > panel.clientHeight + 1 ||
+              panel.scrollWidth > panel.clientWidth + 1,
+          ),
+        };
+      }),
+    ).toEqual({ textTransform: "none", clips: false });
     await expect(
       decision.getByRole("button", {
         name: "Discard Extra Memory to prevent this damage",
