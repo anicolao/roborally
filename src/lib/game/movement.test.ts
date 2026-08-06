@@ -2367,6 +2367,118 @@ describe('priority Program movement', () => {
     expect(trace.filter(({ kind }) => kind === 'archive-updated')).toHaveLength(5);
   });
 
+  it('lets Mechanical Arm touch adjacent flags without moving the archive', () => {
+    const course = compilePlayableCourse('option-world');
+    const robot = raceRobot({
+      uid: 'arm',
+      name: 'Arm',
+      x: 10,
+      y: 3,
+      archive: { x: 4, y: 6 },
+      touchedFlags: [1],
+      nextFlag: 2,
+      options: [{ cardId: 'mechanical-arm', spent: 0, storedProgramCardId: null }]
+    });
+    const trace: ResolutionTraceEntry[] = [];
+
+    resolveFlagsAndArchives(
+      [robot],
+      1,
+      trace,
+      [...course.cells.values()],
+      course.course.flags,
+      course
+    );
+
+    expect(robot).toMatchObject({
+      archive: { x: 4, y: 6 },
+      touchedFlags: [1, 2],
+      nextFlag: 3
+    });
+    expect(trace).toContainEqual(expect.objectContaining({ kind: 'flag-touched' }));
+    expect(trace).not.toContainEqual(expect.objectContaining({ kind: 'archive-updated' }));
+
+    // This reproduces JAJXTK: Flag 4 is adjacent, but out of order. It neither
+    // advances progress nor moves the archive from its previously occupied site.
+    robot.x = 4;
+    robot.y = 2;
+    resolveFlagsAndArchives(
+      [robot],
+      2,
+      trace,
+      [...course.cells.values()],
+      course.course.flags,
+      course
+    );
+    expect(robot).toMatchObject({
+      archive: { x: 4, y: 6 },
+      touchedFlags: [1, 2],
+      nextFlag: 3
+    });
+    expect(trace).not.toContainEqual(expect.objectContaining({ kind: 'archive-updated' }));
+  });
+
+  it('lets Mechanical Arm use adjacent repair and Option sites without moving the archive', () => {
+    const course = compilePlayableCourse('risky-exchange');
+    const robot = raceRobot({
+      uid: 'arm',
+      name: 'Arm',
+      x: 1,
+      y: 2,
+      archive: { x: 6, y: 15 },
+      damage: 4,
+      options: [{ cardId: 'mechanical-arm', spent: 0, storedProgramCardId: null }]
+    });
+    const trace: ResolutionTraceEntry[] = [];
+    const cells = [...course.cells.values()];
+
+    resolveFlagsAndArchives(
+      [robot],
+      5,
+      trace,
+      cells,
+      course.course.flags,
+      course
+    );
+    resolveRepairCleanup([robot], trace, cells, undefined, true, course);
+
+    expect(robot).toMatchObject({ damage: 3, archive: { x: 6, y: 15 } });
+    expect(trace).toContainEqual(
+      expect.objectContaining({
+        kind: 'repair',
+        text: expect.stringContaining('using Mechanical Arm')
+      })
+    );
+    expect(trace).not.toContainEqual(expect.objectContaining({ kind: 'archive-updated' }));
+
+    const optionWorld = compilePlayableCourse('option-world');
+    const optionRobot = raceRobot({
+      uid: 'option-arm',
+      name: 'Option Arm',
+      x: 5,
+      y: 6,
+      archive: { x: 6, y: 16 },
+      damage: 4,
+      options: [{ cardId: 'mechanical-arm', spent: 0, storedProgramCardId: null }]
+    });
+    const optionTrace: ResolutionTraceEntry[] = [];
+    resolveRepairCleanup(
+      [optionRobot],
+      optionTrace,
+      [...optionWorld.cells.values()],
+      createOptionDeck('REMOTE-OPTION-SITE'),
+      true,
+      optionWorld
+    );
+
+    expect(optionRobot).toMatchObject({
+      damage: 4,
+      archive: { x: 6, y: 16 }
+    });
+    expect(optionRobot.options).toHaveLength(3);
+    expect(optionTrace.filter(({ kind }) => kind === 'option-drawn')).toHaveLength(2);
+  });
+
   it('repairs once in cleanup, unlocks low registers first, and preserves Option draws', () => {
     const single = raceRobot({
       uid: 'single',

@@ -187,7 +187,10 @@ export function deriveRaceSetup(
         originalDockOrder: index + 1,
         lives: config.lives,
         position,
-        archive: position,
+        archive:
+          config.courseId === 'option-lab' && config.seed.startsWith('OPTION-FLAG-')
+            ? dockPosition
+            : position,
         facing: 'north'
       };
     })
