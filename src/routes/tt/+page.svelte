@@ -33,6 +33,10 @@
     schedulePlaybackTimer,
     type PlaybackTimer
   } from '$lib/playback-clock';
+  import {
+    firstChangedPlaybackFrame,
+    robotsForPlaybackPresentation
+  } from '$lib/playback-presentation';
 
   type SeatQr = { seat: number; url: string; image: string };
   type PlaybackPhase = 'idle' | 'countdown' | 'register' | 'complete';
@@ -62,8 +66,8 @@
   let playbackFrameCount = 0;
   let playbackProductionDurationMs = 2_000;
   let playbackKey = '';
-  let scheduledPlaybackFrames = 0;
-  let queuedPlayback: ProgramPlayback | undefined;
+  let scheduledPlayback: ProgramPlayback | undefined;
+  let queuedPlayback: { playback: ProgramPlayback; fromIndex: number } | undefined;
   let playbackTimers: PlaybackTimer[] = [];
   const PRODUCTION_PROGRAM_CARD_MS = 2_000;
   const PRODUCTION_FACTORY_STAGE_MS = 1_000;
@@ -95,7 +99,15 @@
               : playbackStage === 'laser-damage'
                 ? 'Damage decision'
             : '';
-  $: presentedRobots = playbackRobots ?? state.resolution?.robots;
+  $: resolutionPlaybackKey = state.resolution
+    ? `${state.raceEpoch}:${state.resolution.turnNumber}`
+    : '';
+  $: presentedRobots = robotsForPlaybackPresentation(
+    state.resolution,
+    playbackRobots,
+    resolutionPlaybackKey,
+    playbackKey
+  );
   $: pendingOptionRobot = state.resolution?.robots.find(
     ({ uid }) => uid === state.resolution?.pendingOptionDecision?.uid
   );
@@ -192,7 +204,7 @@
     playbackFrameIndex = 0;
     playbackFrameCount = 0;
     playbackProductionDurationMs = PRODUCTION_PROGRAM_CARD_MS;
-    scheduledPlaybackFrames = 0;
+    scheduledPlayback = undefined;
     queuedPlayback = undefined;
   }
 
@@ -208,7 +220,7 @@
 
   function schedulePlaybackFrames(playback: ProgramPlayback, fromIndex: number, initialDelay: number) {
     playbackFrameCount = playback.frames.length;
-    scheduledPlaybackFrames = playback.frames.length;
+    scheduledPlayback = playback;
     let frameStart = initialDelay;
     for (const [index, frame] of playback.frames.entries()) {
       if (index < fromIndex) continue;
@@ -228,11 +240,11 @@
       frameStart += Math.round(productionDuration * playbackTimeScale);
     }
     schedulePlayback(() => {
-      if (queuedPlayback && queuedPlayback.frames.length > scheduledPlaybackFrames) {
+      if (queuedPlayback) {
         const continuation = queuedPlayback;
         queuedPlayback = undefined;
         clearPlaybackTimers();
-        schedulePlaybackFrames(continuation, scheduledPlaybackFrames, 0);
+        schedulePlaybackFrames(continuation.playback, continuation.fromIndex, 0);
         return;
       }
       playbackPhase = 'complete';
@@ -260,30 +272,34 @@
     schedulePlaybackFrames(playback, 0, countdownStepMs * 3);
   }
 
-  function continueProgramPlayback(playback: ProgramPlayback) {
-    const fromIndex = scheduledPlaybackFrames;
+  function continueProgramPlayback(playback: ProgramPlayback, fromIndex: number) {
     clearPlaybackTimers();
     schedulePlaybackFrames(playback, fromIndex, 0);
   }
 
   $: {
     const resolution = state.resolution;
-    const nextPlaybackKey = resolution
-      ? `${state.raceEpoch}:${resolution.turnNumber}`
-      : '';
     if (
       resolution?.playback.frames.length &&
-      nextPlaybackKey &&
-      nextPlaybackKey !== playbackKey
+      resolutionPlaybackKey &&
+      resolutionPlaybackKey !== playbackKey
     ) {
-      startProgramPlayback(nextPlaybackKey, resolution.playback);
-    } else if (
-      resolution?.playback.frames.length &&
-      nextPlaybackKey === playbackKey &&
-      resolution.playback.frames.length > scheduledPlaybackFrames
-    ) {
-      if (playbackIsActive) queuedPlayback = resolution.playback;
-      else continueProgramPlayback(resolution.playback);
+      startProgramPlayback(resolutionPlaybackKey, resolution.playback);
+    } else if (resolution?.playback.frames.length && resolutionPlaybackKey === playbackKey) {
+      const comparisonPlayback = queuedPlayback?.playback ?? scheduledPlayback;
+      const changedFrame = comparisonPlayback
+        ? firstChangedPlaybackFrame(comparisonPlayback.frames, resolution.playback.frames)
+        : null;
+      if (changedFrame !== null) {
+        if (playbackIsActive) {
+          queuedPlayback = {
+            playback: resolution.playback,
+            fromIndex: Math.min(queuedPlayback?.fromIndex ?? changedFrame, changedFrame)
+          };
+        } else {
+          continueProgramPlayback(resolution.playback, changedFrame);
+        }
+      }
     }
   }
 
@@ -366,22 +382,6 @@
       <small>ALL PROGRAMS LOCKED</small>
       {#key playbackCountdown}<strong>{playbackCountdown}</strong>{/key}
       <span>Movement incoming</span>
-    </div>
-  {/if}
-
-  {#if !playbackIsActive && state.resolution?.pendingOptionDecision && pendingOptionRobot}
-    <div
-      class="damage-prompt"
-      role="status"
-      aria-live="assertive"
-      data-testid="tabletop-damage-prompt"
-      data-decision-id={state.resolution.pendingOptionDecision.decisionId}
-    >
-      <small>{state.resolution.pendingOptionDecision.timing === 'damage'
-        ? 'DAMAGE DECISION'
-        : 'OPTION DECISION'} · ORIGINAL DOCK ORDER</small>
-      <strong>{pendingOptionRobot.name}</strong>
-      <span>{state.resolution.pendingOptionDecision.tabletopPrompt}</span>
     </div>
   {/if}
 
@@ -498,6 +498,7 @@
 
     <div
       class:playback-active={playbackPhase === 'register' && !!playbackRegister}
+      class:decision-active={!playbackIsActive && !!state.resolution?.pendingOptionDecision && !!pendingOptionRobot}
       class="course-wrap"
     >
       {#if state.setup}
@@ -509,6 +510,34 @@
           laserBeams={playbackLaserBeams}
           presentationOnly
         />
+        {#if !playbackIsActive && state.resolution?.pendingOptionDecision && pendingOptionRobot}
+          <div
+            class:side-facing={tabletopLayout === 'side-seats'}
+            class="course-decision"
+            role="status"
+            aria-live="assertive"
+            data-testid="tabletop-damage-prompt"
+            data-decision-id={state.resolution.pendingOptionDecision.decisionId}
+          >
+            {#each ['near', 'far'] as position}
+              <div
+                class:near={position === 'near'}
+                class:far={position === 'far'}
+                class="decision-copy"
+                aria-hidden={position === 'far'}
+                data-table-facing={tabletopLayout === 'side-seats'
+                  ? position === 'near' ? 'west' : 'east'
+                  : position === 'near' ? 'north' : 'south'}
+              >
+                <small>{state.resolution.pendingOptionDecision.timing === 'damage'
+                  ? 'DAMAGE DECISION'
+                  : 'OPTION DECISION'} · DOCK ORDER</small>
+                <strong>{pendingOptionRobot.name}</strong>
+                <span>{state.resolution.pendingOptionDecision.tabletopPrompt}</span>
+              </div>
+            {/each}
+          </div>
+        {/if}
         {#if playbackPhase === 'register' && playbackRegister}
           <div
             class:side-facing={tabletopLayout === 'side-seats'}
@@ -602,26 +631,6 @@
   .program-countdown small { color: #d2ff37; font-size: clamp(18px, 3vw, 38px); letter-spacing: .12em; }
   .program-countdown strong { color: #eef4ee; font-size: clamp(150px, 35vw, 420px); line-height: .9; text-shadow: 0 0 45px #d2ff3788; }
   .program-countdown span { color: #ffcf4b; font-size: clamp(22px, 4vw, 50px); }
-  .damage-prompt {
-    position: fixed;
-    z-index: 45;
-    top: 50%;
-    left: 50%;
-    display: grid;
-    width: min(78vw, 920px);
-    gap: 10px;
-    padding: clamp(18px, 3vw, 42px);
-    border: 4px solid #ff4545;
-    border-radius: 14px;
-    color: #eef4ee;
-    background: #090d0ef2;
-    box-shadow: 0 0 55px #ff202066, 0 24px 80px #000;
-    text-align: center;
-    transform: translate(-50%, -50%);
-  }
-  .damage-prompt small { color: #ffcf4b; font: 700 clamp(14px, 2vw, 24px) 'Space Mono', monospace; }
-  .damage-prompt strong { color: #fff; font: 700 clamp(48px, 10vw, 132px) 'Space Mono', monospace; text-transform: uppercase; }
-  .damage-prompt span { font-size: clamp(18px, 2.5vw, 34px); }
   .race-finish-overlay { position: fixed; z-index: 55; inset: 0; display: grid; padding: clamp(16px, 5vw, 70px); place-items: center; background: #050909e8; }
   .race-finish-overlay > div { display: grid; width: min(92vw, 1000px); gap: clamp(12px, 2vh, 28px); justify-items: center; padding: clamp(24px, 5vw, 70px); border: 4px solid #d2ff37; border-radius: 18px; background: radial-gradient(circle at top, #243739, #0c1213 72%); box-shadow: 0 0 80px #d2ff3744; text-align: center; }
   .race-finish-overlay span { color: #ffcf4b; font: 700 clamp(20px, 3vw, 42px) 'Space Mono', monospace; letter-spacing: .14em; }
@@ -651,17 +660,18 @@
   .top-bottom-seats .course-wrap { grid-column: 1 / -1; grid-row: 2; }
   .side-seats .course-wrap { grid-column: 2; grid-row: 1 / -1; }
   .course-wrap :global(.course-panel), .course-wrap :global(.board-viewport) { height: 100%; }
-  .course-wrap.playback-active :global(.course-panel.presentation-only) {
+  .course-wrap.playback-active :global(.course-panel.presentation-only),
+  .course-wrap.decision-active :global(.course-panel.presentation-only) {
     padding-inline: var(--playback-gutter-width);
   }
-  .course-playback {
+  .course-playback, .course-decision {
     position: absolute;
     z-index: 3;
     inset: 4px;
     overflow: hidden;
     pointer-events: none;
   }
-  .playback-copy {
+  .playback-copy, .decision-copy {
     position: absolute;
     top: 0;
     bottom: 0;
@@ -679,8 +689,8 @@
     box-shadow: 0 0 24px #000a;
     font-family: 'Space Mono', monospace;
   }
-  .playback-copy.near { left: 0; }
-  .playback-copy.far { right: 0; transform: rotate(180deg); }
+  .playback-copy.near, .decision-copy.near { left: 0; }
+  .playback-copy.far, .decision-copy.far { right: 0; transform: rotate(180deg); }
   .playback-copy strong {
     color: #d2ff37;
     font-size: clamp(14px, 1.5vw, 24px);
@@ -704,7 +714,34 @@
     align-self: end;
     background: linear-gradient(90deg, #d2ff37 0 calc(var(--playback-progress) * 100%), #344043 calc(var(--playback-progress) * 100%) 100%);
   }
-  .course-playback.side-facing .playback-copy {
+  .decision-copy {
+    grid-template-rows: auto auto minmax(0, 1fr);
+    border-color: #ff4545;
+    box-shadow: 0 0 24px #ff202033, 0 0 24px #000a;
+  }
+  .decision-copy small {
+    color: #ffcf4b;
+    font-size: clamp(10px, .8vw, 14px);
+    font-weight: 700;
+    line-height: 1.15;
+    text-transform: uppercase;
+  }
+  .decision-copy strong {
+    overflow: hidden;
+    color: #fff;
+    font-size: clamp(16px, 1.8vw, 28px);
+    line-height: 1;
+    overflow-wrap: anywhere;
+    text-transform: uppercase;
+  }
+  .decision-copy span {
+    overflow: hidden;
+    font-size: clamp(11px, .9vw, 16px);
+    line-height: 1.18;
+    overflow-wrap: anywhere;
+  }
+  .course-playback.side-facing .playback-copy,
+  .course-decision.side-facing .decision-copy {
     top: 0;
     bottom: auto;
     width: 100cqh;
@@ -713,12 +750,14 @@
     grid-template-rows: minmax(0, 1fr) 7px;
     align-items: center;
   }
-  .course-playback.side-facing .playback-copy.near {
+  .course-playback.side-facing .playback-copy.near,
+  .course-decision.side-facing .decision-copy.near {
     left: var(--playback-gutter-width);
     transform: rotate(90deg);
     transform-origin: top left;
   }
-  .course-playback.side-facing .playback-copy.far {
+  .course-playback.side-facing .playback-copy.far,
+  .course-decision.side-facing .decision-copy.far {
     top: 100%;
     right: auto;
     left: calc(100% - var(--playback-gutter-width));
@@ -727,6 +766,11 @@
   }
   .course-playback.side-facing .playback-copy span { white-space: nowrap; text-overflow: ellipsis; }
   .course-playback.side-facing .playback-copy i { grid-column: 1 / -1; }
+  .course-decision.side-facing .decision-copy {
+    grid-template-columns: auto minmax(0, auto) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .course-decision.side-facing .decision-copy span { white-space: nowrap; text-overflow: ellipsis; }
   .seat { z-index: 2; display: grid; gap: 4px; align-content: start; min-width: 0; min-height: 0; overflow: hidden; padding: clamp(4px, 1vw, 12px); border: 2px solid #4b5a5c; border-radius: 10px; background: #11191aee; box-shadow: 0 7px 18px #05070799; }
   .seat.open { border-color: #7e9130; }
   .top-bottom-seats .seat-1 { grid-column: 1; grid-row: 1; } .top-bottom-seats .seat-2 { grid-column: 2; grid-row: 1; } .top-bottom-seats .seat-3 { grid-column: 3; grid-row: 1; } .top-bottom-seats .seat-4 { grid-column: 4; grid-row: 1; }

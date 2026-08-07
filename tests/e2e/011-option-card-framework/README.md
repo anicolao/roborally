@@ -20,14 +20,14 @@ Two ordinary clients reach the crossed repair site on successive turns, draw fro
 - [x] Ada sees the exact pending damage point and her owned Options
 - [x] Grace sees that Ada is the player currently being prompted
 
-## The shared tabletop keeps the successful beam visible and names the prompted player
+## Mirrored gutter rails keep the board visible while naming the prompted player
 
-![The shared tabletop keeps the successful beam visible and names the prompted player](./screenshots/002-tabletop-identifies-damage-decision-desktop.png)
+![Mirrored gutter rails keep the board visible while naming the prompted player](./screenshots/002-tabletop-identifies-damage-decision-desktop.png)
 
 **Verifications:**
 
-- [x] The tabletop prominently identifies Ada as the current responder
-- [x] The successful robot laser remains visible beneath the decision prompt
+- [x] Both table orientations prominently identify Ada as the current responder
+- [x] Decision rails occupy only the gutters and leave the successful laser visible
 
 ## Owning Options no longer creates an up-front planning barrier
 
