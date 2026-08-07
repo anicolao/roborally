@@ -144,6 +144,8 @@ test('face-up Options remain available for execution-time decisions', async (
     await expect(damageChoice).toBeVisible({ timeout: 45_000 });
     const tableDamagePrompt = table.getByTestId('tabletop-damage-prompt');
     await expect(tableDamagePrompt).toBeVisible({ timeout: 45_000 });
+    const decisionCopies = tableDamagePrompt.locator('.decision-copy');
+    await expect(decisionCopies).toHaveCount(2);
     await steps.step('damage-choice-at-impact', {
       description: 'Laser damage pauses execution and prompts the affected player at impact time',
       verifications: [
@@ -168,19 +170,32 @@ test('face-up Options remain available for execution-time decisions', async (
     });
     steps.setPage(table);
     await steps.step('tabletop-identifies-damage-decision', {
-      description: 'The shared tabletop keeps the successful beam visible and names the prompted player',
+      description: 'Mirrored gutter rails keep the board visible while naming the prompted player',
       verifications: [
         {
-          spec: 'The tabletop prominently identifies Ada as the current responder',
+          spec: 'Both table orientations prominently identify Ada as the current responder',
           check: async () => {
             await expect(tableDamagePrompt).toContainText('Ada');
-            await expect(tableDamagePrompt).toContainText('ORIGINAL DOCK ORDER');
+            await expect(tableDamagePrompt).toContainText('DOCK ORDER');
+            await expect(decisionCopies).toHaveCount(2);
           }
         },
         {
-          spec: 'The successful robot laser remains visible beneath the decision prompt',
+          spec: 'Decision rails occupy only the gutters and leave the successful laser visible',
           check: async () => {
             await expect(table.locator('[data-laser-source]')).not.toHaveCount(0);
+            const board = await table.locator('.course-board').boundingBox();
+            const wrap = await table.locator('.course-wrap').boundingBox();
+            const near = await decisionCopies.nth(0).boundingBox();
+            const far = await decisionCopies.nth(1).boundingBox();
+            expect(board).not.toBeNull();
+            expect(wrap).not.toBeNull();
+            expect(near).not.toBeNull();
+            expect(far).not.toBeNull();
+            expect(near!.x + near!.width).toBeLessThanOrEqual(board!.x + 1);
+            expect(far!.x).toBeGreaterThanOrEqual(board!.x + board!.width - 1);
+            expect(near!.x).toBeGreaterThanOrEqual(wrap!.x - 1);
+            expect(far!.x + far!.width).toBeLessThanOrEqual(wrap!.x + wrap!.width + 1);
           }
         }
       ]
@@ -200,6 +215,8 @@ test('face-up Options remain available for execution-time decisions', async (
           check: async () => {
             await expect(guest.getByRole('heading', { name: 'Turn 5 complete' })).toBeVisible();
             await expect(host.getByLabel('Ordered Option decision window')).toHaveCount(0);
+            await expect(tableDamagePrompt).toBeHidden();
+            await expect(table.locator('[data-laser-source]')).toHaveCount(0);
           }
         },
         {

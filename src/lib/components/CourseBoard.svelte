@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import BoardTile from '$lib/components/BoardTile.svelte';
   import type { BoardElement, Direction, Wall } from '$lib/game/course-manifest';
   import { PUBLISHED_COURSES_BY_ID } from '$lib/game/course-catalog';
@@ -6,6 +7,7 @@
   import { ROBOTS } from '$lib/room-model';
   import type { RaceSetup } from '$lib/game/setup';
   import type { RaceRobotPosition, RobotLaserBeam } from '$lib/game/movement';
+  import { facingDegrees, nextFacingDegrees } from '$lib/playback-presentation';
 
   let {
     setup,
@@ -32,6 +34,9 @@
   let panY = $state(0);
   let activeX = $state(1);
   let activeY = $state(1);
+  let playbackRotations = $state<
+    Record<string, { facing: RaceRobotPosition['facing']; degrees: number }>
+  >({});
   const displayedRobots = $derived(
     robots
       // During playback keep destroyed/shutdown robots in the animated frame so
@@ -78,6 +83,25 @@
   const dockingPlacement = $derived(
     course.boardPlacements.find(({ boardId }) => boardId.startsWith('docking-bay'))
   );
+
+  $effect(() => {
+    const visibleRobots = displayedRobots;
+    const isAnimating = animateRobots;
+    const previous = untrack(() => playbackRotations);
+    playbackRotations = Object.fromEntries(
+      visibleRobots.map((robot) => {
+        const prior = previous[robot.uid];
+        const degrees = isAnimating && prior
+          ? nextFacingDegrees(prior.facing, prior.degrees, robot.facing)
+          : facingDegrees(robot.facing);
+        return [robot.uid, { facing: robot.facing, degrees }];
+      })
+    );
+  });
+
+  function playbackRotation(robot: { uid: string; facing: RaceRobotPosition['facing'] }) {
+    return playbackRotations[robot.uid]?.degrees ?? facingDegrees(robot.facing);
+  }
 
   function elementLabel(element: BoardElement): string {
     if (element.kind === 'pit') return 'pit';
@@ -218,9 +242,10 @@
           <span
             aria-hidden="true"
             class:current-player={player.uid === currentPlayerUid}
-            class={`animated-race-robot robot-${player.robotId} facing-${player.facing}`}
+            class={`animated-race-robot robot-${player.robotId}`}
             data-playback-robot={player.uid}
-            style={`left:${((player.position.x - compiledCourse.minX + 0.5) / compiledCourse.width) * 100}%;top:${((player.position.y - compiledCourse.minY + 0.5) / compiledCourse.height) * 100}%;--playback-duration:${transitionDurationMs}ms`}
+            data-facing={player.facing}
+            style={`left:${((player.position.x - compiledCourse.minX + 0.5) / compiledCourse.width) * 100}%;top:${((player.position.y - compiledCourse.minY + 0.5) / compiledCourse.height) * 100}%;--playback-duration:${transitionDurationMs}ms;transform:translate(-50%, -50%) rotate(${playbackRotation(player)}deg)`}
           >
             <i></i>{robot?.mark}
           </span>

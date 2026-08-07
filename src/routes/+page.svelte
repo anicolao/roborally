@@ -44,6 +44,10 @@
     type PlaybackTimer
   } from '$lib/playback-clock';
   import {
+    firstChangedPlaybackFrame,
+    robotsForPlaybackPresentation
+  } from '$lib/playback-presentation';
+  import {
     MAX_ROOM_PLAYERS,
     ROBOTS,
     emptyRoomState,
@@ -109,8 +113,8 @@
   let playbackFrameCount = 0;
   let playbackProductionDurationMs = 2_000;
   let playbackKey = '';
-  let scheduledPlaybackFrames = 0;
-  let queuedPlayback: ProgramPlayback | undefined;
+  let scheduledPlayback: ProgramPlayback | undefined;
+  let queuedPlayback: { playback: ProgramPlayback; fromIndex: number } | undefined;
   // Keep emulator playback quick, but long enough for Playwright and the browser
   // to observe each independently rendered movement stage.
   let playbackTimeScale = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' ? 0.1 : 1;
@@ -225,7 +229,15 @@
               : playbackStage === 'laser-damage'
                 ? 'Damage decision'
             : '';
-  $: presentedResolutionRobots = playbackRobots ?? roomState.resolution?.robots;
+  $: resolutionPlaybackKey = roomState.resolution
+    ? `${roomState.raceEpoch}:${roomState.resolution.turnNumber}`
+    : '';
+  $: presentedResolutionRobots = robotsForPlaybackPresentation(
+    roomState.resolution,
+    playbackRobots,
+    resolutionPlaybackKey,
+    playbackKey
+  );
   $: visibleResolutionTrace = playbackIsActive
     ? playbackTrace
     : (roomState.resolution?.trace ?? []);
@@ -286,7 +298,7 @@
     playbackFrameIndex = 0;
     playbackFrameCount = 0;
     playbackProductionDurationMs = PRODUCTION_PROGRAM_CARD_MS;
-    scheduledPlaybackFrames = 0;
+    scheduledPlayback = undefined;
     queuedPlayback = undefined;
   }
 
@@ -302,7 +314,7 @@
   function schedulePlaybackFrames(playback: ProgramPlayback, fromIndex: number, initialDelay: number) {
     let frameStart = initialDelay;
     playbackFrameCount = playback.frames.length;
-    scheduledPlaybackFrames = playback.frames.length;
+    scheduledPlayback = playback;
     for (const [index, frame] of playback.frames.entries()) {
       if (index < fromIndex) continue;
       const productionDuration = productionDurationForFrame(frame);
@@ -321,11 +333,11 @@
       frameStart += Math.round(productionDuration * playbackTimeScale);
     }
     schedulePlayback(() => {
-      if (queuedPlayback && queuedPlayback.frames.length > scheduledPlaybackFrames) {
+      if (queuedPlayback) {
         const continuation = queuedPlayback;
         queuedPlayback = undefined;
         clearPlaybackTimers();
-        schedulePlaybackFrames(continuation, scheduledPlaybackFrames, 0);
+        schedulePlaybackFrames(continuation.playback, continuation.fromIndex, 0);
         return;
       }
       playbackPhase = 'complete';
@@ -353,30 +365,34 @@
     schedulePlaybackFrames(playback, 0, countdownStepMs * 3);
   }
 
-  function continueProgramPlayback(playback: ProgramPlayback) {
-    const fromIndex = scheduledPlaybackFrames;
+  function continueProgramPlayback(playback: ProgramPlayback, fromIndex: number) {
     clearPlaybackTimers();
     schedulePlaybackFrames(playback, fromIndex, 0);
   }
 
   $: {
     const resolution = roomState.resolution;
-    const nextPlaybackKey = resolution
-      ? `${roomState.raceEpoch}:${resolution.turnNumber}`
-      : '';
     if (
       resolution?.playback.frames.length &&
-      nextPlaybackKey &&
-      nextPlaybackKey !== playbackKey
+      resolutionPlaybackKey &&
+      resolutionPlaybackKey !== playbackKey
     ) {
-      startProgramPlayback(nextPlaybackKey, resolution.playback);
-    } else if (
-      resolution?.playback.frames.length &&
-      nextPlaybackKey === playbackKey &&
-      resolution.playback.frames.length > scheduledPlaybackFrames
-    ) {
-      if (playbackIsActive) queuedPlayback = resolution.playback;
-      else continueProgramPlayback(resolution.playback);
+      startProgramPlayback(resolutionPlaybackKey, resolution.playback);
+    } else if (resolution?.playback.frames.length && resolutionPlaybackKey === playbackKey) {
+      const comparisonPlayback = queuedPlayback?.playback ?? scheduledPlayback;
+      const changedFrame = comparisonPlayback
+        ? firstChangedPlaybackFrame(comparisonPlayback.frames, resolution.playback.frames)
+        : null;
+      if (changedFrame !== null) {
+        if (playbackIsActive) {
+          queuedPlayback = {
+            playback: resolution.playback,
+            fromIndex: Math.min(queuedPlayback?.fromIndex ?? changedFrame, changedFrame)
+          };
+        } else {
+          continueProgramPlayback(resolution.playback, changedFrame);
+        }
+      }
     }
   }
 
