@@ -88,6 +88,23 @@
   $: pendingOptionRobot = state.resolution?.robots.find(
     (candidate) => candidate.uid === pendingOptionDecision?.uid
   );
+  $: waitingForNextTurn =
+    !!state.nextProgramming && requestedTurnNumber < state.nextProgramming.turnNumber;
+  $: powerDownChoiceVisible =
+    canRespondPowerDown && (!programming || programming.submitted);
+  $: programEditorVisible =
+    !!programming &&
+    !waitingForNextTurn &&
+    !pendingOptionDecision &&
+    optionLossRobot?.uid !== player?.uid &&
+    reentryChoices.length === 0 &&
+    !powerDownChoiceVisible;
+  $: focusedController =
+    programEditorVisible ||
+    !!pendingOptionDecision ||
+    optionLossRobot?.uid === player?.uid ||
+    reentryChoices.length > 0 ||
+    powerDownChoiceVisible;
 
   onMount(async () => {
     const params = new URLSearchParams(location.search);
@@ -388,9 +405,13 @@
 </script>
 
 <svelte:head><title>Robo Rally · Private controller</title></svelte:head>
-<main class="phone" data-e2e-private-hand>
+<main class="phone" data-e2e-private-hand data-e2e-layout>
   <header><a href={`${base}/`}><strong>ROBO</strong> RALLY</a><span>{roomCode || 'NO ROOM'}</span></header>
-  <div class:programming={!!programming} class="controller-content">
+  <div
+    class:focused={focusedController}
+    class:programming={programEditorVisible}
+    class="controller-content"
+  >
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if !roomCode}
     <p class="empty">Scan a tabletop position to connect this private controller.</p>
@@ -429,21 +450,11 @@
     </section>
   {:else}
     <section class="identity"><span>PRIVATE CONTROLLER</span><h1>{player.name}</h1><strong>{ROBOTS.find((robot) => robot.id === player.robotId)?.name}</strong><p>{status}</p></section>
-    {#if canRespondPowerDown}
-      <section class="power-control" aria-label="Power-down choice">
-        <h2>Next-turn power</h2>
-        <p>Choose whether your robot will shut down for the next turn.</p>
-        <div>
-          <button onclick={() => respondPowerDown(true)} disabled={pending}>POWER DOWN</button>
-          <button onclick={() => respondPowerDown(false)} disabled={pending}>STAY ACTIVE</button>
-        </div>
-      </section>
-    {/if}
-    {#if state.nextProgramming && requestedTurnNumber < state.nextProgramming.turnNumber}
+    {#if waitingForNextTurn}
       <section class="next-turn-control" aria-label="Next turn ready">
         <h2>Turn {state.resolution?.turnNumber} complete</h2>
         <p>Watch the tabletop finish its playback, then open your next private Program hand.</p>
-        <button onclick={beginNextTurn}>BEGIN TURN {state.nextProgramming.turnNumber}</button>
+        <button onclick={beginNextTurn}>BEGIN TURN {state.nextProgramming?.turnNumber}</button>
       </section>
     {:else if pendingOptionDecision?.uid === player.uid && pendingOptionRobot}
       <section
@@ -467,9 +478,7 @@
                 disabled={pending}
               >
                 <OptionCardFace {card} size="small" />
-                {#if pendingOptionDecision.timing !== 'damage'}
-                  <span>{choice.label}</span>
-                {/if}
+                <span>{choice.label}</span>
               </button>
             {/if}
           {/each}
@@ -516,6 +525,7 @@
                 disabled={pending}
               >
                 <OptionCardFace {card} size="small" />
+                <span>Discard {card.name}</span>
               </button>
             {/if}
           {/each}
@@ -544,8 +554,20 @@
         {/if}
         <button onclick={submitReentryChoice} disabled={pending || !selectedReentryChoice}>CONFIRM RE-ENTRY</button>
       </section>
+    {:else if powerDownChoiceVisible}
+      <section class="power-control" aria-label="Power-down choice">
+        <h2>Next-turn power</h2>
+        <p>Your Program is locked. Choose whether your robot will shut down for the next turn.</p>
+        <div>
+          <button onclick={() => respondPowerDown(true)} disabled={pending}>POWER DOWN</button>
+          <button onclick={() => respondPowerDown(false)} disabled={pending}>STAY ACTIVE</button>
+        </div>
+      </section>
     {:else if programming}
-      <section class="private-programming">
+      <section
+        class="private-programming"
+        data-power-choice-queued={canRespondPowerDown && !programming.submitted}
+      >
         <p>These choices remain private. The tabletop reveals cards only when execution begins.</p>
         {#key turnId}
           <ProgramEditor
@@ -605,7 +627,12 @@
       max(8px, env(safe-area-inset-bottom))
       max(12px, env(safe-area-inset-left));
   }
-  .controller-content { min-height: 0; overflow: auto; }
+  .controller-content {
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
   .controller-content.programming {
     display: flex;
     flex-direction: column;
@@ -623,7 +650,7 @@
   header a, footer a { color: #eef4ee; text-decoration: none; }
   header strong, header span { color: #d2ff37; }
   .identity { margin: 28px 0; }
-  .programming .identity {
+  .focused .identity {
     display: grid;
     flex: none;
     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -631,10 +658,10 @@
     align-items: baseline;
     margin: 6px 0;
   }
-  .programming .identity > span { display: none; }
-  .programming .identity h1 { margin: 0; font-size: clamp(22px, 7vw, 34px); }
-  .programming .identity strong { justify-self: end; }
-  .programming .identity p {
+  .focused .identity > span { display: none; }
+  .focused .identity h1 { margin: 0; font-size: clamp(22px, 7vw, 34px); }
+  .focused .identity strong { justify-self: end; }
+  .focused .identity p {
     grid-column: 1 / -1;
     margin: 0;
     overflow: hidden;
@@ -713,7 +740,13 @@
   .next-turn-control p { margin: 0 0 16px; }
   .power-control p { margin: 0 0 12px; }
   .power-control > div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .effect-control { margin-top: 20px; padding: 16px; border: 2px solid #ffcf4b; background: #211d12; }
+  .effect-control {
+    width: min(100%, 560px);
+    margin: 20px auto 8px;
+    padding: 16px;
+    border: 2px solid #ffcf4b;
+    background: #211d12;
+  }
   .effect-control p { margin: 0 0 14px; }
   .effect-control label { display: grid; gap: 7px; margin-bottom: 12px; color: #ffcf4b; font: 700 15px 'Space Mono', monospace; text-transform: uppercase; }
   .effect-control select { min-height: 52px; padding: 8px 10px; border: 1px solid #657577; color: #eef4ee; background: #141c1d; font-size: 18px; }
@@ -727,10 +760,11 @@
   }
   button.option-card-choice {
     display: grid;
+    gap: 4px;
     justify-items: center;
     min-width: 0;
     min-height: 0;
-    padding: 0;
+    padding: 5px;
     overflow: hidden;
     border: 2px solid #657577;
     border-radius: 7px;
@@ -738,6 +772,12 @@
   }
   button.option-card-choice:hover,
   button.option-card-choice:focus-visible { border-color: #ffcf4b; }
+  button.option-card-choice :global(.option-card) {
+    width: min(100%, 260px);
+    height: auto;
+    aspect-ratio: 320 / 213;
+    filter: drop-shadow(0 5px 8px rgb(0 0 0 / 40%));
+  }
   button.option-card-choice > span {
     display: block;
     width: 100%;
@@ -754,14 +794,18 @@
   @media (max-width: 700px) {
     header, footer { padding-bottom: 6px; font-size: 12px; }
     footer span { display: none; }
+    .effect-control { margin-top: 8px; padding: 10px; }
+    .effect-control h2 { margin-bottom: 6px; }
+    .effect-control p { margin-bottom: 8px; font-size: 17px; line-height: 1.2; }
+    button.option-card-choice :global(.option-card) { width: min(100%, 260px); }
   }
 
   @media (max-height: 720px) {
     .phone { padding-top: max(4px, env(safe-area-inset-top)); padding-bottom: max(3px, env(safe-area-inset-bottom)); }
     header { padding-bottom: 3px; }
     footer { display: none; }
-    .programming .identity { margin: 2px 0; }
-    .programming .identity p { display: none; }
+    .focused .identity { margin: 2px 0; }
+    .focused .identity p { display: none; }
     .programming .private-programming { padding: 3px; }
   }
 </style>

@@ -907,6 +907,11 @@ test("powered-down private controller can resolve incoming damage", async ({
     true,
     "23",
   );
+  const layoutSteps = new TestStepHelper(host, testInfo);
+  layoutSteps.setMetadata(
+    "Compact private Option decisions",
+    "A short phone keeps Option details and every damage action inside a fixed, independently scrollable private controller.",
+  );
   try {
     await chooseStationaryProgram(host);
     const guestTurnOne = await chooseStationaryProgram(guest);
@@ -914,6 +919,7 @@ test("powered-down private controller can resolve incoming damage", async ({
 
     await guest.getByRole("button", { name: "Begin Turn 2" }).click();
     await host.goto(`/hand/?room=${roomCode}&seat=1`);
+    await host.setViewportSize({ width: 320, height: 568 });
     await expect(host.getByRole("heading", { name: "Ada" })).toBeVisible();
     await host.getByRole("button", { name: "BEGIN TURN 2" }).click();
     await expect(host.getByRole("heading", { name: "Program deck" })).toHaveCount(0);
@@ -953,12 +959,69 @@ test("powered-down private controller can resolve incoming damage", async ({
         name: "Discard Extra Memory to prevent this damage",
       }),
     ).toBeVisible();
-    await expect(
-      decision.getByRole("button", { name: "Take this damage" }),
-    ).toBeVisible();
+    const takeDamage = decision.getByRole("button", { name: "Take this damage" });
+    await expect(takeDamage).toBeVisible();
+    await layoutSteps.step("compact-option-decision", {
+      description: "A 320-pixel phone presents a compact Option preview with an explicit action",
+      status: "skip",
+      verifications: [
+        {
+          spec: "The card scales to the narrow panel while its visible discard label remains readable",
+          check: async () => {
+            const geometry = await host.evaluate(() => {
+              const root = document.scrollingElement!;
+              const content = document.querySelector<HTMLElement>(".controller-content")!;
+              const card = document.querySelector<HTMLElement>(
+                '[aria-label="Damage prevention choice"] [data-card-id="extra-memory"]',
+              )!;
+              const bounds = card.getBoundingClientRect();
+              return {
+                root: {
+                  clientWidth: root.clientWidth,
+                  clientHeight: root.clientHeight,
+                  scrollWidth: root.scrollWidth,
+                  scrollHeight: root.scrollHeight,
+                },
+                contentOverflow: getComputedStyle(content).overflowY,
+                card: { left: bounds.left, right: bounds.right, width: bounds.width },
+              };
+            });
+            expect(geometry.root.scrollWidth).toBe(geometry.root.clientWidth);
+            expect(geometry.root.scrollHeight).toBe(geometry.root.clientHeight);
+            expect(geometry.contentOverflow).toBe("auto");
+            expect(geometry.card.width).toBeLessThanOrEqual(260);
+            expect(geometry.card.left).toBeGreaterThanOrEqual(0);
+            expect(geometry.card.right).toBeLessThanOrEqual(320);
+            await expect(
+              decision.getByText("Discard Extra Memory to prevent this damage", { exact: true }),
+            ).toBeVisible();
+          },
+        },
+      ],
+    });
+    await host.setViewportSize({ width: 320, height: 480 });
+    await takeDamage.scrollIntoViewIfNeeded();
+    await layoutSteps.step("reachable-option-actions", {
+      description: "The controller scrolls independently to keep the fallback action reachable",
+      status: "skip",
+      verifications: [
+        {
+          spec: "Take this damage remains a full-width touch target inside the short viewport",
+          check: async () => {
+            const bounds = await takeDamage.boundingBox();
+            expect(bounds).not.toBeNull();
+            expect(bounds!.x).toBeGreaterThanOrEqual(0);
+            expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(320);
+            expect(bounds!.y).toBeGreaterThanOrEqual(0);
+            expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(480);
+            expect(bounds!.height).toBeGreaterThanOrEqual(48);
+          },
+        },
+      ],
+    });
     const decisionId = await decision.getAttribute("data-decision-id");
     expect(decisionId).toBeTruthy();
-    await decision.getByRole("button", { name: "Take this damage" }).click();
+    await takeDamage.click();
     await expect.poll(() => decision.getAttribute("data-decision-id")).not.toBe(decisionId);
   } finally {
     await guestContext.close();

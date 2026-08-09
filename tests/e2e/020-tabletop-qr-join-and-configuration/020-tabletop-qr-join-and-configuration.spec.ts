@@ -100,6 +100,27 @@ async function expectReadablePrivateProgramCards(page: import('@playwright/test'
   }
 }
 
+async function expectProportionalPrivateProgramCards(
+  page: import('@playwright/test').Page,
+  minimumWidth: number
+) {
+  const cards = page.getByLabel('Your Program hand').getByRole('button');
+  const bounds = await cards.evaluateAll((elements) =>
+    elements.map((element) => {
+      const rect = element.getBoundingClientRect();
+      return { width: rect.width, height: rect.height };
+    })
+  );
+  for (const card of bounds) {
+    expect(card.width).toBeGreaterThanOrEqual(minimumWidth);
+    expect(card.height / card.width).toBeGreaterThan(1.35);
+  }
+  const actionHeights = await page
+    .locator('.program-editor .editor-actions button')
+    .evaluateAll((buttons) => buttons.map((button) => button.getBoundingClientRect().height));
+  for (const height of actionHeights) expect(height).toBeGreaterThanOrEqual(44);
+}
+
 async function touchDrag(
   page: import('@playwright/test').Page,
   source: import('@playwright/test').Locator,
@@ -382,10 +403,36 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await touchDrag(firstPhone, touchCard, touchRegister);
     await expect(touchRegister).toContainText(touchCardPriority);
     await expectFixedPrivateViewport(firstPhone);
+    await firstPhone.setViewportSize({ width: 320, height: 568 });
+    await phoneSteps.step('private-programming-small-phone', {
+      description: 'A short narrow phone preserves readable card proportions and touch targets',
+      status: 'skip',
+      verifications: [
+        {
+          spec: 'The 320 by 568 controller fits every card, register, and action without clipping',
+          check: async () => {
+            await expectFixedPrivateViewport(firstPhone);
+            await expectProportionalPrivateProgramCards(firstPhone, 60);
+          }
+        }
+      ]
+    });
     await firstPhone.setViewportSize({ width: 820, height: 1180 });
     await expectFixedPrivateViewport(firstPhone);
     await firstPhone.setViewportSize({ width: 852, height: 393 });
-    await expectFixedPrivateViewport(firstPhone);
+    await phoneSteps.step('private-programming-landscape', {
+      description: 'Landscape separates the Program hand from its register and action rail',
+      status: 'skip',
+      verifications: [
+        {
+          spec: 'The wide short controller uses both axes while retaining portrait Program cards',
+          check: async () => {
+            await expectFixedPrivateViewport(firstPhone);
+            await expectProportionalPrivateProgramCards(firstPhone, 50);
+          }
+        }
+      ]
+    });
     await firstPhone.setViewportSize(privateControllerOptions.viewport);
     await expectFixedPrivateViewport(firstPhone);
 
@@ -515,17 +562,57 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     }
     expect(damagedPhones.length).toBeGreaterThan(0);
 
-    await submitVisibleProgram(firstPhone);
+    const queuedPowerPhone = damagedPhones[0];
+    const alreadyLockedPhone = phones.find((phone) => phone !== queuedPowerPhone)!;
+    await submitVisibleProgram(alreadyLockedPhone);
+    let earlyPowerResponses = 0;
+    await expect.poll(async () => {
+      if (
+        (await queuedPowerPhone
+          .locator('.private-programming')
+          .getAttribute('data-power-choice-queued')) === 'true'
+      ) {
+        return true;
+      }
+      const earlyChoice = alreadyLockedPhone.getByLabel('Power-down choice');
+      if (await earlyChoice.isVisible()) {
+        await earlyChoice.getByRole('button', { name: 'STAY ACTIVE' }).click();
+        earlyPowerResponses += 1;
+      }
+      return false;
+    }).toBe(true);
+    await expect(queuedPowerPhone.getByRole('heading', { name: 'Program deck' })).toBeVisible();
+    await expect(queuedPowerPhone.getByLabel('Power-down choice')).toHaveCount(0);
+    phoneSteps.setPage(queuedPowerPhone);
+    await phoneSteps.step('programming-before-power-choice', {
+      description: 'An unfinished Program remains the only active task when power is queued',
+      status: 'skip',
+      verifications: [
+        {
+          spec: 'The ordered power prompt waits until this player locks all five registers',
+          check: async () => {
+            await expect(queuedPowerPhone.getByRole('heading', { name: 'Program deck' })).toBeVisible();
+            await expect(queuedPowerPhone.getByLabel('Power-down choice')).toHaveCount(0);
+            await expectFixedPrivateViewport(queuedPowerPhone);
+          }
+        }
+      ]
+    });
+
+    await submitVisibleProgram(queuedPowerPhone);
     const shutdownIndex = await phoneWithPowerChoice(phones);
     const shutdownPhone = phones[shutdownIndex];
     const activePhone = phones[1 - shutdownIndex];
     await shutdownPhone.getByRole('button', { name: 'POWER DOWN' }).click();
 
-    for (let response = 1; response < damagedPhones.length; response += 1) {
+    for (
+      let response = earlyPowerResponses + 1;
+      response < damagedPhones.length;
+      response += 1
+    ) {
       const nextIndex = await phoneWithPowerChoice(phones);
       await phones[nextIndex].getByRole('button', { name: 'STAY ACTIVE' }).click();
     }
-    await submitVisibleProgram(secondPhone);
     await completePrivateResolutionChoices(phones, 3);
 
     await firstPhone.getByRole('button', { name: 'BEGIN TURN 3' }).click();
@@ -550,6 +637,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
       shutdownPhone.getByRole('button', { name: 'READY · WATCH THE TABLE' })
     ).toHaveCount(0);
 
+    steps.setPage(shutdownPhone);
     await steps.step('private-power-down-choice', {
       description: 'A private controller handles its next-turn power choice without a Program hand',
       status: 'skip',
@@ -565,6 +653,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
         }
       ]
     });
+    steps.setPage(table);
 
     await shutdownPhone.getByRole('button', { name: 'STAY ACTIVE' }).click();
     if (activePhoneNeedsPowerChoice && !activePhoneResponded) {

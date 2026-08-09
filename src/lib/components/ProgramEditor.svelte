@@ -458,13 +458,13 @@
     .viewport-fit .editor-actions button { min-height: 44px; }
   }
 
-  @media (max-height: 720px) and (max-width: 820px) {
+  @media (max-height: 720px) and (max-width: 820px) and (orientation: portrait) {
     .program-editor { gap: 2px; }
     .instructions, .preview-note { display: none; }
-    .program-hand { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; }
+    .program-hand { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; }
     .viewport-fit .program-hand {
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      grid-template-rows: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-rows: repeat(3, minmax(0, 1fr));
       grid-auto-rows: auto;
       align-content: stretch;
     }
@@ -473,20 +473,33 @@
       height: 100%;
       max-width: 100%;
       justify-self: center;
-      aspect-ratio: 1;
+      aspect-ratio: 1014 / 1424;
     }
     .chosen-registers { gap: 2px; }
-    .chosen-registers li, .chosen-registers button { min-height: 30px; }
-    .chosen-registers button { font-size: 9px; }
+    .chosen-registers li, .chosen-registers button { min-height: 38px; }
+    .chosen-registers button { font-size: 10px; }
     .editor-actions { display: flex; gap: 2px; }
-    .editor-actions button { width: auto; min-height: 23px; padding: 0 4px; font-size: 12px; }
+    .editor-actions button {
+      flex: 1 1 0;
+      width: auto;
+      min-height: 44px;
+      padding: 0 4px;
+      font-size: 12px;
+    }
     .submission-state { padding: 3px; font-size: 12px; }
   }
 
   @media (max-height: 720px) and (orientation: landscape) {
-    .program-editor.viewport-fit { gap: 2px; }
+    .program-editor.viewport-fit {
+      grid-template-columns: minmax(0, 3fr) minmax(190px, 2fr);
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: 3px 8px;
+    }
+    .viewport-fit .editor-heading { grid-column: 1 / -1; }
     .viewport-fit .instructions, .viewport-fit .preview-note { display: none; }
     .viewport-fit .program-hand {
+      grid-column: 1;
+      grid-row: 2 / 4;
       grid-template-columns: repeat(5, minmax(0, 1fr));
       grid-template-rows: repeat(2, minmax(0, 1fr));
       grid-auto-rows: auto;
@@ -498,16 +511,27 @@
       height: 100%;
       max-width: 100%;
       justify-self: center;
-      aspect-ratio: 1;
+      aspect-ratio: 1014 / 1424;
     }
-    .viewport-fit .chosen-registers { gap: 2px; }
+    .viewport-fit .chosen-registers {
+      grid-column: 2;
+      grid-row: 2;
+      grid-template-columns: 1fr;
+      gap: 2px;
+    }
     .viewport-fit .chosen-registers li,
     .viewport-fit .chosen-registers button { min-height: 30px; }
     .viewport-fit .chosen-registers button { font-size: 9px; }
-    .viewport-fit .editor-actions { display: flex; gap: 2px; }
+    .viewport-fit .editor-actions {
+      display: flex;
+      grid-column: 2;
+      grid-row: 3;
+      gap: 2px;
+    }
     .viewport-fit .editor-actions button {
-      width: auto;
-      min-height: 23px;
+      flex: 1 1 0;
+      width: 0;
+      min-height: 44px;
       padding: 0 4px;
       font-size: 12px;
     }
