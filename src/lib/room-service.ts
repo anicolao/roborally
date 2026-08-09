@@ -27,6 +27,7 @@ import {
   type EffectDraft,
   type EffectDraftUpdatedPayload,
   type PlayerJoinedPayload,
+  type PresentationDecisionRevealedPayload,
   type PowerDownRespondedPayload,
   type ProgramSubmittedPayload,
   type ProgramDraftUpdatedPayload,
@@ -223,26 +224,37 @@ async function appendRoomEventUnlocked(
   payload: RoomEventPayload
 ) {
   const gameId = gameIdForCode(roomCode);
-  const clientSeq = nextClientSequence(gameId, user.uid);
-  const id = roomEventId(user.uid, clientSeq);
-  const event = {
-    type,
-    payload,
-    actorUid: user.uid,
-    clientSeq,
-    schemaVersion: ROOM_SCHEMA_VERSION,
-    reducerVersion: ROOM_REDUCER_VERSION
-  };
-  const reference = doc(db, `games/${gameId}/events/${id}`);
+  let clientSeq = nextClientSequence(gameId, user.uid);
 
-  try {
-    await setDoc(reference, { ...event, createdAt: serverTimestamp() });
-  } catch (error) {
-    const existing = await getDoc(reference);
-    if (!existing.exists() || !samePersistedEvent(existing.data(), event)) throw error;
+  while (true) {
+    const id = roomEventId(user.uid, clientSeq);
+    const event = {
+      type,
+      payload,
+      actorUid: user.uid,
+      clientSeq,
+      schemaVersion: ROOM_SCHEMA_VERSION,
+      reducerVersion: ROOM_REDUCER_VERSION
+    };
+    const reference = doc(db, `games/${gameId}/events/${id}`);
+
+    try {
+      await setDoc(reference, { ...event, createdAt: serverTimestamp() });
+      rememberClientSequence(gameId, user.uid, clientSeq);
+      return;
+    } catch (error) {
+      const existing = await getDoc(reference);
+      if (!existing.exists()) throw error;
+      if (samePersistedEvent(existing.data(), event)) {
+        rememberClientSequence(gameId, user.uid, clientSeq);
+        return;
+      }
+      // Another tab using this identity reserved the same immutable sequence.
+      // Advance past it and retry this intent without overwriting either event.
+      rememberClientSequence(gameId, user.uid, clientSeq);
+      clientSeq += 1;
+    }
   }
-
-  rememberClientSequence(gameId, user.uid, clientSeq);
 }
 
 export function appendRoomEvent(
@@ -427,6 +439,15 @@ export async function chooseEffect(
     turnId,
     choice
   });
+}
+
+export async function revealPresentationDecision(
+  db: Firestore,
+  user: User,
+  roomCode: string,
+  payload: PresentationDecisionRevealedPayload
+) {
+  await appendRoomEvent(db, user, roomCode, 'presentation/decision-revealed', payload);
 }
 
 export async function updateEffectDraft(
