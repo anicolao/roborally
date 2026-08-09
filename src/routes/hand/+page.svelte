@@ -24,6 +24,7 @@
     emptyRoomState,
     normalizeRoomCode,
     normalizePlayerName,
+    presentationDecisionKey,
     programmingOptionCardIds,
     type RobotId,
     type RoomState
@@ -75,27 +76,37 @@
   );
   $: currentPlayerReady = !!player && state.readyPlayerUids.includes(player.uid);
   $: canRespondPowerDown = !!player && state.pendingPowerDownUid === player.uid;
-  $: reentryChoices = player && state.resolution
+  $: canonicalPresentationDecisionKey = presentationDecisionKey(state);
+  $: presentationDecisionVisible =
+    !!canonicalPresentationDecisionKey &&
+    state.revealedDecisionKey === canonicalPresentationDecisionKey;
+  $: canonicalReentryChoices = player && state.resolution
     ? legalReentryChoices(state.resolution, player.uid)
     : [];
+  $: reentryChoices = presentationDecisionVisible ? canonicalReentryChoices : [];
   $: reentryRobot = state.resolution?.robots.find(
     (candidate) => candidate.uid === state.resolution?.nextReentryUid
   );
-  $: optionLossRobot = state.resolution?.robots.find(
+  $: canonicalOptionLossRobot = state.resolution?.robots.find(
     (candidate) => candidate.uid === state.resolution?.nextOptionChoiceUid
   );
-  $: pendingOptionDecision = state.resolution?.pendingOptionDecision ?? null;
+  $: optionLossRobot = presentationDecisionVisible ? canonicalOptionLossRobot : undefined;
+  $: canonicalPendingOptionDecision = state.resolution?.pendingOptionDecision ?? null;
+  $: pendingOptionDecision = presentationDecisionVisible
+    ? canonicalPendingOptionDecision
+    : null;
   $: pendingOptionRobot = state.resolution?.robots.find(
     (candidate) => candidate.uid === pendingOptionDecision?.uid
   );
-  $: waitingForNextTurn =
+  $: nextTurnAvailable =
     !!state.nextProgramming && requestedTurnNumber < state.nextProgramming.turnNumber;
+  $: waitingForNextTurn = nextTurnAvailable && presentationDecisionVisible;
   $: powerDownChoiceVisible =
     canRespondPowerDown && (!programming || programming.submitted);
   $: programEditorVisible =
     !!programming &&
     !waitingForNextTurn &&
-    !pendingOptionDecision &&
+    !canonicalPresentationDecisionKey &&
     optionLossRobot?.uid !== player?.uid &&
     reentryChoices.length === 0 &&
     !powerDownChoiceVisible;
@@ -160,10 +171,22 @@
         const programmingIsAhead =
           !!nextActiveProgramming &&
           (!next.resolution || nextActiveProgramming.turnNumber > next.resolution.turnNumber);
-        status = pendingOptionDecision?.uid === uid
-          ? `Choose: ${pendingOptionDecision.heading}.`
-          : pendingOptionDecision
-            ? `Waiting for ${pendingOptionRobot?.name ?? 'the next robot'} to resolve an Option.`
+        const nextPresentationDecisionKey = presentationDecisionKey(next);
+        const nextPresentationDecisionVisible =
+          !!nextPresentationDecisionKey &&
+          next.revealedDecisionKey === nextPresentationDecisionKey;
+        const nextPendingOptionDecision = nextPresentationDecisionVisible
+          ? next.resolution?.pendingOptionDecision ?? null
+          : null;
+        const nextPendingOptionRobot = next.resolution?.robots.find(
+          ({ uid: robotUid }) => robotUid === nextPendingOptionDecision?.uid
+        );
+        status = nextPresentationDecisionKey && !nextPresentationDecisionVisible
+          ? 'Watch the shared tabletop—the next decision will appear here when playback reaches it.'
+          : nextPendingOptionDecision?.uid === uid
+          ? `Choose: ${nextPendingOptionDecision.heading}.`
+          : nextPendingOptionDecision
+            ? `Waiting for ${nextPendingOptionRobot?.name ?? 'the next robot'} to resolve an Option.`
           : programmingIsAhead
           ? `Choose five registers privately for turn ${nextActiveProgramming.turnNumber}.`
           : next.resolution
@@ -181,7 +204,7 @@
   onDestroy(() => unsubscribe?.());
 
   function beginNextTurn() {
-    if (!state.nextProgramming) return;
+    if (!state.nextProgramming || !waitingForNextTurn) return;
     requestedTurnNumber = state.nextProgramming.turnNumber;
     const nextPlayer = state.nextProgramming.players.find((candidate) => candidate.uid === uid);
     draftSlots = nextPlayer

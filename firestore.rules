@@ -38,6 +38,7 @@ service cloud.firestore {
           'game/rematched',
           'game/roster-transferred',
           'game/rematch-redirected',
+          'presentation/decision-revealed',
           'power-down/responded'
         ]
         && request.resource.data.payload is map
@@ -163,6 +164,13 @@ service cloud.firestore {
             request.resource.data.type == 'game/rematch-redirected'
             && request.resource.data.payload.roomCode is string
             && request.resource.data.payload.roomCode.matches('[A-Z0-9]{6}')
+          )
+          ||
+          (
+            request.resource.data.type == 'presentation/decision-revealed'
+            && request.resource.data.payload.decisionKey is string
+            && request.resource.data.payload.decisionKey.size() > 0
+            && request.resource.data.payload.decisionKey.size() <= 256
           )
           ||
           (

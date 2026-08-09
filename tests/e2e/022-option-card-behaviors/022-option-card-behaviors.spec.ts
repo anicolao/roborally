@@ -21,6 +21,10 @@ import {
   respondPowerDownsInDockOrder,
   stayActiveInDockOrder,
 } from "../helpers/game-actions";
+import {
+  enableSyntheticPlaybackClock,
+  finishSyntheticPlayback,
+} from "../helpers/playback-clock";
 import { TestStepHelper } from "../helpers/test-step-helper";
 
 const players = [
@@ -912,10 +916,16 @@ test("powered-down private controller can resolve incoming damage", async ({
     "Compact private Option decisions",
     "A short phone keeps Option details and every damage action inside a fixed, independently scrollable private controller.",
   );
+  let table: Page | undefined;
   try {
     await chooseStationaryProgram(host);
     const guestTurnOne = await chooseStationaryProgram(guest);
     await takeDamageUntilTurnCompletes(host, guest);
+
+    table = await host.context().newPage();
+    await enableSyntheticPlaybackClock(table);
+    await table.goto(`/tt/?room=${roomCode}`);
+    await finishSyntheticPlayback([table]);
 
     await guest.getByRole("button", { name: "Begin Turn 2" }).click();
     await host.goto(`/hand/?room=${roomCode}&seat=1`);
@@ -935,6 +945,16 @@ test("powered-down private controller can resolve incoming damage", async ({
     await guest.getByRole("button", { name: "Stay active" }).click();
 
     const decision = host.getByLabel("Damage prevention choice");
+    await expect.poll(() => table!.evaluate(
+      () => (window.__roborallyE2ePlaybackClock?.pending?.() ?? 0) > 0,
+    )).toBe(true);
+    await expect(decision).toHaveCount(0);
+    await expect(
+      host.locator(".identity").getByText(
+        /next decision will appear here when playback reaches it/i,
+      ),
+    ).toBeVisible();
+    await finishSyntheticPlayback([table]);
     await expect(decision).toBeVisible();
     await expect(decision).toContainText("Laser damage 1 of 1 incoming");
     const optionCard = decision.locator('[data-card-id="extra-memory"]');
@@ -1022,8 +1042,9 @@ test("powered-down private controller can resolve incoming damage", async ({
     const decisionId = await decision.getAttribute("data-decision-id");
     expect(decisionId).toBeTruthy();
     await takeDamage.click();
-    await expect.poll(() => decision.getAttribute("data-decision-id")).not.toBe(decisionId);
+    await expect(decision).toHaveCount(0);
   } finally {
+    await table?.close();
     await guestContext.close();
   }
 });

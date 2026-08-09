@@ -4,6 +4,7 @@ import {
   ROBOTS,
   ROOM_REDUCER_VERSION,
   ROOM_SCHEMA_VERSION,
+  presentationDecisionKey,
   replayRoom,
   type RoomEvent
 } from './room-model';
@@ -552,5 +553,29 @@ describe('immutable room replay', () => {
       ])
     );
     expect(destroyed.diagnostics).toEqual([]);
+
+    const decisionKey = presentationDecisionKey(destroyed)!;
+    expect(decisionKey).toBe('next-turn:turn-002');
+    const guestReveal = event('guest', 4, 'presentation/decision-revealed', {
+      decisionKey
+    }, 3_000);
+    const staleHostReveal = event('host', 6, 'presentation/decision-revealed', {
+      decisionKey: 'next-turn:turn-999'
+    }, 4_000);
+    const hostReveal = event('host', 7, 'presentation/decision-revealed', {
+      decisionKey
+    }, 5_000);
+    const presented = replayRoom([
+      ...events,
+      guestReveal,
+      staleHostReveal,
+      hostReveal
+    ]);
+
+    expect(presented.revealedDecisionKey).toBe(decisionKey);
+    expect(presented.diagnostics.map(({ code }) => code)).toEqual([
+      'invalid-presentation',
+      'invalid-presentation'
+    ]);
   });
 });

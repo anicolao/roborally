@@ -76,6 +76,7 @@ export type RoomEventType =
   | 'game/rematched'
   | 'game/roster-transferred'
   | 'game/rematch-redirected'
+  | 'presentation/decision-revealed'
   | 'power-down/responded';
 
 export interface GameCreatedPayload {
@@ -150,6 +151,10 @@ export interface PowerDownRespondedPayload {
   powerDownNextTurn: boolean;
 }
 
+export interface PresentationDecisionRevealedPayload {
+  decisionKey: string;
+}
+
 export type EffectDraft =
   | {
       kind: 'reentry';
@@ -182,6 +187,7 @@ export type RoomEventPayload =
   | GameRematchedPayload
   | GameRosterTransferredPayload
   | GameRematchRedirectedPayload
+  | PresentationDecisionRevealedPayload
   | PowerDownRespondedPayload;
 
 export interface RoomEvent {
@@ -227,6 +233,7 @@ export interface ReplayDiagnostic {
     | 'invalid-program'
     | 'invalid-timeout'
     | 'invalid-effect'
+    | 'invalid-presentation'
     | 'invalid-rematch'
     | 'invalid-power-down';
   message: string;
@@ -253,6 +260,8 @@ export interface RoomState {
   optionDecisions: (OptionDecision & { turnId: TurnId })[];
   effectDrafts: (EffectDraftUpdatedPayload & { uid: string })[];
   pendingOptionUid: string | null;
+  /** The resolution decision the shared tabletop has actually reached. */
+  revealedDecisionKey: string | null;
   acceptedEventIds: string[];
   diagnostics: ReplayDiagnostic[];
 }
@@ -279,9 +288,33 @@ export function emptyRoomState(): RoomState {
     optionDecisions: [],
     effectDrafts: [],
     pendingOptionUid: null,
+    revealedDecisionKey: null,
     acceptedEventIds: [],
     diagnostics: []
   };
+}
+
+/**
+ * A canonical resolution can run ahead of the shared tabletop's local animation.
+ * This key identifies the next private control that may be revealed once playback
+ * has visually reached it.
+ */
+export function presentationDecisionKey(state: RoomState): string | null {
+  const resolution = state.resolution;
+  if (!resolution) return null;
+  if (resolution.pendingOptionDecision) {
+    return `option-decision:${resolution.pendingOptionDecision.decisionId}`;
+  }
+  if (resolution.nextOptionChoiceUid) {
+    return `option-loss:${resolution.turnNumber}:${resolution.nextOptionChoiceUid}`;
+  }
+  if (resolution.nextReentryUid) {
+    return `reentry:${resolution.turnNumber}:${resolution.nextReentryUid}`;
+  }
+  if (resolution.phase === 'turn-complete' && state.nextProgramming) {
+    return `next-turn:${state.nextProgramming.turnId}`;
+  }
+  return null;
 }
 
 export function normalizeRoomCode(value: string): string {
@@ -810,6 +843,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         state.optionPlans = [];
         state.optionDecisions = [];
         state.effectDrafts = [];
+        state.revealedDecisionKey = null;
         refreshPowerDownPending(state);
       }
     } else if (event.type === 'program/draft-updated') {
@@ -1026,6 +1060,25 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       if (state.programming?.phase === 'programmed') {
         resolveReadyProgramming(state);
       }
+    } else if (event.type === 'presentation/decision-revealed') {
+      const payload = event.payload as PresentationDecisionRevealedPayload;
+      const expectedDecisionKey = presentationDecisionKey(state);
+      if (
+        event.actorUid !== state.hostUid ||
+        !payload ||
+        typeof payload.decisionKey !== 'string' ||
+        payload.decisionKey !== expectedDecisionKey ||
+        payload.decisionKey === state.revealedDecisionKey
+      ) {
+        diagnostic(
+          state,
+          event,
+          'invalid-presentation',
+          'Only the tabletop host can reveal the current resolution decision.'
+        );
+        continue;
+      }
+      state.revealedDecisionKey = payload.decisionKey;
     } else if (event.type === 'effect/chosen') {
       const payload = event.payload as EffectChosenPayload;
       const eventProgramming =
@@ -1135,6 +1188,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
           choiceId,
           turnId: payload.turnId
         });
+        state.revealedDecisionKey = null;
         resolveReadyProgramming(state);
         projectNextProgramming(state);
         state.acceptedEventIds.push(event.id);
@@ -1200,6 +1254,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         continue;
       }
       state.resolution = next;
+      state.revealedDecisionKey = null;
       state.effectDrafts = state.effectDrafts.filter(
         ({ uid, turnId }) => uid !== event.actorUid || turnId !== payload.turnId
       );
@@ -1241,6 +1296,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       state.optionPlans = [];
       state.optionDecisions = [];
       state.effectDrafts = [];
+      state.revealedDecisionKey = null;
       refreshPowerDownPending(state);
     } else if (event.type === 'game/rematch-redirected') {
       const payload = event.payload as GameRematchRedirectedPayload;

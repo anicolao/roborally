@@ -167,10 +167,26 @@ async function submitVisibleProgram(page: import('@playwright/test').Page) {
 }
 
 async function completePrivateResolutionChoices(
+  table: import('@playwright/test').Page,
   pages: import('@playwright/test').Page[],
   nextTurnNumber = 2
 ) {
   await expect.poll(async () => {
+    const tabletopPlaybackPending = await table.evaluate(
+      () => (window.__roborallyE2ePlaybackClock?.pending?.() ?? 0) > 0
+    );
+    if (tabletopPlaybackPending) {
+      const visiblePrivateDecisions = await Promise.all(
+        pages.map((page) =>
+          page.locator(
+            '[data-decision-id], [aria-label="Destroyed robot Option loss"], [aria-label="Re-entry cell and facing"]'
+          ).count()
+        )
+      );
+      if (visiblePrivateDecisions.some((count) => count > 0)) return false;
+      await table.evaluate(() => window.__roborallyE2ePlaybackClock?.runAll?.() ?? 0);
+      return false;
+    }
     for (const page of pages) {
       const takeDamage = page.getByRole('button', { name: 'TAKE THIS DAMAGE' });
       if (await takeDamage.isVisible()) {
@@ -542,7 +558,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
       ]
     });
     await finishSyntheticPlayback([table]);
-    await completePrivateResolutionChoices([firstPhone, secondPhone]);
+    await completePrivateResolutionChoices(table, [firstPhone, secondPhone]);
     await expect.poll(() => table.locator('.damage-track i.taken').count()).toBeGreaterThan(0);
     await expect(firstPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toBeVisible();
     await expect(secondPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toBeVisible();
@@ -613,7 +629,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
       const nextIndex = await phoneWithPowerChoice(phones);
       await phones[nextIndex].getByRole('button', { name: 'STAY ACTIVE' }).click();
     }
-    await completePrivateResolutionChoices(phones, 3);
+    await completePrivateResolutionChoices(table, phones, 3);
 
     await firstPhone.getByRole('button', { name: 'BEGIN TURN 3' }).click();
     await secondPhone.getByRole('button', { name: 'BEGIN TURN 3' }).click();

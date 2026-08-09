@@ -306,6 +306,25 @@ describe('append-only game stream rules', () => {
     );
   });
 
+  it('allows only bounded presentation decision keys', async () => {
+    const db = environment.authenticatedContext('tabletop').firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'games/room/events/tabletop-000001'), {
+        ...eventData('tabletop'),
+        type: 'presentation/decision-revealed',
+        payload: { decisionKey: 'option-decision:turn-001:laser:robot-a' }
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, 'games/room/events/tabletop-000002'), {
+        ...eventData('tabletop'),
+        type: 'presentation/decision-revealed',
+        clientSeq: 2,
+        payload: { decisionKey: '' }
+      })
+    );
+  });
+
   it('attributes ordered power-down responses to their owner', async () => {
     const db = environment.authenticatedContext('robot-a').firestore();
     await assertSucceeds(

@@ -14,6 +14,7 @@
     ROBOTS,
     emptyRoomState,
     normalizeRoomCode,
+    presentationDecisionKey,
     type RoomState
   } from '$lib/room-model';
   import * as RoomService from '$lib/room-service';
@@ -68,6 +69,7 @@
   let playbackKey = '';
   let scheduledPlayback: ProgramPlayback | undefined;
   let queuedPlayback: { playback: ProgramPlayback; fromIndex: number } | undefined;
+  let attemptedDecisionReveal = '';
   let playbackTimers: PlaybackTimer[] = [];
   const PRODUCTION_PROGRAM_CARD_MS = 2_000;
   const PRODUCTION_FACTORY_STAGE_MS = 1_000;
@@ -108,8 +110,15 @@
     resolutionPlaybackKey,
     playbackKey
   );
+  $: pendingPresentationDecisionKey = presentationDecisionKey(state);
+  $: presentationDecisionVisible =
+    !!pendingPresentationDecisionKey &&
+    state.revealedDecisionKey === pendingPresentationDecisionKey;
+  $: pendingOptionDecision = presentationDecisionVisible && playbackCaughtUp
+    ? state.resolution?.pendingOptionDecision ?? null
+    : null;
   $: pendingOptionRobot = state.resolution?.robots.find(
-    ({ uid }) => uid === state.resolution?.pendingOptionDecision?.uid
+    ({ uid }) => uid === pendingOptionDecision?.uid
   );
   $: latestPlaybackEntry = playbackTrace.at(-1);
   $: isTableHost = services?.user.uid === state.hostUid;
@@ -121,6 +130,19 @@
     !!state.resolution.summary &&
     !playbackIsActive &&
     playbackPhase === 'complete';
+  $: playbackCaughtUp = !!state.resolution && (
+    state.resolution.playback.frames.length === 0 ||
+    (
+      resolutionPlaybackKey === playbackKey &&
+      playbackPhase === 'complete' &&
+      !!scheduledPlayback &&
+      !queuedPlayback &&
+      firstChangedPlaybackFrame(
+        scheduledPlayback.frames,
+        state.resolution.playback.frames
+      ) === null
+    )
+  );
 
   onMount(async () => {
     try {
@@ -300,6 +322,33 @@
           continueProgramPlayback(resolution.playback, changedFrame);
         }
       }
+    }
+  }
+
+  $: if (
+    services &&
+    isTableHost &&
+    pendingPresentationDecisionKey &&
+    pendingPresentationDecisionKey !== state.revealedDecisionKey &&
+    pendingPresentationDecisionKey !== attemptedDecisionReveal &&
+    playbackCaughtUp
+  ) {
+    void revealCurrentPresentationDecision(pendingPresentationDecisionKey);
+  }
+
+  async function revealCurrentPresentationDecision(decisionKey: string) {
+    if (!services) return;
+    attemptedDecisionReveal = decisionKey;
+    try {
+      await RoomService.revealPresentationDecision(
+        services.db,
+        services.user,
+        roomCode,
+        { decisionKey }
+      );
+    } catch (nextError) {
+      console.error(nextError);
+      error = 'The tabletop could not synchronize the next private decision.';
     }
   }
 
@@ -498,7 +547,7 @@
 
     <div
       class:playback-active={playbackPhase === 'register' && !!playbackRegister}
-      class:decision-active={!playbackIsActive && !!state.resolution?.pendingOptionDecision && !!pendingOptionRobot}
+      class:decision-active={!!pendingOptionDecision && !!pendingOptionRobot}
       class="course-wrap"
     >
       {#if state.setup}
@@ -510,14 +559,14 @@
           laserBeams={playbackLaserBeams}
           presentationOnly
         />
-        {#if !playbackIsActive && state.resolution?.pendingOptionDecision && pendingOptionRobot}
+        {#if pendingOptionDecision && pendingOptionRobot}
           <div
             class:side-facing={tabletopLayout === 'side-seats'}
             class="course-decision"
             role="status"
             aria-live="assertive"
             data-testid="tabletop-damage-prompt"
-            data-decision-id={state.resolution.pendingOptionDecision.decisionId}
+            data-decision-id={pendingOptionDecision.decisionId}
           >
             {#each ['near', 'far'] as position}
               <div
@@ -529,11 +578,11 @@
                   ? position === 'near' ? 'west' : 'east'
                   : position === 'near' ? 'north' : 'south'}
               >
-                <small>{state.resolution.pendingOptionDecision.timing === 'damage'
+                <small>{pendingOptionDecision.timing === 'damage'
                   ? 'DAMAGE DECISION'
                   : 'OPTION DECISION'} · DOCK ORDER</small>
                 <strong>{pendingOptionRobot.name}</strong>
-                <span>{state.resolution.pendingOptionDecision.tabletopPrompt}</span>
+                <span>{pendingOptionDecision.tabletopPrompt}</span>
               </div>
             {/each}
           </div>
