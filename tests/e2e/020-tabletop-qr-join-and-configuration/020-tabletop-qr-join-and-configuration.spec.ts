@@ -693,3 +693,82 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await secondContext.close();
   }
 });
+
+test('a replacement tabletop releases controls after replay catches up', async ({
+  browser,
+  page: originalTable
+}, testInfo) => {
+  const roomCode = testInfo.project.name === 'phone' ? 'R20PHN' : 'R20DSK';
+  const phoneOptions = { viewport: { width: 393, height: 852 }, hasTouch: true };
+  const firstContext = await browser.newContext(phoneOptions);
+  const secondContext = await browser.newContext(phoneOptions);
+  const replacementContext = await browser.newContext({
+    viewport: originalTable.viewportSize() ?? { width: 1280, height: 1000 }
+  });
+  const firstPhone = await firstContext.newPage();
+  const secondPhone = await secondContext.newPage();
+  const replacementTable = await replacementContext.newPage();
+
+  try {
+    await enableSyntheticPlaybackClock(originalTable);
+    await originalTable.goto(`/tt/?e2eRoomCode=${roomCode}`);
+    const firstJoin = await originalTable
+      .getByRole('link', { name: `Join tabletop ${roomCode} at position 1` })
+      .getAttribute('href');
+    const secondJoin = await originalTable
+      .getByRole('link', { name: `Join tabletop ${roomCode} at position 2` })
+      .getAttribute('href');
+    expect(firstJoin).not.toBeNull();
+    expect(secondJoin).not.toBeNull();
+
+    await firstPhone.goto(firstJoin!);
+    await firstPhone.getByLabel('Racer name').fill('Ada');
+    await firstPhone.getByRole('button', { name: 'Axle' }).click();
+    await firstPhone.getByRole('button', { name: 'CLAIM POSITION 1' }).click();
+    await secondPhone.goto(secondJoin!);
+    await secondPhone.getByLabel('Racer name').fill('Grace');
+    await secondPhone.getByRole('button', { name: 'Bit' }).click();
+    await secondPhone.getByRole('button', { name: 'CLAIM POSITION 2' }).click();
+
+    await originalTable.getByLabel('Course', { exact: true }).selectOption('risky-exchange');
+    await originalTable.getByLabel('Setup seed').fill('REPLACEMENT-TABLE');
+    await originalTable.getByRole('button', { name: 'CONFIGURE RACE' }).click();
+    await firstPhone.getByRole('button', { name: 'READY FOR RACE' }).click();
+    await secondPhone.getByRole('button', { name: 'READY FOR RACE' }).click();
+    await expect(firstPhone.getByRole('heading', { name: 'Program deck' })).toBeVisible();
+    await expect(secondPhone.getByRole('heading', { name: 'Program deck' })).toBeVisible();
+    await submitVisibleProgram(firstPhone);
+    await submitVisibleProgram(secondPhone);
+    await expect(originalTable.getByTestId('tabletop-program-countdown')).toBeVisible();
+
+    // Losing browser storage changes the anonymous Firebase UID. A tabletop
+    // opened in a fresh context must still be able to release the next control.
+    await originalTable.close();
+    await enableSyntheticPlaybackClock(replacementTable);
+    await replacementTable.goto(`/tt/?room=${roomCode}`);
+    await expect(replacementTable.getByTestId('tabletop-program-countdown')).toBeVisible();
+    await finishSyntheticPlayback([replacementTable]);
+    await completePrivateResolutionChoices(replacementTable, [firstPhone, secondPhone]);
+
+    await expect(firstPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toBeVisible();
+    await expect(secondPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toBeVisible();
+    await expect.poll(() => replacementTable.evaluate((code) => {
+      const cache = JSON.parse(
+        localStorage.getItem(`roborally.room-events.v1.${code.toLowerCase()}`) ?? '{"events":[]}'
+      ) as {
+        events: { type: string; actorUid: string }[];
+      };
+      const creator = cache.events.find(({ type }) => type === 'game/created');
+      const reveal = cache.events.find(
+        ({ type }) => type === 'presentation/decision-revealed'
+      );
+      return !!creator && !!reveal && creator.actorUid !== reveal.actorUid;
+    }, roomCode)).toBe(true);
+  } finally {
+    await Promise.all([
+      firstContext.close(),
+      secondContext.close(),
+      replacementContext.close()
+    ]);
+  }
+});

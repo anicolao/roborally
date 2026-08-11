@@ -556,26 +556,24 @@ describe('immutable room replay', () => {
 
     const decisionKey = presentationDecisionKey(destroyed)!;
     expect(decisionKey).toBe('next-turn:turn-002');
-    const guestReveal = event('guest', 4, 'presentation/decision-revealed', {
-      decisionKey
-    }, 3_000);
-    const staleHostReveal = event('host', 6, 'presentation/decision-revealed', {
+    const staleReplacementReveal = event('replacement-table', 1, 'presentation/decision-revealed', {
       decisionKey: 'next-turn:turn-999'
+    }, 3_000);
+    const replacementReveal = event('replacement-table', 2, 'presentation/decision-revealed', {
+      decisionKey
     }, 4_000);
-    const hostReveal = event('host', 7, 'presentation/decision-revealed', {
+    const concurrentHostReveal = event('host', 6, 'presentation/decision-revealed', {
       decisionKey
     }, 5_000);
     const presented = replayRoom([
       ...events,
-      guestReveal,
-      staleHostReveal,
-      hostReveal
+      staleReplacementReveal,
+      replacementReveal,
+      concurrentHostReveal
     ]);
 
     expect(presented.revealedDecisionKey).toBe(decisionKey);
-    expect(presented.diagnostics.map(({ code }) => code)).toEqual([
-      'invalid-presentation',
-      'invalid-presentation'
-    ]);
+    expect(presented.diagnostics.map(({ code }) => code)).toEqual(['invalid-presentation']);
+    expect(presented.acceptedEventIds).toContain(concurrentHostReveal.id);
   });
 });

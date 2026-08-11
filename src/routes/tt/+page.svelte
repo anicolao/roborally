@@ -123,7 +123,6 @@
     ({ uid }) => uid === pendingOptionDecision?.uid
   );
   $: latestPlaybackEntry = playbackTrace.at(-1);
-  $: isTableHost = services?.user.uid === state.hostUid;
   $: finishWinners = (state.resolution?.summary?.winnerUids ?? [])
     .map((uid) => state.players.find((player) => player.uid === uid))
     .filter((player) => player !== undefined);
@@ -331,7 +330,6 @@
 
   $: if (
     services &&
-    isTableHost &&
     pendingPresentationDecisionKey &&
     pendingPresentationDecisionKey !== state.revealedDecisionKey &&
     pendingPresentationDecisionKey !== attemptedDecisionReveal &&
