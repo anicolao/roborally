@@ -262,6 +262,9 @@ test('the tabletop owns configuration and seat QR codes open private controllers
 
   try {
     await enableSyntheticPlaybackClock(table);
+    await table.addInitScript(() => {
+      window.__roborallyE2ePresentationRevealFailures = 1;
+    });
     await table.goto(`/tt/?e2eIdentity=TABLE&e2eRoomCode=${roomCode}`);
     await expect(table.locator('[data-e2e-tabletop]')).toHaveAttribute('data-room-code', roomCode);
     await expect(table.locator('header, footer')).toHaveCount(0);
@@ -562,6 +565,12 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expect.poll(() => table.locator('.damage-track i.taken').count()).toBeGreaterThan(0);
     await expect(firstPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toBeVisible();
     await expect(secondPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toBeVisible();
+    await expect
+      .poll(() =>
+        table.evaluate(() => window.__roborallyE2ePresentationRevealAttempts ?? 0)
+      )
+      .toBeGreaterThanOrEqual(2);
+    await expect(table.getByRole('alert')).toHaveCount(0);
 
     await firstPhone.getByRole('button', { name: 'BEGIN TURN 2' }).click();
     await secondPhone.getByRole('button', { name: 'BEGIN TURN 2' }).click();

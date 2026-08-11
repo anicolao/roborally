@@ -34,6 +34,7 @@
     schedulePlaybackTimer,
     type PlaybackTimer
   } from '$lib/playback-clock';
+  import { revealPresentationDecisionWithRetry } from '$lib/presentation-reveal';
   import {
     firstChangedPlaybackFrame,
     robotsForPlaybackPresentation
@@ -70,6 +71,7 @@
   let scheduledPlayback: ProgramPlayback | undefined;
   let queuedPlayback: { playback: ProgramPlayback; fromIndex: number } | undefined;
   let attemptedDecisionReveal = '';
+  let tabletopMounted = false;
   let playbackTimers: PlaybackTimer[] = [];
   const PRODUCTION_PROGRAM_CARD_MS = 2_000;
   const PRODUCTION_FACTORY_STAGE_MS = 1_000;
@@ -145,6 +147,7 @@
   );
 
   onMount(async () => {
+    tabletopMounted = true;
     try {
       services = await initializeFirebase();
       const params = new URLSearchParams(location.search);
@@ -203,6 +206,7 @@
     }
   });
   onDestroy(() => {
+    tabletopMounted = false;
     unsubscribe?.();
     clearPlaybackTimers();
   });
@@ -338,17 +342,42 @@
 
   async function revealCurrentPresentationDecision(decisionKey: string) {
     if (!services) return;
+    const activeServices = services;
     attemptedDecisionReveal = decisionKey;
-    try {
-      await RoomService.revealPresentationDecision(
-        services.db,
-        services.user,
-        roomCode,
-        { decisionKey }
-      );
-    } catch (nextError) {
-      console.error(nextError);
-      error = 'The tabletop could not synchronize the next private decision.';
+    const synchronized = await revealPresentationDecisionWithRetry({
+      reveal: async () => {
+        if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
+          window.__roborallyE2ePresentationRevealAttempts =
+            (window.__roborallyE2ePresentationRevealAttempts ?? 0) + 1;
+          if ((window.__roborallyE2ePresentationRevealFailures ?? 0) > 0) {
+            window.__roborallyE2ePresentationRevealFailures! -= 1;
+            throw new Error('Synthetic presentation checkpoint rejection.');
+          }
+        }
+        await RoomService.revealPresentationDecision(
+          activeServices.db,
+          activeServices.user,
+          roomCode,
+          { decisionKey }
+        );
+      },
+      shouldContinue: () =>
+        tabletopMounted &&
+        presentationDecisionKey(state) === decisionKey &&
+        state.revealedDecisionKey !== decisionKey &&
+        playbackCaughtUp,
+      onRetry: (nextError, delay) => {
+        console.error(nextError);
+        error = `The tabletop could not synchronize the next player control. Retrying in ${Math.ceil(delay / 1_000)} seconds…`;
+      },
+      onSuccess: () => {
+        if (error.startsWith('The tabletop could not synchronize the next player control.')) {
+          error = '';
+        }
+      }
+    });
+    if (!synchronized && attemptedDecisionReveal === decisionKey) {
+      attemptedDecisionReveal = '';
     }
   }
 

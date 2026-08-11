@@ -19,6 +19,11 @@ declare global {
   interface ImportMeta {
     readonly env: ImportMetaEnv;
   }
+
+  interface Window {
+    __roborallyE2ePresentationRevealFailures?: number;
+    __roborallyE2ePresentationRevealAttempts?: number;
+  }
 }
 
 export {};
