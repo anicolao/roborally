@@ -1063,18 +1063,19 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
     } else if (event.type === 'presentation/decision-revealed') {
       const payload = event.payload as PresentationDecisionRevealedPayload;
       const expectedDecisionKey = presentationDecisionKey(state);
+      // A tabletop may be reopened after browser storage is cleared, and two
+      // displays may reach the same checkpoint together. These display-only
+      // events therefore accept any actor and are idempotent for the current key.
       if (
-        event.actorUid !== state.hostUid ||
         !payload ||
         typeof payload.decisionKey !== 'string' ||
-        payload.decisionKey !== expectedDecisionKey ||
-        payload.decisionKey === state.revealedDecisionKey
+        payload.decisionKey !== expectedDecisionKey
       ) {
         diagnostic(
           state,
           event,
           'invalid-presentation',
-          'Only the tabletop host can reveal the current resolution decision.'
+          'A tabletop can only reveal the current resolution decision.'
         );
         continue;
       }
