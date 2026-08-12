@@ -799,13 +799,34 @@
                 (playbackPhase === "complete" ||
                   (playbackPhase === "register" &&
                     cardIndex + 1 <= (playbackRegister ?? 0)))}
-              {@const cardId = programPlayer?.registers[cardIndex]?.cardId}
+              {@const register = programPlayer?.registers[cardIndex]}
+              {@const locked = register?.locked ?? false}
+              {@const cardId = register?.cardId}
               {@const card = PROGRAM_CARDS.find((entry) => entry.id === cardId)}
-              <span class:revealed class="program-card">
-                {#if revealed && card}
+              <span
+                class:revealed={revealed || locked}
+                class:locked
+                class="program-card"
+                data-register={cardIndex + 1}
+                data-locked={locked ? "true" : undefined}
+              >
+                {#if (revealed || locked) && card}
                   <ProgramCardFace {card} compact variant="square" />
                 {:else}
                   <span class="program-card-back" aria-hidden="true">●</span>
+                {/if}
+                {#if locked}
+                  <span
+                    class="register-lock"
+                    role="img"
+                    aria-label={`Register ${cardIndex + 1} locked`}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        d="M7.5 10V7.5a4.5 4.5 0 0 1 9 0V10h1.25A2.25 2.25 0 0 1 20 12.25v6.5A2.25 2.25 0 0 1 17.75 21H6.25A2.25 2.25 0 0 1 4 18.75v-6.5A2.25 2.25 0 0 1 6.25 10zm2 0h5V7.5a2.5 2.5 0 0 0-5 0z"
+                      />
+                    </svg>
+                  </span>
                 {/if}
               </span>
             {/each}
@@ -1700,6 +1721,27 @@
     overflow: visible;
     border-color: transparent;
     background: transparent;
+  }
+  .register-lock {
+    position: absolute;
+    z-index: 4;
+    top: -8%;
+    right: -8%;
+    display: grid;
+    width: clamp(16px, 1.55cqw, 25px);
+    aspect-ratio: 1;
+    place-items: center;
+    border: 1px solid rgb(255 255 255 / 62%);
+    border-radius: 50%;
+    color: #152022;
+    background: #d2ff37;
+    box-shadow: 0 2px 7px rgb(0 0 0 / 65%);
+  }
+  .register-lock svg {
+    display: block;
+    width: 68%;
+    height: 68%;
+    fill: currentcolor;
   }
   .program-card-back {
     display: grid;
