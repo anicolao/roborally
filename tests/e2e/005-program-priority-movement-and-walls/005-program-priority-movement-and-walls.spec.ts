@@ -121,8 +121,8 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     // final turn summary.
     const awaitingReentry = host.getByRole('heading', { name: /awaiting re-entry/ });
     if (await awaitingReentry.isVisible({ timeout: 10_000 }).catch(() => false)) {
-      const hostReentry = host.getByLabel('Re-entry cell and facing');
-      const guestReentry = guest.getByLabel('Re-entry cell and facing');
+      const hostReentry = host.getByLabel('Re-entry facing');
+      const guestReentry = guest.getByLabel('Re-entry facing');
       if (await guestReentry.isVisible({ timeout: 10_000 }).catch(() => false)) {
         await guestReentry.selectOption({ index: 1 });
         await guest.getByRole('button', { name: 'Confirm re-entry' }).click();

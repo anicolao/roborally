@@ -191,7 +191,7 @@ async function completePrivateResolutionChoices(
       const visiblePrivateDecisions = await Promise.all(
         pages.map((page) =>
           page.locator(
-            '[data-decision-id], [aria-label="Destroyed robot Option loss"], [aria-label="Re-entry cell and facing"]'
+            '[data-decision-id], [aria-label="Destroyed robot Option loss"], [aria-label="Re-entry facing"]'
           ).count()
         )
       );
@@ -211,7 +211,7 @@ async function completePrivateResolutionChoices(
         return false;
       }
 
-      const reentry = page.getByLabel('Re-entry cell and facing');
+      const reentry = page.getByLabel('Re-entry facing');
       if (await reentry.isVisible()) {
         await reentry.selectOption({ index: 1 });
         await page.getByRole('button', { name: 'CONFIRM RE-ENTRY' }).click();

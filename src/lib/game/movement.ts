@@ -2718,25 +2718,6 @@ function updateResolutionPhase(resolution: ProgramResolution) {
   resolution.phase = next ? 'awaiting-reentry' : 'turn-complete';
 }
 
-function hasRobotInLineOfSight(
-  robots: readonly RaceRobotPosition[],
-  x: number,
-  y: number,
-  facing: Direction,
-  course: CompiledCourse = defaultCourse
-) {
-  let cursorX = x;
-  let cursorY = y;
-  const [dx, dy] = steps[facing];
-  for (let distance = 1; distance <= 3; distance += 1) {
-    if (movementBlockedByWall(cursorX, cursorY, facing, course)) return false;
-    cursorX += dx;
-    cursorY += dy;
-    if (activeRobotAt(robots, cursorX, cursorY)) return true;
-  }
-  return false;
-}
-
 export function legalReentryChoices(
   resolution: ProgramResolution,
   uid: string
@@ -2744,33 +2725,12 @@ export function legalReentryChoices(
   if (resolution.nextReentryUid !== uid) return [];
   const robot = resolution.robots.find((candidate) => candidate.uid === uid);
   if (!robot || robot.status !== 'destroyed') return [];
-  const course = resolutionCourse(resolution);
-  const archiveOpen =
-    !activeRobotAt(resolution.robots, robot.archive.x, robot.archive.y) &&
-    !courseHasPit(robot.archive.x, robot.archive.y, course);
-  const cells = archiveOpen
-    ? [robot.archive]
-    : [-1, 0, 1].flatMap((dy) =>
-        [-1, 0, 1]
-          .filter((dx) => dx !== 0 || dy !== 0)
-          .map((dx) => ({ x: robot.archive.x + dx, y: robot.archive.y + dy }))
-      );
 
-  return cells
-    .filter(
-      ({ x, y }) =>
-        courseContains(x, y, course) &&
-        !courseHasPit(x, y, course) &&
-        !activeRobotAt(resolution.robots, x, y)
-    )
-    .flatMap(({ x, y }) =>
-      directionOrder
-        .filter(
-          (facing) =>
-            archiveOpen || !hasRobotInLineOfSight(resolution.robots, x, y, facing, course)
-        )
-        .map((facing) => ({ x, y, facing }))
-    );
+  return directionOrder.map((facing) => ({
+    x: robot.archive.x,
+    y: robot.archive.y,
+    facing
+  }));
 }
 
 export function applyReentryChoice(

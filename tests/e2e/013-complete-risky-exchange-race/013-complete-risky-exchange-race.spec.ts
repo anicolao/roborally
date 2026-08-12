@@ -73,7 +73,7 @@ async function closeResolutionInterrupts(host: Page, guest: Page, turn: number) 
         await expect(loss).not.toBeVisible({ timeout: 10_000 });
         break;
       }
-      const reentry = page.getByLabel('Re-entry cell and facing');
+      const reentry = page.getByLabel('Re-entry facing');
       if (!handledReentry.has(page) && (await reentry.isVisible())) {
         handledReentry.add(page);
         await reentry.selectOption({ index: 1 });
@@ -95,7 +95,7 @@ async function closeResolutionInterrupts(host: Page, guest: Page, turn: number) 
       (await Promise.all([host, guest].map(async (page) =>
         (await page.locator('[data-decision-id]').count()) > 0 ||
         (await page.getByLabel('Destroyed robot Option loss').count()) > 0 ||
-        (await page.getByLabel('Re-entry cell and facing').count()) > 0
+        (await page.getByLabel('Re-entry facing').count()) > 0
       ))).some(Boolean) ||
       (await host.evaluate(() =>
         (window.__roborallyE2ePlaybackClock?.pending?.() ?? 0) > 0
