@@ -110,8 +110,8 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
 
       if (turn === 6) {
         await expect(host.getByRole('heading', { name: /Turn 6 awaiting re-entry/ })).toBeVisible();
-        await guest.getByLabel('Re-entry cell and facing').selectOption({
-          label: '(6,15) facing north'
+        await guest.getByLabel('Re-entry facing').selectOption({
+          label: 'north'
         });
         await guest.getByRole('button', { name: 'Confirm re-entry' }).click();
       }

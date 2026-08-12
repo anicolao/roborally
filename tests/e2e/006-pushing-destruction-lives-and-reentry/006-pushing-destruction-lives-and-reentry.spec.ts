@@ -94,7 +94,15 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
         {
           spec: 'Only the first destroyed robot owner receives the first re-entry control',
           check: async () => {
-            await expect(host.getByLabel('Re-entry cell and facing')).toBeVisible();
+            await expect(host.getByLabel('Re-entry facing')).toBeVisible();
+            await expect(host.getByText('Archive position (6,16)')).toBeVisible();
+            await expect(host.getByLabel('Re-entry facing').locator('option')).toHaveText([
+              'Choose a facing',
+              'north',
+              'east',
+              'south',
+              'west'
+            ]);
             await expect(guest.getByText('Waiting for Ada to choose re-entry.')).toBeVisible();
           }
         }
@@ -102,13 +110,14 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
     });
 
     await host
-      .getByLabel('Re-entry cell and facing')
-      .selectOption({ label: '(6,16) facing north' });
+      .getByLabel('Re-entry facing')
+      .selectOption({ label: 'north' });
     await host.getByRole('button', { name: 'Confirm re-entry' }).click();
-    await expect(guest.getByLabel('Re-entry cell and facing')).toBeVisible();
+    await expect(guest.getByLabel('Re-entry facing')).toBeVisible();
+    await expect(guest.getByText('Archive position (7,16)')).toBeVisible();
     await guest
-      .getByLabel('Re-entry cell and facing')
-      .selectOption({ label: '(7,16) facing east' });
+      .getByLabel('Re-entry facing')
+      .selectOption({ label: 'east' });
     await guest.getByRole('button', { name: 'Confirm re-entry' }).click();
 
     await expect(host.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();
@@ -148,10 +157,10 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
           }
         },
         {
-          spec: 'The UI exposes the adjacent-cell and three-space line-of-sight shared-archive rule',
+          spec: 'The UI explains that the current archive marker is the only re-entry position',
           check: async () => {
-            await expect(host.getByText(/Shared archive safety/)).toContainText(
-              'no robot in line of sight within three spaces'
+            await expect(host.getByText(/Re-entry position/)).toContainText(
+              'returns only to its current archive marker'
             );
           }
         }

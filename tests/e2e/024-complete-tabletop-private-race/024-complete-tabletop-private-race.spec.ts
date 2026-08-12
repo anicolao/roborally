@@ -263,7 +263,7 @@ async function documentPrivateDecision(
     return answered;
   }
 
-  const reentry = racer.page.getByLabel('Re-entry cell and facing');
+  const reentry = racer.page.getByLabel('Re-entry facing');
   if (await reentry.isVisible()) {
     await reentry.selectOption({ index: 1 });
     const selectedLabel = await reentry.locator('option:checked').textContent();
@@ -271,16 +271,16 @@ async function documentPrivateDecision(
       steps,
       racer.page,
       `turn-${turn}-${slug(racer.name)}-select-reentry`,
-      `${racer.name} selects re-entry ${selectedLabel?.trim() ?? ''}`,
-      'The legal re-entry placement and facing are visible after selection',
+      `${racer.name} selects re-entry facing ${selectedLabel?.trim() ?? ''}`,
+      'The current archive position and selected re-entry facing are visible',
       async () => await expect(reentry).not.toHaveValue('')
     );
     await documentBeforeClick(
       steps,
       racer.page,
       `turn-${turn}-${slug(racer.name)}-confirm-reentry`,
-      `${racer.name} confirms the re-entry placement`,
-      'The selected cell, facing, and confirmation action fit on the phone without scrolling',
+      `${racer.name} confirms re-entry at the current archive`,
+      'The fixed archive position, facing, and confirmation action fit without scrolling',
       racer.page.getByRole('button', { name: 'CONFIRM RE-ENTRY' })
     );
     // Do not let the polling loop observe the just-answered decision while the

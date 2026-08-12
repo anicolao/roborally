@@ -110,12 +110,12 @@ test('cache, cursor, retry, and replay converge across a resolution disconnect',
     await expect(host.getByRole('heading', { name: /awaiting re-entry/ })).toBeVisible();
 
     await host
-      .getByLabel('Re-entry cell and facing')
-      .selectOption({ label: '(7,15) facing north' });
+      .getByLabel('Re-entry facing')
+      .selectOption({ label: 'north' });
     await host.getByRole('button', { name: 'Confirm re-entry' }).click();
     await guest
-      .getByLabel('Re-entry cell and facing')
-      .selectOption({ label: '(6,15) facing east' });
+      .getByLabel('Re-entry facing')
+      .selectOption({ label: 'east' });
     await guest.getByRole('button', { name: 'Confirm re-entry' }).click();
 
     await expect(host.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();

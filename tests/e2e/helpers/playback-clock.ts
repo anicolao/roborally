@@ -33,7 +33,7 @@ export async function finishSyntheticPlayback(pages: readonly Page[]) {
           if ((window.__roborallyE2ePlaybackClock?.pending?.() ?? 0) > 0) return true;
           if (
             document.querySelector(
-              '[data-decision-id], [aria-label="Destroyed robot Option loss"], [aria-label="Re-entry cell and facing"]'
+              '[data-decision-id], [aria-label="Destroyed robot Option loss"], [aria-label="Re-entry facing"]'
             )
           ) return true;
           return [...document.querySelectorAll('h1, h2')].some(({ textContent }) =>

@@ -560,14 +560,17 @@
     {:else if reentryChoices.length > 0}
       <section class="effect-control" aria-label="Robot re-entry choice">
         <h2>Re-enter your robot</h2>
-        <p>Choose a legal cell and facing. The race continues after every destroyed robot returns.</p>
+        <p>
+          Return to your current archive marker at
+          <strong>({reentryChoices[0].x},{reentryChoices[0].y})</strong>. Choose your facing.
+        </p>
         <label>
-          Re-entry cell and facing
+          Re-entry facing
           <select bind:value={selectedReentryChoice} onchange={persistReentryDraft}>
-            <option value="">Choose a legal placement</option>
+            <option value="">Choose a facing</option>
             {#each reentryChoices as choice}
               <option value={`${choice.x},${choice.y},${choice.facing}`}>
-                ({choice.x},{choice.y}) facing {choice.facing}
+                {choice.facing}
               </option>
             {/each}
           </select>

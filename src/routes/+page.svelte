@@ -1288,8 +1288,8 @@
                   {/each}
                 </ul>
                 <p class="reentry-policy">
-                  Shared archive safety: later destructions choose an empty adjacent cell and a
-                  facing with no robot in line of sight within three spaces.
+                  Re-entry position: a destroyed robot returns only to its current archive marker;
+                  its owner chooses the facing.
                 </p>
                 <p class="board-phase">
                   Board phase: express conveyors → all conveyors → register pushers → gears →
@@ -1391,17 +1391,21 @@
                 {/if}
                 {#if !playbackIsActive && reentryChoices.length > 0}
                   <div class="reentry-choice">
+                    <p class="reentry-position">
+                      Archive position
+                      <strong>({reentryChoices[0].x},{reentryChoices[0].y})</strong>
+                    </p>
                     <label>
-                      Re-entry cell and facing
+                      Re-entry facing
                       <select
                         bind:value={selectedReentryChoice}
-                        aria-label="Re-entry cell and facing"
+                        aria-label="Re-entry facing"
                         onchange={persistReentryDraft}
                       >
-                        <option value="">Choose a legal placement</option>
+                        <option value="">Choose a facing</option>
                         {#each reentryChoices as choice}
                           <option value={`${choice.x},${choice.y},${choice.facing}`}>
-                            ({choice.x},{choice.y}) facing {choice.facing}
+                            {choice.facing}
                           </option>
                         {/each}
                       </select>
@@ -2727,6 +2731,13 @@
   }
   .reentry-policy { margin: 0; color: #778487; font-size: 14px; line-height: 1.3; }
   .board-phase { margin: 0; color: #6e9691; font-size: 14px; line-height: 1.3; }
+  .reentry-position {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: #d7e0dd;
+    font: 14px 'Space Mono', monospace;
+  }
+  .reentry-position strong { color: #ffcf4b; }
   .reentry-choice label {
     display: grid;
     gap: 2px;

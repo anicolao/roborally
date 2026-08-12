@@ -1354,21 +1354,21 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 - [x] Every discardable Option and the selected destruction penalty are visible on the private controller
 
-## Ada selects re-entry (10,8) facing north
+## Ada selects re-entry facing north
 
-![Ada selects re-entry (10,8) facing north](./screenshots/169-turn-10-ada-select-reentry-desktop.png)
-
-**Verifications:**
-
-- [x] The legal re-entry placement and facing are visible after selection
-
-## Ada confirms the re-entry placement
-
-![Ada confirms the re-entry placement](./screenshots/170-turn-10-ada-confirm-reentry-desktop.png)
+![Ada selects re-entry facing north](./screenshots/169-turn-10-ada-select-reentry-desktop.png)
 
 **Verifications:**
 
-- [x] The selected cell, facing, and confirmation action fit on the phone without scrolling
+- [x] The current archive position and selected re-entry facing are visible
+
+## Ada confirms re-entry at the current archive
+
+![Ada confirms re-entry at the current archive](./screenshots/170-turn-10-ada-confirm-reentry-desktop.png)
+
+**Verifications:**
+
+- [x] The fixed archive position, facing, and confirmation action fit without scrolling
 
 ## The tabletop completes Turn 10 playback
 

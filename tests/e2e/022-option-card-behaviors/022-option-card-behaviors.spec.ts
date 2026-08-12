@@ -818,7 +818,7 @@ test("Superior Archive Copy removes the next re-entry damage", async ({
       .getByRole("button", { name: "Discard Superior Archive Copy" })
       .click();
 
-    const reentry = host.getByLabel("Re-entry cell and facing");
+    const reentry = host.getByLabel("Re-entry facing");
     await expect(reentry).toBeVisible();
     await reentry.selectOption({ index: 1 });
     await host.getByRole("button", { name: "Confirm re-entry" }).click();

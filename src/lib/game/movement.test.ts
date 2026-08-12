@@ -375,7 +375,7 @@ describe('priority Program movement', () => {
     expect(trace.at(-1)?.kind).toBe('eliminated');
   });
 
-  it('re-enters shared archives in destruction order with adjacent line-of-sight limits', () => {
+  it('uses only each robot\'s current archive position for re-entry', () => {
     const first = raceRobot({
       uid: 'first',
       name: 'First',
@@ -418,17 +418,23 @@ describe('priority Program movement', () => {
     });
     expect(resolution.nextReentryUid).toBe('second');
     const secondChoices = legalReentryChoices(resolution, 'second');
-    expect(secondChoices).not.toContainEqual({ x: 6, y: 10, facing: 'north' });
-    expect(secondChoices.some(({ x, y }) => x !== 6 || y !== 10)).toBe(true);
-    const selected = secondChoices.find(
-      ({ x, y, facing }) => x === 5 && y === 9 && facing === 'west'
-    )!;
+    expect(secondChoices).toHaveLength(4);
+    expect(secondChoices).toEqual(
+      expect.arrayContaining([
+        { x: 6, y: 10, facing: 'north' },
+        { x: 6, y: 10, facing: 'east' },
+        { x: 6, y: 10, facing: 'south' },
+        { x: 6, y: 10, facing: 'west' }
+      ])
+    );
+    expect(secondChoices.every(({ x, y }) => x === 6 && y === 10)).toBe(true);
+    const selected = secondChoices.find(({ facing }) => facing === 'west')!;
     resolution = applyReentryChoice(resolution, 'second', selected);
     expect(resolution.phase).toBe('turn-complete');
     expect(resolution.robots).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ uid: 'first', x: 6, y: 10, damage: 2, status: 'active' }),
-        expect.objectContaining({ uid: 'second', x: 5, y: 9, damage: 2, status: 'active' })
+        expect.objectContaining({ uid: 'second', x: 6, y: 10, damage: 2, status: 'active' })
       ])
     );
   });
