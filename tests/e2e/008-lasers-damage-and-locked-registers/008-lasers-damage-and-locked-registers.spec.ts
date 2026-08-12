@@ -52,6 +52,13 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
     const linus = await join(contexts[1], roomCode, 'LINUS', 'Linus', 'Cog');
     const margaret = await join(contexts[2], roomCode, 'MARGARET', 'Margaret', 'Dash');
     const pages = [host, grace, linus, margaret];
+    const tableContext = await browser.newContext({ viewport: { width: 1280, height: 1000 } });
+    contexts.push(tableContext);
+    const table = await tableContext.newPage();
+    await enableSyntheticPlaybackClock(table);
+    await table.goto(`/tt/?room=${roomCode}`);
+    await expect(table.getByRole('status')).toHaveAttribute('data-status', 'synced');
+    const playbackPages = [...pages, table];
     const steps = new TestStepHelper(host, testInfo);
     steps.setMetadata(
       'Resolve lasers, damage, and locked registers',
@@ -101,7 +108,7 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
     const registerPlayback = host.getByTestId('register-playback');
     let robotLasersVisible = false;
     for (let frame = 0; frame < 100; frame += 1) {
-      await advanceSyntheticPlayback(pages);
+      await advanceSyntheticPlayback(playbackPages);
       if (
         (await registerPlayback.count()) > 0 &&
         (await registerPlayback.getAttribute('data-stage')) === 'lasers' &&
@@ -132,7 +139,7 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
         }
       ]
     });
-    await finishSyntheticPlayback(pages);
+    await finishSyntheticPlayback(playbackPages);
 
     for (const page of pages) {
       await expect(page.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();
@@ -203,6 +210,59 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
           spec: 'The UI exposes the fully locked repeat invariant',
           check: async () => {
             await expect(host.getByText(/Damage 9 repeats all five locked registers/)).toBeVisible();
+          }
+        }
+      ]
+    });
+
+    for (const page of pages) {
+      await page.getByRole('button', { name: 'Begin Turn 2' }).click();
+    }
+    await stayActiveInDockOrder(pages);
+    const margaretHand = margaret.getByLabel('Your Program hand').getByRole('button');
+    await expect(margaretHand).toHaveCount(3);
+    for (let index = 0; index < 3; index += 1) {
+      await margaretHand.nth(index).click();
+    }
+    await margaret.getByRole('button', { name: 'Submit immutable program' }).click();
+
+    const margaretDock = table.locator('[data-seat="4"]');
+    await expect(margaretDock).toContainText('Margaret');
+    await expect(margaretDock.locator('.program-card[data-locked="true"]')).toHaveCount(2);
+    steps.setPage(table);
+    await steps.step('locked-registers-stay-visible-next-turn', {
+      description: 'Locked cards remain public in the tabletop dock while new cards stay hidden',
+      verifications: [
+        {
+          spec: 'The three unlocked registers return to face-down card backs for Turn 2',
+          check: async () => {
+            await expect(
+              margaretDock.locator(
+                '.program-card[data-register]:not([data-locked]) .program-card-back'
+              )
+            ).toHaveCount(3);
+          }
+        },
+        {
+          spec: 'Registers 4 and 5 retain their exact locked cards in the player dock',
+          check: async () => {
+            await expect(
+              margaretDock.getByRole('img', { name: 'Rotate left, priority 380' })
+            ).toBeVisible();
+            await expect(
+              margaretDock.getByRole('img', { name: 'Rotate right, priority 150' })
+            ).toBeVisible();
+          }
+        },
+        {
+          spec: 'Each locked register has a visible, accessible lock icon',
+          check: async () => {
+            await expect(
+              margaretDock.getByRole('img', { name: 'Register 4 locked' })
+            ).toBeVisible();
+            await expect(
+              margaretDock.getByRole('img', { name: 'Register 5 locked' })
+            ).toBeVisible();
           }
         }
       ]

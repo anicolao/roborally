@@ -22,3 +22,13 @@ Four ordinary Programs create repeated unobstructed robot-laser snapshots. Marga
 - [x] Six damage locks registers 4 and 5 with their revealed cards retained
 - [x] Owner and observer views converge on public damage and lock state
 - [x] The UI exposes the fully locked repeat invariant
+
+## Locked cards remain public in the tabletop dock while new cards stay hidden
+
+![Locked cards remain public in the tabletop dock while new cards stay hidden](./screenshots/002-locked-registers-stay-visible-next-turn-desktop.png)
+
+**Verifications:**
+
+- [x] The three unlocked registers return to face-down card backs for Turn 2
+- [x] Registers 4 and 5 retain their exact locked cards in the player dock
+- [x] Each locked register has a visible, accessible lock icon
