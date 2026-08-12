@@ -5,6 +5,10 @@ import {
   finishSyntheticPlayback
 } from '../helpers/playback-clock';
 import { TestStepHelper } from '../helpers/test-step-helper';
+import {
+  COMPLETE_RISKY_EXCHANGE_TURNS,
+  type CompleteRaceProgram
+} from '../helpers/complete-risky-exchange-programs';
 
 async function expectFixedViewport(page: import('@playwright/test').Page) {
   const geometry = await page.evaluate(() => {
@@ -100,6 +104,29 @@ async function expectReadablePrivateProgramCards(page: import('@playwright/test'
   }
 }
 
+async function expectVisiblePrivateHand(
+  page: import('@playwright/test').Page,
+  expectedCards: number
+) {
+  const controller = page.locator('.controller-content');
+  await expect(controller).toHaveClass(/programming/);
+  const cards = page.getByLabel('Your Program hand').getByRole('button');
+  await expect(cards).toHaveCount(expectedCards);
+  for (const card of await cards.all()) await expect(card).toBeInViewport();
+  await expectFixedPrivateViewport(page);
+}
+
+async function expectCompleteRoundHand(
+  table: import('@playwright/test').Page,
+  phone: import('@playwright/test').Page,
+  seat: number
+) {
+  const damage = await table.locator(`[data-seat="${seat}"] .damage-track i.taken`).count();
+  const cards = phone.getByLabel('Your Program hand').getByRole('button');
+  await expect.poll(() => cards.count()).toBeGreaterThanOrEqual(9 - damage);
+  await expectVisiblePrivateHand(phone, await cards.count());
+}
+
 async function expectProportionalPrivateProgramCards(
   page: import('@playwright/test').Page,
   minimumWidth: number
@@ -164,6 +191,106 @@ async function submitVisibleProgram(page: import('@playwright/test').Page) {
     if (await lockProgram.isEnabled()) break;
   }
   await lockProgram.click();
+}
+
+async function choosePrivateProgram(
+  page: import('@playwright/test').Page,
+  labels: CompleteRaceProgram
+) {
+  const clear = page.getByRole('button', { name: 'Clear register choices' });
+  if (await clear.isVisible()) await clear.click();
+  for (const label of labels) {
+    const card = page.getByRole('button', { name: label, exact: true });
+    await expect(card).toBeVisible();
+    await card.click();
+    await expect(card).toHaveAttribute('aria-pressed', 'true');
+  }
+  const lock = page.getByRole('button', { name: 'Lock program' });
+  await expect(lock).toBeEnabled();
+  await lock.click();
+}
+
+async function answerPowerChoicesUntilPlayback(
+  table: import('@playwright/test').Page,
+  phones: import('@playwright/test').Page[],
+  powerDownPhone?: import('@playwright/test').Page
+) {
+  const answered = new Set<import('@playwright/test').Page>();
+  await expect.poll(async () => {
+    if (
+      await table.getByTestId('tabletop-program-countdown').isVisible() ||
+      await table.evaluate(() => (window.__roborallyE2ePlaybackClock?.pending?.() ?? 0) > 0) ||
+      (await Promise.all(phones.map(async (phone) =>
+        await phone.locator(
+          '[data-decision-id], [aria-label="Destroyed robot Option loss"], [aria-label="Re-entry cell and facing"]'
+        ).count() > 0
+      ))).some(Boolean)
+    ) return true;
+    for (const phone of phones) {
+      const control = phone.getByLabel('Power-down choice');
+      if (!answered.has(phone) && await control.isVisible()) {
+        const choice = phone === powerDownPhone ? 'POWER DOWN' : 'STAY ACTIVE';
+        const button = control.getByRole('button', { name: choice });
+        if (await button.isEnabled()) {
+          answered.add(phone);
+          await button.click();
+          return false;
+        }
+      }
+    }
+    return false;
+  }, { timeout: 30_000 }).toBe(true);
+}
+
+async function finishTabletopRaceTurn(
+  table: import('@playwright/test').Page,
+  phones: import('@playwright/test').Page[],
+  nextTurnNumber: number
+) {
+  let outcome: 'next-turn' | 'finished' | 'waiting' = 'waiting';
+  await expect.poll(async () => {
+    if (await table.evaluate(
+      () => (window.__roborallyE2ePlaybackClock?.pending?.() ?? 0) > 0
+    )) {
+      await table.evaluate(() => window.__roborallyE2ePlaybackClock?.runAll?.() ?? 0);
+      return 'waiting';
+    }
+    for (const phone of phones) {
+      const takeDamage = phone.getByRole('button', { name: 'TAKE THIS DAMAGE' });
+      if (await takeDamage.isVisible()) {
+        await takeDamage.click();
+        return 'waiting';
+      }
+      const optionDecision = phone.getByLabel('Option decision');
+      if (await optionDecision.isVisible()) {
+        await optionDecision.getByRole('button').last().click();
+        return 'waiting';
+      }
+      const optionLoss = phone.getByLabel('Destroyed robot Option loss').getByRole('button');
+      if (await optionLoss.first().isVisible()) {
+        await optionLoss.first().click();
+        return 'waiting';
+      }
+      const reentry = phone.getByLabel('Re-entry cell and facing');
+      if (await reentry.isVisible()) {
+        await reentry.selectOption({ index: 1 });
+        await phone.getByRole('button', { name: 'CONFIRM RE-ENTRY' }).click();
+        return 'waiting';
+      }
+    }
+    if (await table.getByRole('dialog', { name: 'Race finished' }).isVisible()) {
+      outcome = 'finished';
+      return outcome;
+    }
+    const nextButtons = await Promise.all(
+      phones.map((phone) =>
+        phone.getByRole('button', { name: `BEGIN TURN ${nextTurnNumber}` }).isVisible()
+      )
+    );
+    if (nextButtons.every(Boolean)) outcome = 'next-turn';
+    return outcome;
+  }, { timeout: 30_000 }).not.toBe('waiting');
+  return outcome;
 }
 
 async function completePrivateResolutionChoices(
@@ -272,6 +399,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expect(table.getByRole('img', { name: /QR code to join position/ })).toHaveCount(8);
     await expect(table.getByLabel('Tabletop race configuration')).toBeVisible();
     await expect(table.getByRole('button', { name: 'CONFIGURE RACE' })).toBeDisabled();
+    await expect(table.getByLabel('Setup seed')).toHaveValue(roomCode);
 
     const positionSevenUrl = await table
       .getByRole('link', { name: `Join tabletop ${roomCode} at position 7` })
@@ -572,12 +700,15 @@ test('the tabletop owns configuration and seat QR codes open private controllers
       .toBeGreaterThanOrEqual(2);
     await expect(table.getByRole('alert')).toHaveCount(0);
 
+    const firstTurnTwoCards = 9 - await adaSeat.locator('.damage-track i.taken').count();
+    const secondTurnTwoCards =
+      9 - await table.locator('[data-seat="2"] .damage-track i.taken').count();
     await firstPhone.getByRole('button', { name: 'BEGIN TURN 2' }).click();
     await secondPhone.getByRole('button', { name: 'BEGIN TURN 2' }).click();
     await expect(firstPhone.getByText('Choose five registers privately for turn 2.')).toBeVisible();
     await expect(secondPhone.getByText('Choose five registers privately for turn 2.')).toBeVisible();
-    await expect(firstPhone.getByLabel('Your Program hand').getByRole('button').first()).toBeEnabled();
-    await expect(secondPhone.getByLabel('Your Program hand').getByRole('button').first()).toBeEnabled();
+    await expectVisiblePrivateHand(firstPhone, firstTurnTwoCards);
+    await expectVisiblePrivateHand(secondPhone, secondTurnTwoCards);
 
     const phones = [firstPhone, secondPhone];
     const damagedPhones = [];
@@ -770,5 +901,83 @@ test('a replacement tabletop releases controls after replay catches up', async (
       secondContext.close(),
       replacementContext.close()
     ]);
+  }
+});
+
+test('private tabletop controllers complete a full race with every round hand visible', async ({
+  browser,
+  page: table
+}, testInfo) => {
+  test.setTimeout(420_000);
+  const roomCode = testInfo.project.name === 'phone' ? 'F20PHN' : 'F20DSK';
+  const phoneOptions = { viewport: { width: 393, height: 852 }, hasTouch: true };
+  const firstContext = await browser.newContext(phoneOptions);
+  const secondContext = await browser.newContext(phoneOptions);
+  const firstPhone = await firstContext.newPage();
+  const secondPhone = await secondContext.newPage();
+  const phones = [firstPhone, secondPhone];
+
+  try {
+    await enableSyntheticPlaybackClock(table);
+    await table.goto(`/tt/?e2eRoomCode=${roomCode}&course=risky-exchange-a`);
+    const firstJoin = await table
+      .getByRole('link', { name: `Join tabletop ${roomCode} at position 1` })
+      .getAttribute('href');
+    const secondJoin = await table
+      .getByRole('link', { name: `Join tabletop ${roomCode} at position 2` })
+      .getAttribute('href');
+    expect(firstJoin).not.toBeNull();
+    expect(secondJoin).not.toBeNull();
+
+    await firstPhone.goto(firstJoin!);
+    await firstPhone.getByLabel('Racer name').fill('Ada');
+    await firstPhone.getByRole('button', { name: 'Axle' }).click();
+    await firstPhone.getByRole('button', { name: 'CLAIM POSITION 1' }).click();
+    await secondPhone.goto(secondJoin!);
+    await secondPhone.getByLabel('Racer name').fill('Grace');
+    await secondPhone.getByRole('button', { name: 'Bit' }).click();
+    await secondPhone.getByRole('button', { name: 'CLAIM POSITION 2' }).click();
+
+    await table.getByLabel('Setup seed').fill('OPTION-11');
+    await table.getByRole('button', { name: 'CONFIGURE RACE' }).click();
+    await firstPhone.getByRole('button', { name: 'READY FOR RACE' }).click();
+    await secondPhone.getByRole('button', { name: 'READY FOR RACE' }).click();
+
+    for (const [index, programs] of COMPLETE_RISKY_EXCHANGE_TURNS.entries()) {
+      const turn = index + 1;
+      if (turn > 1) {
+        await firstPhone.getByRole('button', { name: `BEGIN TURN ${turn}` }).click();
+        await secondPhone.getByRole('button', { name: `BEGIN TURN ${turn}` }).click();
+      }
+
+      if (programs.host.length > 0) {
+        await expectCompleteRoundHand(table, firstPhone, 1);
+        await choosePrivateProgram(firstPhone, programs.host);
+      } else {
+        await expect(firstPhone.getByLabel('Your Program hand')).toHaveCount(0);
+      }
+      if (programs.guest.length > 0) {
+        await expectCompleteRoundHand(table, secondPhone, 2);
+        await choosePrivateProgram(secondPhone, programs.guest);
+      }
+
+      await answerPowerChoicesUntilPlayback(
+        table,
+        phones,
+        turn === 9 ? firstPhone : undefined
+      );
+      const outcome = await finishTabletopRaceTurn(table, phones, turn + 1);
+      expect(outcome).toBe(turn === COMPLETE_RISKY_EXCHANGE_TURNS.length
+        ? 'finished'
+        : 'next-turn');
+    }
+
+    await expect(table.getByRole('dialog', { name: 'Race finished' })).toContainText('Ada WINS!');
+    await expect(table.getByRole('dialog', { name: 'Race finished' })).toContainText(
+      'Ada touched every flag in order.'
+    );
+  } finally {
+    await firstContext.close();
+    await secondContext.close();
   }
 });

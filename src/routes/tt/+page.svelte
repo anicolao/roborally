@@ -63,7 +63,7 @@
   let pending = false;
   let seatQrs: SeatQr[] = [];
   let selectedCourseId: PlayableCourseId = "risky-exchange";
-  let setupSeed = "RALLY-2005";
+  let setupSeed = "";
   let setupLives: 3 | 4 = 3;
   let e2eRematchRoomCode = "";
   let unsubscribe: Unsubscribe | undefined;
@@ -196,13 +196,16 @@
           requestedCourse as (typeof PLAYABLE_COURSE_IDS)[number],
         ) ||
           (import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true" &&
-            requestedCourse === "option-lab"))
+            ["option-lab", "risky-exchange-a"].includes(requestedCourse)))
       ) {
         selectedCourseId = requestedCourse as PlayableCourseId;
       }
-      if (params.get("lives") === "4") setupLives = 4;
-      setupSeed = params.get("seed")?.slice(0, 64) || setupSeed;
       roomCode = requestedRoom || e2eRoom || RoomService.createRoomCode();
+      if (params.get("lives") === "4") setupLives = 4;
+      // A room code is already random and stable, which makes it a useful
+      // default seed: separate tabletops get separate deals without giving up
+      // deterministic replay or an explicitly supplied setup seed.
+      setupSeed = params.get("seed")?.slice(0, 64) || roomCode;
 
       const joinBase = `${location.origin}${base}/hand/`;
       seatQrs = await Promise.all(
@@ -502,7 +505,7 @@
       await RoomService.configureRace(services.db, services.user, roomCode, {
         config: raceConfig(
           selectedCourseId,
-          setupSeed.trim() || "RALLY-2005",
+          setupSeed.trim() || roomCode,
           setupLives,
         ),
       });
@@ -947,6 +950,9 @@
                   </option>
                 {/each}
                 {#if import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true"}
+                  <option value="risky-exchange-a"
+                    >Risky Exchange test Dock A (2–8 players)</option
+                  >
                   <option value="option-lab">Option Lab (2–8 players)</option>
                 {/if}
               </select>

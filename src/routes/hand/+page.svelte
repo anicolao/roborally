@@ -101,12 +101,15 @@
   $: nextTurnAvailable =
     !!state.nextProgramming && requestedTurnNumber < state.nextProgramming.turnNumber;
   $: waitingForNextTurn = nextTurnAvailable && presentationDecisionVisible;
+  $: openedNextProgramming =
+    !!state.nextProgramming &&
+    state.nextProgramming.turnNumber === requestedTurnNumber;
   $: powerDownChoiceVisible =
     canRespondPowerDown && (!programming || programming.submitted);
   $: programEditorVisible =
     !!programming &&
     !waitingForNextTurn &&
-    !canonicalPresentationDecisionKey &&
+    (!canonicalPresentationDecisionKey || openedNextProgramming) &&
     optionLossRobot?.uid !== player?.uid &&
     reentryChoices.length === 0 &&
     !powerDownChoiceVisible;
