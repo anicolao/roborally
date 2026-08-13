@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { stayActiveInDockOrder } from '../helpers/game-actions';
+import { chooseReentry, stayActiveInDockOrder } from '../helpers/game-actions';
 import { TestStepHelper } from '../helpers/test-step-helper';
 
 async function chooseProgram(page: Page, labels: readonly string[]) {
@@ -109,13 +109,9 @@ test('cache, cursor, retry, and replay converge across a resolution disconnect',
     await host.getByRole('button', { name: 'Open programming console' }).click();
     await expect(host.getByRole('heading', { name: /awaiting re-entry/ })).toBeVisible();
 
-    await host
-      .getByLabel('Re-entry facing')
-      .selectOption({ label: 'north' });
+    await chooseReentry(host, 'north');
     await host.getByRole('button', { name: 'Confirm re-entry' }).click();
-    await guest
-      .getByLabel('Re-entry facing')
-      .selectOption({ label: 'east' });
+    await chooseReentry(guest, 'east');
     await guest.getByRole('button', { name: 'Confirm re-entry' }).click();
 
     await expect(host.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();

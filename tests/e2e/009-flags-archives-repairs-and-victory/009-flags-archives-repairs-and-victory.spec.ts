@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { stayActiveInDockOrder } from '../helpers/game-actions';
+import { chooseReentry, stayActiveInDockOrder } from '../helpers/game-actions';
 import {
   enableSyntheticPlaybackClock,
   finishSyntheticPlayback
@@ -110,9 +110,7 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
 
       if (turn === 6) {
         await expect(host.getByRole('heading', { name: /Turn 6 awaiting re-entry/ })).toBeVisible();
-        await guest.getByLabel('Re-entry facing').selectOption({
-          label: 'north'
-        });
+        await chooseReentry(guest, 'north');
         await guest.getByRole('button', { name: 'Confirm re-entry' }).click();
       }
       await expect(host.getByRole('heading', { name: new RegExp(`Turn ${turn} (complete|finished)`) })).toBeVisible();

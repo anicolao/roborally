@@ -1360,15 +1360,15 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 **Verifications:**
 
-- [x] The current archive position and selected re-entry facing are visible
+- [x] The archive placement and selected re-entry facing are visible
 
-## Ada confirms re-entry at the current archive
+## Ada confirms re-entry
 
-![Ada confirms re-entry at the current archive](./screenshots/170-turn-10-ada-confirm-reentry-desktop.png)
+![Ada confirms re-entry](./screenshots/170-turn-10-ada-confirm-reentry-desktop.png)
 
 **Verifications:**
 
-- [x] The fixed archive position, facing, and confirmation action fit without scrolling
+- [x] The chosen placement, facing, and confirmation action fit without scrolling
 
 ## The tabletop completes Turn 10 playback
 

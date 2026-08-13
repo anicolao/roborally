@@ -2718,6 +2718,61 @@ function updateResolutionPhase(resolution: ProgramResolution) {
   resolution.phase = next ? 'awaiting-reentry' : 'turn-complete';
 }
 
+function hasRobotInLineOfSight(
+  robots: readonly RaceRobotPosition[],
+  x: number,
+  y: number,
+  facing: Direction,
+  course: CompiledCourse = defaultCourse
+) {
+  let cursorX = x;
+  let cursorY = y;
+  const [dx, dy] = steps[facing];
+  for (let distance = 1; distance <= 3; distance += 1) {
+    if (movementBlockedByWall(cursorX, cursorY, facing, course)) return false;
+    cursorX += dx;
+    cursorY += dy;
+    if (activeRobotAt(robots, cursorX, cursorY)) return true;
+  }
+  return false;
+}
+
+function reentryBand(
+  archive: { x: number; y: number },
+  radius: number
+) {
+  const cells: { x: number; y: number }[] = [];
+  for (let dy = -radius; dy <= radius; dy += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+      cells.push({ x: archive.x + dx, y: archive.y + dy });
+    }
+  }
+  return cells;
+}
+
+function legalReentryChoicesInBand(
+  resolution: ProgramResolution,
+  archive: { x: number; y: number },
+  radius: number,
+  course: CompiledCourse
+) {
+  return reentryBand(archive, radius)
+    .filter(
+      ({ x, y }) =>
+        courseContains(x, y, course) &&
+        !courseHasPit(x, y, course) &&
+        !activeRobotAt(resolution.robots, x, y)
+    )
+    .flatMap(({ x, y }) =>
+      directionOrder
+        .filter(
+          (facing) => !hasRobotInLineOfSight(resolution.robots, x, y, facing, course)
+        )
+        .map((facing) => ({ x, y, facing }))
+    );
+}
+
 export function legalReentryChoices(
   resolution: ProgramResolution,
   uid: string
@@ -2725,12 +2780,29 @@ export function legalReentryChoices(
   if (resolution.nextReentryUid !== uid) return [];
   const robot = resolution.robots.find((candidate) => candidate.uid === uid);
   if (!robot || robot.status !== 'destroyed') return [];
+  const course = resolutionCourse(resolution);
+  const archiveOpen =
+    courseContains(robot.archive.x, robot.archive.y, course) &&
+    !courseHasPit(robot.archive.x, robot.archive.y, course) &&
+    !activeRobotAt(resolution.robots, robot.archive.x, robot.archive.y);
+  if (archiveOpen) {
+    return directionOrder.map((facing) => ({
+      x: robot.archive.x,
+      y: robot.archive.y,
+      facing
+    }));
+  }
 
-  return directionOrder.map((facing) => ({
-    x: robot.archive.x,
-    y: robot.archive.y,
-    facing
-  }));
+  const maximumRadius = Math.max(
+    ...[...course.cells.values()].map(({ x, y }) =>
+      Math.max(Math.abs(x - robot.archive.x), Math.abs(y - robot.archive.y))
+    )
+  );
+  for (let radius = 1; radius <= maximumRadius; radius += 1) {
+    const choices = legalReentryChoicesInBand(resolution, robot.archive, radius, course);
+    if (choices.length > 0) return choices;
+  }
+  return [];
 }
 
 export function applyReentryChoice(

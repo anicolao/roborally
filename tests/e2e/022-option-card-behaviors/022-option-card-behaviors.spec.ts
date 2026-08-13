@@ -18,6 +18,7 @@ import {
 import { createProgrammingState } from "../../../src/lib/game/programming";
 import { deriveRaceSetup, raceConfig } from "../../../src/lib/game/setup";
 import {
+  chooseReentry,
   respondPowerDownsInDockOrder,
   stayActiveInDockOrder,
 } from "../helpers/game-actions";
@@ -818,9 +819,9 @@ test("Superior Archive Copy removes the next re-entry damage", async ({
       .getByRole("button", { name: "Discard Superior Archive Copy" })
       .click();
 
-    const reentry = host.getByLabel("Re-entry facing");
+    const reentry = host.getByRole("group", { name: "Re-entry facing" });
     await expect(reentry).toBeVisible();
-    await reentry.selectOption({ index: 1 });
+    await chooseReentry(host);
     await host.getByRole("button", { name: "Confirm re-entry" }).click();
     await expect(host.locator(".full-resolution")).toContainText(
       /Ada re-entered .* with 0 damage\./,

@@ -11,6 +11,8 @@
   import CourseCatalog from '$lib/components/CourseCatalog.svelte';
   import OptionCardFace from '$lib/components/OptionCardFace.svelte';
   import ProgramEditor from '$lib/components/ProgramEditor.svelte';
+  import ReentryPicker from '$lib/components/ReentryPicker.svelte';
+  import type { Direction } from '$lib/game/course-manifest';
   import { PROGRAM_CARDS, type ProgramCard } from '$lib/game/program-manifest';
   import {
     OPTION_CARDS,
@@ -97,7 +99,8 @@
   let clockInterval: ReturnType<typeof setInterval> | undefined;
   let showProgramming = false;
   let requestedTurnNumber = 1;
-  let selectedReentryChoice = '';
+  let selectedReentryCell = '';
+  let selectedReentryFacing: Direction | '' = '';
   let reentryPoweredDown = false;
   let effectDraftDirty = false;
   let playbackPhase: PlaybackPhase = 'idle';
@@ -264,6 +267,13 @@
       : [];
   $: reentryRobot = roomState.resolution?.robots.find(
     ({ uid }) => uid === roomState.resolution?.nextReentryUid
+  );
+  $: reentryArchiveOccupant = roomState.resolution?.robots.find(
+    ({ uid, status, x, y }) =>
+      uid !== reentryRobot?.uid &&
+      status === 'active' &&
+      x === reentryRobot?.archive.x &&
+      y === reentryRobot?.archive.y
   );
   $: optionLossRobot = roomState.resolution?.robots.find(
     ({ uid }) => uid === roomState.resolution?.nextOptionChoiceUid
@@ -437,7 +447,8 @@
     programDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
     programDraftDirty = false;
     programDraftWriteQueue = Promise.resolve();
-    selectedReentryChoice = '';
+    selectedReentryCell = '';
+    selectedReentryFacing = '';
     reentryPoweredDown = false;
     effectDraftDirty = false;
     unsubscribe = roomService.subscribeRoom(
@@ -471,16 +482,17 @@
         );
         if (effectDraft && (!effectDraftDirty ||
           (effectDraft.draft.kind === 'reentry' &&
-            ((effectDraft.draft.x === null && selectedReentryChoice === '') ||
-              selectedReentryChoice === `${effectDraft.draft.x},${effectDraft.draft.y},${effectDraft.draft.facing}`) &&
+            ((effectDraft.draft.x === null && selectedReentryCell === '') ||
+              selectedReentryCell === `${effectDraft.draft.x},${effectDraft.draft.y}`) &&
+            selectedReentryFacing === (effectDraft.draft.facing ?? '') &&
             effectDraft.draft.poweredDown === reentryPoweredDown))) {
           if (effectDraft.draft.kind === 'reentry') {
-            selectedReentryChoice =
+            selectedReentryCell =
               effectDraft.draft.x !== null &&
-              effectDraft.draft.y !== null &&
-              effectDraft.draft.facing
-                ? `${effectDraft.draft.x},${effectDraft.draft.y},${effectDraft.draft.facing}`
+              effectDraft.draft.y !== null
+                ? `${effectDraft.draft.x},${effectDraft.draft.y}`
                 : '';
+            selectedReentryFacing = effectDraft.draft.facing ?? '';
             reentryPoweredDown = effectDraft.draft.poweredDown;
           }
           effectDraftDirty = false;
@@ -816,9 +828,9 @@
   }
 
   async function submitReentryChoice() {
-    if (!services || !roomService || !selectedReentryChoice) return;
-    const [x, y, facing] = selectedReentryChoice.split(',');
-    if (!x || !y || !['north', 'east', 'south', 'west'].includes(facing)) return;
+    if (!services || !roomService || !selectedReentryCell || !selectedReentryFacing) return;
+    const [x, y] = selectedReentryCell.split(',');
+    if (!x || !y) return;
     pending = true;
     try {
       await roomService.chooseEffect(
@@ -829,14 +841,15 @@
           kind: 'reentry',
           x: Number(x),
           y: Number(y),
-          facing: facing as 'north' | 'east' | 'south' | 'west',
+          facing: selectedReentryFacing,
           ...(reentryRobot?.powerDownNextTurn
             ? { poweredDown: reentryPoweredDown }
             : {})
         },
         `turn-${String(roomState.resolution?.turnNumber ?? 1).padStart(3, '0')}`
       );
-      selectedReentryChoice = '';
+      selectedReentryCell = '';
+      selectedReentryFacing = '';
       reentryPoweredDown = false;
       effectDraftDirty = false;
     } catch (error) {
@@ -866,12 +879,12 @@
     }
   }
 
-  async function persistReentryDraft() {
+  async function persistReentryDraft(
+    cell = selectedReentryCell,
+    facing: Direction | '' = selectedReentryFacing
+  ) {
     if (!services || !roomService || !roomState.resolution) return;
-    const [x, y, facing] = selectedReentryChoice.split(',');
-    const validFacing = ['north', 'east', 'south', 'west'].includes(facing)
-      ? (facing as 'north' | 'east' | 'south' | 'west')
-      : null;
+    const [x, y] = cell.split(',');
     effectDraftDirty = true;
     try {
       await roomService.updateEffectDraft(
@@ -883,7 +896,7 @@
           kind: 'reentry',
           x: x ? Number(x) : null,
           y: y ? Number(y) : null,
-          facing: validFacing,
+          facing: facing || null,
           poweredDown: reentryPoweredDown
         }
       );
@@ -891,6 +904,12 @@
       console.error(error);
       formError = 'The re-entry draft could not be written.';
     }
+  }
+
+  function updateReentrySelection(cell: string, facing: Direction | '') {
+    selectedReentryCell = cell;
+    selectedReentryFacing = facing;
+    void persistReentryDraft(cell, facing);
   }
 
   async function answerOptionDecision(choiceId: string) {
@@ -1288,8 +1307,8 @@
                   {/each}
                 </ul>
                 <p class="reentry-policy">
-                  Re-entry position: a destroyed robot returns only to its current archive marker;
-                  its owner chooses the facing.
+                  Re-entry position: return to the current archive marker when it is clear. If it
+                  is occupied, choose the nearest legal surrounding square and then a facing.
                 </p>
                 <p class="board-phase">
                   Board phase: express conveyors → all conveyors → register pushers → gears →
@@ -1391,31 +1410,23 @@
                 {/if}
                 {#if !playbackIsActive && reentryChoices.length > 0}
                   <div class="reentry-choice">
-                    <p class="reentry-position">
-                      Archive position
-                      <strong>({reentryChoices[0].x},{reentryChoices[0].y})</strong>
-                    </p>
-                    <label>
-                      Re-entry facing
-                      <select
-                        bind:value={selectedReentryChoice}
-                        aria-label="Re-entry facing"
-                        onchange={persistReentryDraft}
-                      >
-                        <option value="">Choose a facing</option>
-                        {#each reentryChoices as choice}
-                          <option value={`${choice.x},${choice.y},${choice.facing}`}>
-                            {choice.facing}
-                          </option>
-                        {/each}
-                      </select>
-                    </label>
+                    {#if reentryRobot}
+                      <ReentryPicker
+                        choices={reentryChoices}
+                        archive={reentryRobot.archive}
+                        archiveOccupantName={reentryArchiveOccupant?.name ?? ''}
+                        selectedCell={selectedReentryCell}
+                        selectedFacing={selectedReentryFacing}
+                        onselectionchange={updateReentrySelection}
+                        compact
+                      />
+                    {/if}
                     {#if reentryRobot?.powerDownNextTurn}
                       <label class="reentry-power">
                         <input
                           type="checkbox"
                           bind:checked={reentryPoweredDown}
-                          onchange={persistReentryDraft}
+                          onchange={() => void persistReentryDraft()}
                         />
                         Re-enter powered down
                       </label>
@@ -1423,7 +1434,7 @@
                     <button
                       type="button"
                       onclick={submitReentryChoice}
-                      disabled={pending || !selectedReentryChoice}
+                      disabled={pending || !selectedReentryCell || !selectedReentryFacing}
                     >Confirm re-entry</button>
                   </div>
                 {:else if !playbackIsActive && roomState.resolution.nextReentryUid}
@@ -2731,13 +2742,7 @@
   }
   .reentry-policy { margin: 0; color: #778487; font-size: 14px; line-height: 1.3; }
   .board-phase { margin: 0; color: #6e9691; font-size: 14px; line-height: 1.3; }
-  .reentry-position {
-    grid-column: 1 / -1;
-    margin: 0;
-    color: #d7e0dd;
-    font: 14px 'Space Mono', monospace;
-  }
-  .reentry-position strong { color: #ffcf4b; }
+  .reentry-choice :global(.reentry-picker) { grid-column: 1 / -1; }
   .reentry-choice label {
     display: grid;
     gap: 2px;
@@ -2749,14 +2754,6 @@
     display: flex;
     grid-column: 1 / -1;
     align-items: center;
-  }
-  .reentry-choice select {
-    min-width: 0;
-    min-height: 28px;
-    border: 1px solid #536164;
-    color: #eef4ee;
-    background: #11191a;
-    font: 16px 'Space Mono', monospace;
   }
   .reentry-choice button { min-height: 28px; padding: 0 6px; font-size: 14px; }
   .reentry-wait { margin: 0; color: #ffcf4b; font-size: 16px; }
@@ -3258,7 +3255,6 @@
       gap: 2px;
       padding: 2px;
     }
-    .reentry-choice select,
     .reentry-choice button,
     .race-summary button {
       min-height: 22px;

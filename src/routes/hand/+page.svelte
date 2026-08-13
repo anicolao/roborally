@@ -8,7 +8,9 @@
   import { initializeFirebase, type FirebaseServices } from '$lib/firebase';
   import OptionCardFace from '$lib/components/OptionCardFace.svelte';
   import ProgramEditor from '$lib/components/ProgramEditor.svelte';
+  import ReentryPicker from '$lib/components/ReentryPicker.svelte';
   import * as RoomService from '$lib/room-service';
+  import type { Direction } from '$lib/game/course-manifest';
   import type { ProgramCard } from '$lib/game/program-manifest';
   import {
     REGISTER_COUNT,
@@ -44,8 +46,10 @@
   );
   let draftDirty = false;
   let draftWriteQueue: Promise<void> = Promise.resolve();
-  let selectedReentryChoice = '';
+  let selectedReentryCell = '';
+  let selectedReentryFacing: Direction | '' = '';
   let reentryPoweredDown = false;
+  let effectDraftDirty = false;
   let requestedTurnNumber = 1;
   let status = 'Connecting to the tabletop…';
   let error = '';
@@ -86,6 +90,13 @@
   $: reentryChoices = presentationDecisionVisible ? canonicalReentryChoices : [];
   $: reentryRobot = state.resolution?.robots.find(
     (candidate) => candidate.uid === state.resolution?.nextReentryUid
+  );
+  $: reentryArchiveOccupant = state.resolution?.robots.find(
+    ({ uid: robotUid, status: robotStatus, x, y }) =>
+      robotUid !== reentryRobot?.uid &&
+      robotStatus === 'active' &&
+      x === reentryRobot?.archive.x &&
+      y === reentryRobot?.archive.y
   );
   $: canonicalOptionLossRobot = state.resolution?.robots.find(
     (candidate) => candidate.uid === state.resolution?.nextOptionChoiceUid
@@ -162,14 +173,22 @@
             (draftTurnId === next.programming?.turnId ||
               draftTurnId === `turn-${String(next.resolution?.turnNumber ?? 0).padStart(3, '0')}`)
         );
-        if (effectDraft?.draft.kind === 'reentry') {
-          selectedReentryChoice =
+        if (
+          effectDraft?.draft.kind === 'reentry' &&
+          (!effectDraftDirty ||
+            (((effectDraft.draft.x === null && selectedReentryCell === '') ||
+              selectedReentryCell === `${effectDraft.draft.x},${effectDraft.draft.y}`) &&
+              selectedReentryFacing === (effectDraft.draft.facing ?? '') &&
+              effectDraft.draft.poweredDown === reentryPoweredDown))
+        ) {
+          selectedReentryCell =
             effectDraft.draft.x !== null &&
-            effectDraft.draft.y !== null &&
-            effectDraft.draft.facing
-              ? `${effectDraft.draft.x},${effectDraft.draft.y},${effectDraft.draft.facing}`
+            effectDraft.draft.y !== null
+              ? `${effectDraft.draft.x},${effectDraft.draft.y}`
               : '';
+          selectedReentryFacing = effectDraft.draft.facing ?? '';
           reentryPoweredDown = effectDraft.draft.poweredDown;
+          effectDraftDirty = false;
         }
         const programmingIsAhead =
           !!nextActiveProgramming &&
@@ -218,12 +237,13 @@
     status = `Choose five registers privately for turn ${requestedTurnNumber}.`;
   }
 
-  async function persistReentryDraft() {
+  async function persistReentryDraft(
+    cell = selectedReentryCell,
+    facing: Direction | '' = selectedReentryFacing
+  ) {
     if (!services || !state.resolution) return;
-    const [x, y, facing] = selectedReentryChoice.split(',');
-    const validFacing = ['north', 'east', 'south', 'west'].includes(facing)
-      ? (facing as 'north' | 'east' | 'south' | 'west')
-      : null;
+    const [x, y] = cell.split(',');
+    effectDraftDirty = true;
     try {
       await RoomService.updateEffectDraft(
         services.db,
@@ -234,7 +254,7 @@
           kind: 'reentry',
           x: x ? Number(x) : null,
           y: y ? Number(y) : null,
-          facing: validFacing,
+          facing: facing || null,
           poweredDown: reentryPoweredDown
         }
       );
@@ -245,9 +265,15 @@
   }
 
   async function submitReentryChoice() {
-    if (!services || !state.resolution || !selectedReentryChoice || pending) return;
-    const [x, y, facing] = selectedReentryChoice.split(',');
-    if (!x || !y || !['north', 'east', 'south', 'west'].includes(facing)) return;
+    if (
+      !services ||
+      !state.resolution ||
+      !selectedReentryCell ||
+      !selectedReentryFacing ||
+      pending
+    ) return;
+    const [x, y] = selectedReentryCell.split(',');
+    if (!x || !y) return;
     pending = true;
     error = '';
     try {
@@ -259,19 +285,27 @@
           kind: 'reentry',
           x: Number(x),
           y: Number(y),
-          facing: facing as 'north' | 'east' | 'south' | 'west',
+          facing: selectedReentryFacing,
           ...(reentryRobot?.powerDownNextTurn ? { poweredDown: reentryPoweredDown } : {})
         },
         `turn-${String(state.resolution.turnNumber).padStart(3, '0')}`
       );
-      selectedReentryChoice = '';
+      selectedReentryCell = '';
+      selectedReentryFacing = '';
       reentryPoweredDown = false;
+      effectDraftDirty = false;
     } catch (nextError) {
       console.error(nextError);
       error = 'Your re-entry choice could not be written.';
     } finally {
       pending = false;
     }
+  }
+
+  function updateReentrySelection(cell: string, facing: Direction | '') {
+    selectedReentryCell = cell;
+    selectedReentryFacing = facing;
+    void persistReentryDraft(cell, facing);
   }
 
   async function discardDestroyedOption(cardId: OptionCardId) {
@@ -560,28 +594,30 @@
     {:else if reentryChoices.length > 0}
       <section class="effect-control" aria-label="Robot re-entry choice">
         <h2>Re-enter your robot</h2>
-        <p>
-          Return to your current archive marker at
-          <strong>({reentryChoices[0].x},{reentryChoices[0].y})</strong>. Choose your facing.
-        </p>
-        <label>
-          Re-entry facing
-          <select bind:value={selectedReentryChoice} onchange={persistReentryDraft}>
-            <option value="">Choose a facing</option>
-            {#each reentryChoices as choice}
-              <option value={`${choice.x},${choice.y},${choice.facing}`}>
-                {choice.facing}
-              </option>
-            {/each}
-          </select>
-        </label>
+        {#if reentryRobot}
+          <ReentryPicker
+            choices={reentryChoices}
+            archive={reentryRobot.archive}
+            archiveOccupantName={reentryArchiveOccupant?.name ?? ''}
+            selectedCell={selectedReentryCell}
+            selectedFacing={selectedReentryFacing}
+            onselectionchange={updateReentrySelection}
+          />
+        {/if}
         {#if reentryRobot?.powerDownNextTurn}
           <label class="check-control">
-            <input type="checkbox" bind:checked={reentryPoweredDown} onchange={persistReentryDraft} />
+            <input
+              type="checkbox"
+              bind:checked={reentryPoweredDown}
+              onchange={() => void persistReentryDraft()}
+            />
             Re-enter powered down
           </label>
         {/if}
-        <button onclick={submitReentryChoice} disabled={pending || !selectedReentryChoice}>CONFIRM RE-ENTRY</button>
+        <button
+          onclick={submitReentryChoice}
+          disabled={pending || !selectedReentryCell || !selectedReentryFacing}
+        >CONFIRM RE-ENTRY</button>
       </section>
     {:else if powerDownChoiceVisible}
       <section class="power-control" aria-label="Power-down choice">
@@ -778,8 +814,8 @@
   }
   .effect-control p { margin: 0 0 14px; }
   .effect-control label { display: grid; gap: 7px; margin-bottom: 12px; color: #ffcf4b; font: 700 15px 'Space Mono', monospace; text-transform: uppercase; }
-  .effect-control select { min-height: 52px; padding: 8px 10px; border: 1px solid #657577; color: #eef4ee; background: #141c1d; font-size: 18px; }
   .effect-control > div { display: grid; gap: 8px; margin-bottom: 10px; }
+  .effect-control :global(.reentry-picker) { margin-bottom: 12px; }
   .effect-control > button { width: 100%; }
   .effect-control > .option-card-grid {
     grid-template-columns: minmax(0, 1fr);
