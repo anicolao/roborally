@@ -597,6 +597,7 @@
         {#if reentryRobot}
           <ReentryPicker
             choices={reentryChoices}
+            courseId={state.setup!.courseId}
             archive={reentryRobot.archive}
             archiveOccupantName={reentryArchiveOccupant?.name ?? ''}
             selectedCell={selectedReentryCell}
