@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { stayActiveInDockOrder } from '../helpers/game-actions';
+import { chooseReentry, stayActiveInDockOrder } from '../helpers/game-actions';
 import {
   advanceSyntheticPlayback,
   enableSyntheticPlaybackClock,
@@ -121,13 +121,13 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     // final turn summary.
     const awaitingReentry = host.getByRole('heading', { name: /awaiting re-entry/ });
     if (await awaitingReentry.isVisible({ timeout: 10_000 }).catch(() => false)) {
-      const hostReentry = host.getByLabel('Re-entry facing');
-      const guestReentry = guest.getByLabel('Re-entry facing');
+      const hostReentry = host.getByRole('group', { name: 'Re-entry facing' });
+      const guestReentry = guest.getByRole('group', { name: 'Re-entry facing' });
       if (await guestReentry.isVisible({ timeout: 10_000 }).catch(() => false)) {
-        await guestReentry.selectOption({ index: 1 });
+        await chooseReentry(guest);
         await guest.getByRole('button', { name: 'Confirm re-entry' }).click();
       } else if (await hostReentry.isVisible({ timeout: 10_000 }).catch(() => false)) {
-        await hostReentry.selectOption({ index: 1 });
+        await chooseReentry(host);
         await host.getByRole('button', { name: 'Confirm re-entry' }).click();
       }
     }

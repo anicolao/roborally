@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { stayActiveInDockOrder } from '../helpers/game-actions';
+import { chooseReentry, stayActiveInDockOrder } from '../helpers/game-actions';
 import { TestStepHelper } from '../helpers/test-step-helper';
 
 async function chooseProgram(page: Page, labels: readonly string[]) {
@@ -94,30 +94,22 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
         {
           spec: 'Only the first destroyed robot owner receives the first re-entry control',
           check: async () => {
-            await expect(host.getByLabel('Re-entry facing')).toBeVisible();
-            await expect(host.getByText('Archive position (6,16)')).toBeVisible();
-            await expect(host.getByLabel('Re-entry facing').locator('option')).toHaveText([
-              'Choose a facing',
-              'north',
-              'east',
-              'south',
-              'west'
-            ]);
+            await expect(host.getByRole('group', { name: 'Re-entry facing' })).toBeVisible();
+            await expect(host.getByText('Archive (6,16) is clear.')).toBeVisible();
+            for (const facing of ['north', 'east', 'south', 'west']) {
+              await expect(host.getByRole('button', { name: `Face ${facing}` })).toBeEnabled();
+            }
             await expect(guest.getByText('Waiting for Ada to choose re-entry.')).toBeVisible();
           }
         }
       ]
     });
 
-    await host
-      .getByLabel('Re-entry facing')
-      .selectOption({ label: 'north' });
+    await chooseReentry(host, 'north');
     await host.getByRole('button', { name: 'Confirm re-entry' }).click();
-    await expect(guest.getByLabel('Re-entry facing')).toBeVisible();
-    await expect(guest.getByText('Archive position (7,16)')).toBeVisible();
-    await guest
-      .getByLabel('Re-entry facing')
-      .selectOption({ label: 'east' });
+    await expect(guest.getByRole('group', { name: 'Re-entry facing' })).toBeVisible();
+    await expect(guest.getByText('Archive (7,16) is clear.')).toBeVisible();
+    await chooseReentry(guest, 'east');
     await guest.getByRole('button', { name: 'Confirm re-entry' }).click();
 
     await expect(host.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();
@@ -157,10 +149,10 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
           }
         },
         {
-          spec: 'The UI explains that the current archive marker is the only re-entry position',
+          spec: 'The UI explains the occupied-archive nearest-placement rule',
           check: async () => {
             await expect(host.getByText(/Re-entry position/)).toContainText(
-              'returns only to its current archive marker'
+              'choose the nearest legal surrounding square'
             );
           }
         }

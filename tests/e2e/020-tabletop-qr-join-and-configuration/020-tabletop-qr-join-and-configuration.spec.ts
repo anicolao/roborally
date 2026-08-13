@@ -4,6 +4,7 @@ import {
   enableSyntheticPlaybackClock,
   finishSyntheticPlayback
 } from '../helpers/playback-clock';
+import { chooseReentry } from '../helpers/game-actions';
 import { TestStepHelper } from '../helpers/test-step-helper';
 
 async function expectFixedViewport(page: import('@playwright/test').Page) {
@@ -211,9 +212,9 @@ async function completePrivateResolutionChoices(
         return false;
       }
 
-      const reentry = page.getByLabel('Re-entry facing');
+      const reentry = page.getByRole('group', { name: 'Re-entry facing' });
       if (await reentry.isVisible()) {
-        await reentry.selectOption({ index: 1 });
+        await chooseReentry(page);
         await page.getByRole('button', { name: 'CONFIRM RE-ENTRY' }).click();
         return false;
       }

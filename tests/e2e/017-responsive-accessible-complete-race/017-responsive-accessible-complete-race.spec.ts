@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { stayActiveInDockOrder } from '../helpers/game-actions';
+import { chooseReentry, stayActiveInDockOrder } from '../helpers/game-actions';
 import {
   enableSyntheticPlaybackClock,
   finishSyntheticPlayback
@@ -121,10 +121,10 @@ async function closeResolutionInterrupts(host: Page, guest: Page, turn: number) 
         await expect(loss).not.toBeVisible({ timeout: 10_000 });
         break;
       }
-      const reentry = page.getByLabel('Re-entry facing');
+      const reentry = page.getByRole('group', { name: 'Re-entry facing' });
       if (!handledReentry.has(page) && (await reentry.isVisible())) {
         handledReentry.add(page);
-        await reentry.selectOption({ index: 1 });
+        await chooseReentry(page);
         const confirm = page.getByRole('button', { name: 'Confirm re-entry' });
         await confirm.click();
         await expect(confirm).not.toBeVisible({ timeout: 10_000 });

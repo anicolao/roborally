@@ -22,4 +22,4 @@ Two ordinary immutable Programs form a deterministic push chain. One robot is pu
 - [x] Destruction order authorizes Ada before Grace
 - [x] Each returning robot has two damage and two remaining Lives
 - [x] Both clients converge on the chosen cells and facings
-- [x] The UI explains that the current archive marker is the only re-entry position
+- [x] The UI explains the occupied-archive nearest-placement rule

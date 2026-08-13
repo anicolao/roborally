@@ -263,24 +263,38 @@ async function documentPrivateDecision(
     return answered;
   }
 
-  const reentry = racer.page.getByLabel('Re-entry facing');
+  const reentry = racer.page.getByRole('group', { name: 'Re-entry facing' });
   if (await reentry.isVisible()) {
-    await reentry.selectOption({ index: 1 });
-    const selectedLabel = await reentry.locator('option:checked').textContent();
+    const square = racer.page.getByRole('button', { name: /^Re-entry square \(/ }).first();
+    if (await square.isVisible()) {
+      await square.click();
+      const squareLabel = await square.getAttribute('aria-label');
+      await documentCurrentState(
+        steps,
+        racer.page,
+        `turn-${turn}-${slug(racer.name)}-select-reentry-square`,
+        `${racer.name} selects ${squareLabel ?? 'a re-entry square'}`,
+        'The occupied archive and selected nearest legal square are visible',
+        async () => await expect(square).toHaveAttribute('aria-pressed', 'true')
+      );
+    }
+    const facing = reentry.locator('button:not([disabled])').first();
+    await facing.click();
+    const selectedLabel = await facing.getAttribute('aria-label');
     await documentCurrentState(
       steps,
       racer.page,
       `turn-${turn}-${slug(racer.name)}-select-reentry`,
-      `${racer.name} selects re-entry facing ${selectedLabel?.trim() ?? ''}`,
-      'The current archive position and selected re-entry facing are visible',
-      async () => await expect(reentry).not.toHaveValue('')
+      `${racer.name} selects re-entry facing ${selectedLabel?.replace('Face ', '') ?? ''}`,
+      'The archive placement and selected re-entry facing are visible',
+      async () => await expect(facing).toHaveAttribute('aria-pressed', 'true')
     );
     await documentBeforeClick(
       steps,
       racer.page,
       `turn-${turn}-${slug(racer.name)}-confirm-reentry`,
-      `${racer.name} confirms re-entry at the current archive`,
-      'The fixed archive position, facing, and confirmation action fit without scrolling',
+      `${racer.name} confirms re-entry`,
+      'The chosen placement, facing, and confirmation action fit without scrolling',
       racer.page.getByRole('button', { name: 'CONFIRM RE-ENTRY' })
     );
     // Do not let the polling loop observe the just-answered decision while the

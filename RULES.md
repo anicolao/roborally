@@ -428,6 +428,9 @@ order:
    spaces; and
 4. ignore board elements during placement except pits, which are illegal.
 
+If every placement in that adjacent band is illegal, expand outward to the
+next band around the Archive marker, repeating until a legal placement exists.
+
 Re-entry facing and, when necessary, adjacent cell are genuine player choices.
 Resolution pauses until the authorized player chooses a legal combination.
 

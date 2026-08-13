@@ -33,6 +33,25 @@ export function stayActiveInDockOrder(pages: readonly Page[]) {
   return declineEligiblePowerDowns(pages);
 }
 
+export async function chooseReentry(
+  page: Page,
+  facing?: 'north' | 'east' | 'south' | 'west',
+  cell?: { x: number; y: number }
+) {
+  const square = cell
+    ? page.getByRole('button', { name: `Re-entry square (${cell.x},${cell.y})` })
+    : page.getByRole('button', { name: /^Re-entry square \(/ }).first();
+  if (await square.isVisible()) await square.click();
+  const facingButton = facing
+    ? page.getByRole('button', { name: `Face ${facing}` })
+    : page
+        .getByRole('group', { name: 'Re-entry facing' })
+        .locator('button:not([disabled])')
+        .first();
+  await facingButton.click();
+  return (await facingButton.getAttribute('aria-label')) ?? '';
+}
+
 async function declineEligiblePowerDowns(pages: readonly Page[]) {
   const targetTurnId = await pages[0]
     .getByLabel('Ordered power-down control')

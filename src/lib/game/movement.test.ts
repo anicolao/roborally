@@ -375,7 +375,7 @@ describe('priority Program movement', () => {
     expect(trace.at(-1)?.kind).toBe('eliminated');
   });
 
-  it('uses only each robot\'s current archive position for re-entry', () => {
+  it('re-enters shared archives in destruction order with adjacent line-of-sight limits', () => {
     const first = raceRobot({
       uid: 'first',
       name: 'First',
@@ -418,25 +418,98 @@ describe('priority Program movement', () => {
     });
     expect(resolution.nextReentryUid).toBe('second');
     const secondChoices = legalReentryChoices(resolution, 'second');
-    expect(secondChoices).toHaveLength(4);
-    expect(secondChoices).toEqual(
-      expect.arrayContaining([
-        { x: 6, y: 10, facing: 'north' },
-        { x: 6, y: 10, facing: 'east' },
-        { x: 6, y: 10, facing: 'south' },
-        { x: 6, y: 10, facing: 'west' }
-      ])
-    );
-    expect(secondChoices.every(({ x, y }) => x === 6 && y === 10)).toBe(true);
-    const selected = secondChoices.find(({ facing }) => facing === 'west')!;
+    expect(secondChoices).not.toContainEqual({ x: 6, y: 10, facing: 'north' });
+    expect(secondChoices.some(({ x, y }) => x !== 6 || y !== 10)).toBe(true);
+    const selected = secondChoices.find(
+      ({ x, y, facing }) => x === 5 && y === 9 && facing === 'west'
+    )!;
     resolution = applyReentryChoice(resolution, 'second', selected);
     expect(resolution.phase).toBe('turn-complete');
     expect(resolution.robots).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ uid: 'first', x: 6, y: 10, damage: 2, status: 'active' }),
-        expect.objectContaining({ uid: 'second', x: 6, y: 10, damage: 2, status: 'active' })
+        expect.objectContaining({ uid: 'second', x: 5, y: 9, damage: 2, status: 'active' })
       ])
     );
+  });
+
+  it('accepts the occupied-archive placement recorded in LB49CR', () => {
+    const justin = raceRobot({
+      uid: 'justin',
+      name: 'Justin',
+      x: 4,
+      y: 9,
+      archive: { x: 7, y: 7 },
+      status: 'destroyed',
+      destructionOrder: 1,
+      lives: 2
+    });
+    const anna = raceRobot({ uid: 'anna', name: 'Anna', x: 7, y: 7, facing: 'east' });
+    const alex = raceRobot({ uid: 'alex', name: 'Alex', x: 7, y: 8, facing: 'west' });
+    const resolution: ProgramResolution = {
+      turnNumber: 5,
+      phase: 'awaiting-reentry',
+      courseId: 'option-world',
+      robots: [alex, justin, anna],
+      trace: [],
+      optionDeck: createOptionDeck('lb49cr-reentry'),
+      nextOptionChoiceUid: null,
+      nextReentryUid: justin.uid,
+      winnerUids: [],
+      runnersUpUids: [],
+      summary: null,
+      playback: { initialRobots: [], frames: [] }
+    };
+
+    const choices = legalReentryChoices(resolution, justin.uid);
+    expect(choices).toHaveLength(23);
+    expect(choices).toContainEqual({ x: 6, y: 6, facing: 'north' });
+    expect(choices.some(({ x, y }) => x === 7 && y === 7)).toBe(false);
+  });
+
+  it('expands to the next band when every adjacent re-entry space is blocked', () => {
+    const archive = { x: 6, y: 10 };
+    const destroyed = raceRobot({
+      uid: 'returning',
+      name: 'Returning',
+      x: 3,
+      y: 3,
+      archive,
+      status: 'destroyed',
+      destructionOrder: 1,
+      lives: 2
+    });
+    const blockers = [-1, 0, 1].flatMap((dy) =>
+      [-1, 0, 1].map((dx) =>
+        raceRobot({
+          uid: `blocker-${dx}-${dy}`,
+          name: 'Blocker',
+          x: archive.x + dx,
+          y: archive.y + dy
+        })
+      )
+    );
+    const resolution: ProgramResolution = {
+      turnNumber: 1,
+      phase: 'awaiting-reentry',
+      robots: [destroyed, ...blockers],
+      trace: [],
+      optionDeck: createOptionDeck('reentry-next-band'),
+      nextOptionChoiceUid: null,
+      nextReentryUid: destroyed.uid,
+      winnerUids: [],
+      runnersUpUids: [],
+      summary: null,
+      playback: { initialRobots: [], frames: [] }
+    };
+
+    const choices = legalReentryChoices(resolution, destroyed.uid);
+    expect(choices.length).toBeGreaterThan(0);
+    expect(
+      choices.every(({ x, y }) =>
+        Math.max(Math.abs(x - archive.x), Math.abs(y - archive.y)) === 2
+      )
+    ).toBe(true);
   });
 
   it('lets a destroyed announcer decide whether re-entry begins the promised shutdown', () => {
