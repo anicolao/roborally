@@ -1,8 +1,14 @@
 <script lang="ts">
-  import type { Direction } from '$lib/game/course-manifest';
+  import BoardTile from '$lib/components/BoardTile.svelte';
+  import type { Direction, Wall } from '$lib/game/course-manifest';
   import type { ReentryChoice } from '$lib/game/movement';
+  import {
+    compilePlayableCourse,
+    type PlayableCourseId
+  } from '$lib/game/playable-courses';
 
   export let choices: readonly ReentryChoice[];
+  export let courseId: PlayableCourseId;
   export let archive: { x: number; y: number };
   export let archiveOccupantName = '';
   export let selectedCell = '';
@@ -28,6 +34,16 @@
   $: archiveOpen = cellChoices.some(({ key }) => key === archiveCell);
   $: effectiveCell = selectedCell || (cellChoices.length === 1 ? cellChoices[0].key : '');
   $: selectedCellChoice = cellChoices.find(({ key }) => key === effectiveCell);
+  $: compiledCourse = compilePlayableCourse(courseId);
+  $: wallsByCell = [...compiledCourse.walls].reduce<Map<string, Wall[]>>((byCell, wallKey) => {
+    const [x, y, edge] = wallKey.split(',');
+    const key = `${x},${y}`;
+    byCell.set(key, [
+      ...(byCell.get(key) ?? []),
+      { x: Number(x), y: Number(y), edge: edge as Direction }
+    ]);
+    return byCell;
+  }, new Map());
   $: radius = Math.max(
     0,
     ...cellChoices.map(({ x, y }) => Math.max(Math.abs(x - archive.x), Math.abs(y - archive.y)))
@@ -39,7 +55,14 @@
     const x = archive.x + dx;
     const y = archive.y + dy;
     const key = `${x},${y}`;
-    return { key, x, y, choice: cellChoices.find((candidate) => candidate.key === key) };
+    return {
+      key,
+      x,
+      y,
+      choice: cellChoices.find((candidate) => candidate.key === key),
+      manifestCell: compiledCourse.cells.get(key),
+      walls: wallsByCell.get(key) ?? []
+    };
   });
 
   function chooseCell(cell: string) {
@@ -80,12 +103,20 @@
           {#if cell.choice}
             <button
               type="button"
+              class="placement-cell"
               class:selected={effectiveCell === cell.key}
               aria-label={`Re-entry square (${cell.x},${cell.y})`}
               aria-pressed={effectiveCell === cell.key}
               onclick={() => chooseCell(cell.key)}
             >
-              <span>{cell.x},{cell.y}</span>
+              <BoardTile
+                embedded
+                elements={cell.manifestCell?.elements ?? []}
+                walls={cell.walls}
+                x={cell.x}
+                y={cell.y}
+              />
+              <span class="tile-coordinate">{cell.x},{cell.y}</span>
             </button>
           {:else if cell.key === archiveCell}
             <span
@@ -94,9 +125,34 @@
                 ? `, ${archiveOccupantName}`
                 : ''}`}
               title={archiveOccupantName || 'Occupied archive'}
-            >A</span>
+            >
+              <BoardTile
+                embedded
+                elements={cell.manifestCell?.elements ?? []}
+                walls={cell.walls}
+                x={cell.x}
+                y={cell.y}
+              />
+              <span class="archive-marker" aria-hidden="true">A</span>
+              <span class="tile-coordinate">{cell.x},{cell.y}</span>
+            </span>
           {:else}
-            <span class="unavailable-cell" aria-hidden="true"></span>
+            <span
+              class:outside-course={!cell.manifestCell}
+              class="unavailable-cell"
+              aria-hidden="true"
+            >
+              {#if cell.manifestCell}
+                <BoardTile
+                  embedded
+                  elements={cell.manifestCell.elements}
+                  walls={cell.walls}
+                  x={cell.x}
+                  y={cell.y}
+                />
+                <span class="tile-coordinate">{cell.x},{cell.y}</span>
+              {/if}
+            </span>
           {/if}
         {/each}
       </div>
@@ -139,13 +195,15 @@
     display: grid;
     grid-template-columns: repeat(var(--reentry-grid-size), minmax(0, 1fr));
     gap: 4px;
-    width: min(100%, calc(var(--reentry-grid-size) * 52px));
+    width: min(100%, calc(var(--reentry-grid-size) * 68px));
     margin-inline: auto;
   }
   .placement-grid > * { min-width: 0; aspect-ratio: 1; }
   .placement-grid button,
   .archive-cell,
   .unavailable-cell {
+    position: relative;
+    overflow: hidden;
     display: grid;
     place-items: center;
     border: 1px solid #536164;
@@ -153,7 +211,7 @@
   }
   .placement-grid button {
     min-height: 44px;
-    padding: 2px;
+    padding: 0;
     color: #eef4ee;
     background: #172224;
     font: 700 12px 'Space Mono', monospace;
@@ -162,16 +220,42 @@
   .placement-grid button:focus-visible { border-color: #ffcf4b; }
   .placement-grid button.selected {
     border-color: #d2ff37;
-    color: #101718;
-    background: #d2ff37;
-    box-shadow: 0 0 0 2px rgb(210 255 55 / 22%);
+    box-shadow: inset 0 0 0 3px #d2ff37, 0 0 0 2px rgb(210 255 55 / 22%);
   }
   .archive-cell {
-    color: #101718;
-    background: repeating-linear-gradient(135deg, #ffcf4b 0 6px, #b88a15 6px 12px);
-    font: 700 18px 'Space Mono', monospace;
+    border-color: #ffcf4b;
+    box-shadow: inset 0 0 0 2px #ffcf4b;
   }
-  .unavailable-cell { border-style: dashed; opacity: 0.28; background: #0d1314; }
+  .archive-marker {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 52%;
+    aspect-ratio: 1;
+    border: 2px solid #ffe69b;
+    border-radius: 50%;
+    color: #101718;
+    background: rgb(255 207 75 / 92%);
+    font: 700 18px 'Space Mono', monospace;
+    box-shadow: 0 2px 7px rgb(0 0 0 / 72%);
+  }
+  .tile-coordinate {
+    position: absolute;
+    z-index: 3;
+    right: 2px;
+    bottom: 2px;
+    padding: 1px 3px;
+    border-radius: 2px;
+    color: #fff;
+    background: rgb(5 9 10 / 82%);
+    font: 700 9px 'Space Mono', monospace;
+    line-height: 1.15;
+    text-shadow: 0 1px 2px #000;
+  }
+  .placement-grid button.selected .tile-coordinate { color: #101718; background: #d2ff37; }
+  .unavailable-cell { opacity: 0.38; background: #0d1314; }
+  .unavailable-cell.outside-course { border-style: dashed; }
   .facing-control > div { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
   .facing-control button {
     display: grid;
@@ -193,9 +277,10 @@
   .compact { gap: 5px; }
   .compact .placement-explanation { font-size: 14px; }
   .compact legend { margin-bottom: 3px; font-size: 11px; }
-  .compact .placement-grid { width: min(100%, calc(var(--reentry-grid-size) * 38px)); gap: 2px; }
+  .compact .placement-grid { width: min(100%, calc(var(--reentry-grid-size) * 48px)); gap: 2px; }
   .compact .placement-grid button { min-height: 32px; font-size: 9px; }
-  .compact .archive-cell { font-size: 14px; }
+  .compact .archive-marker { font-size: 14px; }
+  .compact .tile-coordinate { right: 1px; bottom: 1px; padding: 0 2px; font-size: 7px; }
   .compact .facing-control > div { gap: 3px; }
   .compact .facing-control button { min-height: 34px; }
   .compact .facing-control button > span { font-size: 18px; }

@@ -1413,6 +1413,7 @@
                     {#if reentryRobot}
                       <ReentryPicker
                         choices={reentryChoices}
+                        courseId={roomState.setup.courseId}
                         archive={reentryRobot.archive}
                         archiveOccupantName={reentryArchiveOccupant?.name ?? ''}
                         selectedCell={selectedReentryCell}

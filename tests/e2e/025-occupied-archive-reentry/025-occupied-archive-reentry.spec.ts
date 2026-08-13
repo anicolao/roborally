@@ -155,6 +155,7 @@ test('an occupied archive uses a staged, spatial re-entry control', async ({ pag
   const control = page.getByRole('region', { name: 'Robot re-entry choice' });
   await expect(control).toBeVisible();
   const squares = page.getByRole('button', { name: /^Re-entry square \(/ });
+  const placementGrid = page.getByLabel('Legal re-entry squares');
   await expect(squares).toHaveCount(7);
   await steps.step('occupied-archive-choices', {
     status: 'skip',
@@ -172,6 +173,17 @@ test('an occupied archive uses a staged, spatial re-entry control', async ({ pag
         check: async () => {
           await expect(squares).toHaveCount(7);
           await expect(page.getByRole('button', { name: /^Face / }).first()).toBeDisabled();
+        }
+      },
+      {
+        spec: 'The picker reproduces the actual Option World floor, repair sites, and walls',
+        check: async () => {
+          await expect(placementGrid.locator('.board-tile')).toHaveCount(9);
+          await expect(placementGrid.locator('.feature-art')).toHaveCount(4);
+          await expect(
+            placementGrid.locator('.feature-art[src$="/repair-option.webp"]')
+          ).toHaveCount(4);
+          await expect(placementGrid.locator('.wall-art')).toHaveCount(1);
         }
       }
     ]

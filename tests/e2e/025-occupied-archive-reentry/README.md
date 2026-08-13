@@ -10,6 +10,7 @@ The LB49CR turn-five state is replayed with Anna occupying Justin’s current ar
 
 - [x] The archive identifies Anna as its occupant and is not selectable
 - [x] Seven square choices replace the former 23-item cell-and-facing menu
+- [x] The picker reproduces the actual Option World floor, repair sites, and walls
 
 ## Justin selects the legal square at (6,6)
 
