@@ -23,7 +23,7 @@ const waitForRetry = (milliseconds: number) =>
  * the canonical decision changes. A rejected first write must not permanently
  * hide the next controller task.
  */
-export async function revealPresentationDecisionWithRetry({
+export async function persistPresentationEventWithRetry({
   reveal,
   shouldContinue,
   wait = waitForRetry,
@@ -46,3 +46,6 @@ export async function revealPresentationDecisionWithRetry({
   }
   return false;
 }
+
+/** Legacy name retained for callers and deployed-room compatibility tests. */
+export const revealPresentationDecisionWithRetry = persistPresentationEventWithRetry;

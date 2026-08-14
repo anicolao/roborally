@@ -325,6 +325,33 @@ describe('append-only game stream rules', () => {
     );
   });
 
+  it('accepts only bounded durable presentation steps', async () => {
+    const db = environment.authenticatedContext('tabletop').firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'games/room/events/tabletop-000001'), {
+        ...eventData('tabletop'),
+        type: 'presentation/turn-started',
+        payload: { turnId: 'turn-001', turnNumber: 1 }
+      })
+    );
+    await assertSucceeds(
+      setDoc(doc(db, 'games/room/events/tabletop-000002'), {
+        ...eventData('tabletop'),
+        clientSeq: 2,
+        type: 'presentation/step-completed',
+        payload: { turnId: 'turn-001', turnNumber: 1, segment: 0, frameIndex: 0 }
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, 'games/room/events/tabletop-000003'), {
+        ...eventData('tabletop'),
+        clientSeq: 3,
+        type: 'presentation/step-completed',
+        payload: { turnId: 'turn-001', turnNumber: 1, segment: -1, frameIndex: 1 }
+      })
+    );
+  });
+
   it('attributes ordered power-down responses to their owner', async () => {
     const db = environment.authenticatedContext('robot-a').firestore();
     await assertSucceeds(

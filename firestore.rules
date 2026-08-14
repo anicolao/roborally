@@ -39,6 +39,8 @@ service cloud.firestore {
           'game/roster-transferred',
           'game/rematch-redirected',
           'presentation/decision-revealed',
+          'presentation/turn-started',
+          'presentation/step-completed',
           'power-down/responded'
         ]
         && request.resource.data.payload is map
@@ -171,6 +173,31 @@ service cloud.firestore {
             && request.resource.data.payload.decisionKey is string
             && request.resource.data.payload.decisionKey.size() > 0
             && request.resource.data.payload.decisionKey.size() <= 256
+          )
+          ||
+          (
+            request.resource.data.type == 'presentation/turn-started'
+            && request.resource.data.payload.keys().hasOnly(['turnId', 'turnNumber'])
+            && request.resource.data.payload.turnId.matches('turn-[0-9]+')
+            && request.resource.data.payload.turnNumber is int
+            && request.resource.data.payload.turnNumber > 0
+          )
+          ||
+          (
+            request.resource.data.type == 'presentation/step-completed'
+            && request.resource.data.payload.keys().hasOnly([
+              'turnId',
+              'turnNumber',
+              'segment',
+              'frameIndex'
+            ])
+            && request.resource.data.payload.turnId.matches('turn-[0-9]+')
+            && request.resource.data.payload.turnNumber is int
+            && request.resource.data.payload.turnNumber > 0
+            && request.resource.data.payload.segment is int
+            && request.resource.data.payload.segment >= 0
+            && request.resource.data.payload.frameIndex is int
+            && request.resource.data.payload.frameIndex >= 0
           )
           ||
           (

@@ -1,5 +1,9 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { stayActiveInDockOrder } from '../helpers/game-actions';
+import {
+  enableSyntheticPlaybackClock,
+  finishSyntheticPlayback
+} from '../helpers/playback-clock';
 import { TestStepHelper } from '../helpers/test-step-helper';
 
 type Program = readonly string[];
@@ -132,14 +136,18 @@ test('face-up Options remain available for execution-time decisions', async (
     await guest.getByRole('button', { name: 'Begin Turn 5' }).click();
     await stayActiveInDockOrder([host, guest]);
     const table = await host.context().newPage();
+    await enableSyntheticPlaybackClock(table);
     await table.goto(`/tt/?room=${roomCode}`);
     await chooseFirstProgram(host);
     await chooseFirstProgram(guest);
 
+    await finishSyntheticPlayback([table]);
     const fireControl = guest.getByLabel('Option decision');
     await expect(fireControl).toContainText('Use Fire Control?');
     await fireControl.getByRole('button', { name: 'Deal normal damage' }).click();
 
+    await expect(fireControl).toBeHidden();
+    await finishSyntheticPlayback([table]);
     const damageChoice = host.getByLabel('Damage prevention choice');
     await expect(damageChoice).toBeVisible({ timeout: 45_000 });
     const tableDamagePrompt = table.getByTestId('tabletop-damage-prompt');
@@ -176,7 +184,7 @@ test('face-up Options remain available for execution-time decisions', async (
           spec: 'Both table orientations prominently identify Ada as the current responder',
           check: async () => {
             await expect(tableDamagePrompt).toContainText('Ada');
-            await expect(tableDamagePrompt).toContainText('DOCK ORDER');
+            await expect(tableDamagePrompt).toContainText('WAITING FOR');
             await expect(decisionCopies).toHaveCount(2);
           }
         },
@@ -205,6 +213,8 @@ test('face-up Options remain available for execution-time decisions', async (
       .getByRole('button', { name: /Discard .* to prevent this damage/ })
       .first()
       .click();
+    await expect(damageChoice).toBeHidden();
+    await finishSyntheticPlayback([table]);
     await expect(host.getByRole('heading', { name: 'Turn 5 complete' })).toBeVisible();
 
     await steps.step('options-wait-for-execution-time-use', {
