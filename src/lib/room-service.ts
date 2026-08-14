@@ -28,6 +28,8 @@ import {
   type EffectDraftUpdatedPayload,
   type PlayerJoinedPayload,
   type PresentationDecisionRevealedPayload,
+  type PresentationStepCompletedPayload,
+  type PresentationTurnStartedPayload,
   type PowerDownRespondedPayload,
   type ProgramSubmittedPayload,
   type ProgramDraftUpdatedPayload,
@@ -448,6 +450,24 @@ export async function revealPresentationDecision(
   payload: PresentationDecisionRevealedPayload
 ) {
   await appendRoomEvent(db, user, roomCode, 'presentation/decision-revealed', payload);
+}
+
+export async function startPresentationTurn(
+  db: Firestore,
+  user: User,
+  roomCode: string,
+  payload: PresentationTurnStartedPayload
+) {
+  await appendRoomEvent(db, user, roomCode, 'presentation/turn-started', payload);
+}
+
+export async function completePresentationStep(
+  db: Firestore,
+  user: User,
+  roomCode: string,
+  payload: PresentationStepCompletedPayload
+) {
+  await appendRoomEvent(db, user, roomCode, 'presentation/step-completed', payload);
 }
 
 export async function updateEffectDraft(

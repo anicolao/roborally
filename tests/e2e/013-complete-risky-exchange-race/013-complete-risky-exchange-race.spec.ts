@@ -164,6 +164,7 @@ test('a production Risky Exchange race uses the complete rules loop', async (
       ).toBeVisible();
 
       if (turn === 4) {
+        await host.evaluate(() => window.scrollTo(0, 0));
         await steps.step('options-enter-production-race', {
           description: 'Both robots carry public face-up Options into the long race',
           verifications: [

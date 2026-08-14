@@ -4,7 +4,9 @@ import {
   ROBOTS,
   ROOM_REDUCER_VERSION,
   ROOM_SCHEMA_VERSION,
+  presentationDecisionAvailable,
   presentationDecisionKey,
+  presentationPlaybackComplete,
   replayRoom,
   type RoomEvent
 } from './room-model';
@@ -556,6 +558,28 @@ describe('immutable room replay', () => {
 
     const decisionKey = presentationDecisionKey(destroyed)!;
     expect(decisionKey).toBe('next-turn:turn-002');
+    const streamStarted = event('stream-table', 1, 'presentation/turn-started', {
+      turnId: 'turn-001',
+      turnNumber: 1
+    }, 2_100);
+    const started = replayRoom([...events, streamStarted]);
+    expect(presentationDecisionAvailable(started)).toBe(false);
+    expect(presentationPlaybackComplete(started)).toBe(false);
+
+    const stepEvents = destroyed.resolution!.playback.frames.map((_, frameIndex) =>
+      event('stream-table', frameIndex + 2, 'presentation/step-completed', {
+        turnId: 'turn-001',
+        turnNumber: 1,
+        segment: 0,
+        frameIndex
+      }, 2_200 + frameIndex)
+    );
+    const streamed = replayRoom([...events, streamStarted, ...stepEvents]);
+    expect(streamed.presentationTurn?.frameCursor).toBe(stepEvents.length);
+    expect(streamed.presentationTurn?.timeline).toHaveLength(stepEvents.length);
+    expect(presentationPlaybackComplete(streamed)).toBe(true);
+    expect(presentationDecisionAvailable(streamed)).toBe(true);
+
     const staleReplacementReveal = event('replacement-table', 1, 'presentation/decision-revealed', {
       decisionKey: 'next-turn:turn-999'
     }, 3_000);

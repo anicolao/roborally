@@ -16,7 +16,10 @@
     ROBOTS,
     emptyRoomState,
     normalizeRoomCode,
+    presentationDecisionAvailable,
     presentationDecisionKey,
+    presentationPlaybackComplete,
+    presentationUsesEventStream,
     programmingOptionCardIds,
     type RoomState,
   } from "$lib/room-model";
@@ -29,6 +32,7 @@
     type PlayableCourseId,
   } from "$lib/game/setup";
   import { PROGRAM_CARDS, type ProgramCard } from "$lib/game/program-manifest";
+  import type { TurnId } from "$lib/game/programming";
   import {
     OPTION_CARDS_BY_ID,
     type OptionCardId,
@@ -41,14 +45,11 @@
     schedulePlaybackTimer,
     type PlaybackTimer,
   } from "$lib/playback-clock";
-  import { revealPresentationDecisionWithRetry } from "$lib/presentation-reveal";
-  import {
-    firstChangedPlaybackFrame,
-    robotsForPlaybackPresentation,
-  } from "$lib/playback-presentation";
+  import { persistPresentationEventWithRetry } from "$lib/presentation-reveal";
+  import { robotsForPlaybackPresentation } from "$lib/playback-presentation";
 
   type SeatQr = { seat: number; url: string; image: string };
-  type PlaybackPhase = "idle" | "countdown" | "register" | "complete";
+  type PlaybackPhase = "idle" | "countdown" | "register" | "waiting" | "complete";
   type OptionInspection = {
     playerName: string;
     cardIds: OptionCardId[];
@@ -80,11 +81,12 @@
   let playbackFrameCount = 0;
   let playbackProductionDurationMs = 2_000;
   let playbackKey = "";
-  let scheduledPlayback: ProgramPlayback | undefined;
-  let queuedPlayback:
-    | { playback: ProgramPlayback; fromIndex: number }
-    | undefined;
-  let attemptedDecisionReveal = "";
+  let serverAtHead = false;
+  let presentationTimelineIndex = 0;
+  let presentationBusy = false;
+  let presentationCountdownComplete = false;
+  let attemptedPresentationStart = "";
+  let awaitingCompletedStep = "";
   let tabletopMounted = false;
   let optionInspection: OptionInspection | undefined;
   let optionInspector: HTMLDivElement | undefined;
@@ -134,23 +136,42 @@
   $: resolutionPlaybackKey = state.resolution
     ? `${state.raceEpoch}:${state.resolution.turnNumber}`
     : "";
+  $: presentationSettled =
+    presentationPlaybackComplete(state) &&
+    !state.resolution?.pendingOptionDecision &&
+    !state.resolution?.nextOptionChoiceUid &&
+    !state.resolution?.nextReentryUid;
   $: presentedRobots = robotsForPlaybackPresentation(
     state.resolution,
-    playbackRobots,
+    presentationSettled ? undefined : playbackRobots,
     resolutionPlaybackKey,
     playbackKey,
   );
   $: pendingPresentationDecisionKey = presentationDecisionKey(state);
   $: presentationDecisionVisible =
+    serverAtHead &&
     !!pendingPresentationDecisionKey &&
-    state.revealedDecisionKey === pendingPresentationDecisionKey;
+    presentationDecisionAvailable(state);
   $: pendingOptionDecision =
-    presentationDecisionVisible && playbackCaughtUp
+    presentationDecisionVisible
       ? (state.resolution?.pendingOptionDecision ?? null)
       : null;
   $: pendingOptionRobot = state.resolution?.robots.find(
     ({ uid }) => uid === pendingOptionDecision?.uid,
   );
+  $: waitingPlayerUid = presentationDecisionVisible
+    ? (pendingOptionDecision?.uid ??
+      state.resolution?.nextOptionChoiceUid ??
+      state.resolution?.nextReentryUid ??
+      null)
+    : null;
+  $: waitingPlayer = state.players.find(({ uid }) => uid === waitingPlayerUid);
+  $: waitingPrompt = pendingOptionDecision?.tabletopPrompt ??
+    (state.resolution?.nextOptionChoiceUid
+      ? "Choose an Option to discard"
+      : state.resolution?.nextReentryUid
+        ? "Choose a re-entry position and facing"
+        : "");
   $: inspectedOptionCard = optionInspection
     ? OPTION_CARDS_BY_ID.get(optionInspection.selectedCardId)
     : undefined;
@@ -161,19 +182,9 @@
   $: finishOverlayVisible =
     state.resolution?.phase === "race-finished" &&
     !!state.resolution.summary &&
-    !playbackIsActive &&
-    playbackPhase === "complete";
-  $: playbackCaughtUp =
-    !!state.resolution &&
-    (state.resolution.playback.frames.length === 0 ||
-      (resolutionPlaybackKey === playbackKey &&
-        playbackPhase === "complete" &&
-        !!scheduledPlayback &&
-        !queuedPlayback &&
-        firstChangedPlaybackFrame(
-          scheduledPlayback.frames,
-          state.resolution.playback.frames,
-        ) === null));
+    (presentationUsesEventStream(state)
+      ? presentationSettled
+      : !playbackIsActive && playbackPhase === "complete");
 
   onMount(async () => {
     tabletopMounted = true;
@@ -255,6 +266,9 @@
         (error) => {
           status = error.message;
         },
+        (sync) => {
+          if (sync.source === "server" && !sync.hasPendingWrites) serverAtHead = true;
+        },
       );
     } catch (nextError) {
       error =
@@ -315,8 +329,11 @@
     playbackFrameIndex = 0;
     playbackFrameCount = 0;
     playbackProductionDurationMs = PRODUCTION_PROGRAM_CARD_MS;
-    scheduledPlayback = undefined;
-    queuedPlayback = undefined;
+    presentationTimelineIndex = 0;
+    presentationBusy = false;
+    presentationCountdownComplete = false;
+    attemptedPresentationStart = "";
+    awaitingCompletedStep = "";
   }
 
   function schedulePlayback(callback: () => void, delay: number) {
@@ -331,163 +348,201 @@
       : PRODUCTION_FACTORY_STAGE_MS;
   }
 
-  function schedulePlaybackFrames(
-    playback: ProgramPlayback,
-    fromIndex: number,
-    initialDelay: number,
-  ) {
-    playbackFrameCount = playback.frames.length;
-    scheduledPlayback = playback;
-    let frameStart = initialDelay;
-    for (const [index, frame] of playback.frames.entries()) {
-      if (index < fromIndex) continue;
-      const productionDuration = productionDurationForFrame(frame);
-      schedulePlayback(() => {
-        playbackPhase = "register";
-        playbackRegister = frame.register;
-        playbackStage = frame.stage;
-        playbackActorUid = frame.actorUid;
-        playbackCardId = frame.cardId;
-        playbackRobots = frame.robots;
-        playbackTrace = frame.trace;
-        playbackLaserBeams = frame.laserBeams ?? [];
-        playbackFrameIndex = index + 1;
-        playbackProductionDurationMs = productionDuration;
-      }, frameStart);
-      frameStart += Math.round(productionDuration * playbackTimeScale);
-    }
-    schedulePlayback(() => {
-      if (queuedPlayback) {
-        const continuation = queuedPlayback;
-        queuedPlayback = undefined;
-        clearPlaybackTimers();
-        schedulePlaybackFrames(
-          continuation.playback,
-          continuation.fromIndex,
-          0,
-        );
-        return;
-      }
-      playbackPhase = "complete";
-      playbackRegister = null;
-      playbackStage = null;
-      playbackActorUid = null;
-      playbackCardId = null;
-      if (!state.resolution?.pendingOptionDecision) {
-        playbackRobots = undefined;
-        playbackLaserBeams = [];
-      }
-      playbackTrace = [];
-    }, frameStart);
-  }
-
-  function startProgramPlayback(key: string, playback: ProgramPlayback) {
+  function prepareProgramPlayback(key: string, playback: ProgramPlayback) {
     resetProgramPlayback();
     playbackKey = key;
-    playbackPhase = "countdown";
-    playbackCountdown = 3;
     playbackRobots = playback.initialRobots;
-
-    schedulePlayback(() => (playbackCountdown = 2), countdownStepMs);
-    schedulePlayback(() => (playbackCountdown = 1), countdownStepMs * 2);
-    schedulePlaybackFrames(playback, 0, countdownStepMs * 3);
   }
 
-  function continueProgramPlayback(
-    playback: ProgramPlayback,
-    fromIndex: number,
+  function startPlaybackCountdown() {
+    if (presentationBusy || presentationCountdownComplete) return;
+    presentationBusy = true;
+    playbackPhase = "countdown";
+    playbackCountdown = 3;
+    schedulePlayback(() => (playbackCountdown = 2), countdownStepMs);
+    schedulePlayback(() => (playbackCountdown = 1), countdownStepMs * 2);
+    schedulePlayback(() => {
+      presentationCountdownComplete = true;
+      presentationBusy = false;
+      queueMicrotask(() => void driveEventPresentation());
+    }, countdownStepMs * 3);
+  }
+
+  function showPlaybackFrame(
+    frame: ProgramPlayback["frames"][number],
+    frameIndex: number,
+    frameCount: number,
   ) {
-    clearPlaybackTimers();
-    schedulePlaybackFrames(playback, fromIndex, 0);
+    playbackPhase = "register";
+    playbackRegister = frame.register;
+    playbackStage = frame.stage;
+    playbackActorUid = frame.actorUid;
+    playbackCardId = frame.cardId;
+    playbackRobots = frame.robots;
+    playbackTrace = frame.trace;
+    playbackLaserBeams = frame.laserBeams ?? [];
+    playbackFrameIndex = frameIndex + 1;
+    playbackFrameCount = Math.max(frameCount, frameIndex + 1);
+    playbackProductionDurationMs = productionDurationForFrame(frame);
+  }
+
+  async function writePresentationEvent(write: () => Promise<void>) {
+    if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true") {
+      window.__roborallyE2ePresentationRevealAttempts =
+        (window.__roborallyE2ePresentationRevealAttempts ?? 0) + 1;
+      if ((window.__roborallyE2ePresentationRevealFailures ?? 0) > 0) {
+        window.__roborallyE2ePresentationRevealFailures! -= 1;
+        throw new Error("Synthetic presentation event rejection.");
+      }
+    }
+    await write();
   }
 
   $: {
     const resolution = state.resolution;
-    if (
-      resolution?.playback.frames.length &&
-      resolutionPlaybackKey &&
-      resolutionPlaybackKey !== playbackKey
-    ) {
-      startProgramPlayback(resolutionPlaybackKey, resolution.playback);
-    } else if (
-      resolution?.playback.frames.length &&
-      resolutionPlaybackKey === playbackKey
-    ) {
-      const comparisonPlayback = queuedPlayback?.playback ?? scheduledPlayback;
-      const changedFrame = comparisonPlayback
-        ? firstChangedPlaybackFrame(
-            comparisonPlayback.frames,
-            resolution.playback.frames,
-          )
-        : null;
-      if (changedFrame !== null) {
-        if (playbackIsActive) {
-          queuedPlayback = {
-            playback: resolution.playback,
-            fromIndex: Math.min(
-              queuedPlayback?.fromIndex ?? changedFrame,
-              changedFrame,
-            ),
-          };
-        } else {
-          continueProgramPlayback(resolution.playback, changedFrame);
-        }
-      }
+    if (resolution && resolutionPlaybackKey !== playbackKey) {
+      prepareProgramPlayback(resolutionPlaybackKey, resolution.playback);
     }
+    state.presentationTurn?.timeline.length;
+    state.presentationTurn?.frameCursor;
+    serverAtHead;
+    presentationTimelineIndex;
+    presentationBusy;
+    presentationCountdownComplete;
+    void driveEventPresentation();
   }
 
-  $: if (
-    services &&
-    pendingPresentationDecisionKey &&
-    pendingPresentationDecisionKey !== state.revealedDecisionKey &&
-    pendingPresentationDecisionKey !== attemptedDecisionReveal &&
-    playbackCaughtUp
-  ) {
-    void revealCurrentPresentationDecision(pendingPresentationDecisionKey);
-  }
+  async function driveEventPresentation() {
+    if (!services || !tabletopMounted || !state.resolution || presentationBusy) return;
+    const resolution = state.resolution;
+    const turnId: TurnId = state.programming?.turnNumber === resolution.turnNumber
+      ? state.programming.turnId
+      : `turn-${String(resolution.turnNumber).padStart(3, "0")}` as TurnId;
+    const turnKey = `${state.raceEpoch}:${turnId}`;
 
-  async function revealCurrentPresentationDecision(decisionKey: string) {
-    if (!services) return;
-    const activeServices = services;
-    attemptedDecisionReveal = decisionKey;
-    const synchronized = await revealPresentationDecisionWithRetry({
-      reveal: async () => {
-        if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true") {
-          window.__roborallyE2ePresentationRevealAttempts =
-            (window.__roborallyE2ePresentationRevealAttempts ?? 0) + 1;
-          if ((window.__roborallyE2ePresentationRevealFailures ?? 0) > 0) {
-            window.__roborallyE2ePresentationRevealFailures! -= 1;
-            throw new Error("Synthetic presentation checkpoint rejection.");
-          }
-        }
-        await RoomService.revealPresentationDecision(
-          activeServices.db,
-          activeServices.user,
-          roomCode,
-          { decisionKey },
-        );
-      },
-      shouldContinue: () =>
-        tabletopMounted &&
-        presentationDecisionKey(state) === decisionKey &&
-        state.revealedDecisionKey !== decisionKey &&
-        playbackCaughtUp,
-      onRetry: (nextError, delay) => {
-        console.error(nextError);
-        error = `The tabletop could not synchronize the next player control. Retrying in ${Math.ceil(delay / 1_000)} seconds…`;
-      },
-      onSuccess: () => {
-        if (
-          error.startsWith(
-            "The tabletop could not synchronize the next player control.",
+    if (!presentationUsesEventStream(state)) {
+      if (!serverAtHead || attemptedPresentationStart === turnKey) return;
+      attemptedPresentationStart = turnKey;
+      const synchronized = await persistPresentationEventWithRetry({
+        reveal: () => writePresentationEvent(() =>
+          RoomService.startPresentationTurn(
+            services!.db,
+            services!.user,
+            roomCode,
+            { turnId, turnNumber: resolution.turnNumber },
           )
-        ) {
-          error = "";
-        }
-      },
-    });
-    if (!synchronized && attemptedDecisionReveal === decisionKey) {
-      attemptedDecisionReveal = "";
+        ),
+        shouldContinue: () =>
+          tabletopMounted &&
+          serverAtHead &&
+          state.resolution?.turnNumber === resolution.turnNumber &&
+          !presentationUsesEventStream(state),
+        onRetry: (nextError, delay) => {
+          console.error(nextError);
+          error = `The tabletop could not synchronize playback. Retrying in ${Math.ceil(delay / 1_000)} seconds…`;
+        },
+        onSuccess: () => { error = ""; },
+      });
+      if (!synchronized) {
+        attemptedPresentationStart = "";
+      }
+      return;
+    }
+
+    const presentation = state.presentationTurn!;
+    const timelineEntry = presentation.timeline[presentationTimelineIndex];
+    if (timelineEntry?.kind === "decision") {
+      presentationTimelineIndex += 1;
+      queueMicrotask(() => void driveEventPresentation());
+      return;
+    }
+    if (timelineEntry?.kind === "frame") {
+      const stepKey = `${timelineEntry.segment}:${timelineEntry.frameIndex}`;
+      if (awaitingCompletedStep === stepKey) {
+        awaitingCompletedStep = "";
+        presentationTimelineIndex += 1;
+        queueMicrotask(() => void driveEventPresentation());
+        return;
+      }
+      if (!presentationCountdownComplete) {
+        startPlaybackCountdown();
+        return;
+      }
+      presentationBusy = true;
+      showPlaybackFrame(
+        timelineEntry.frame,
+        timelineEntry.frameIndex,
+        Math.max(resolution.playback.frames.length, timelineEntry.frameIndex + 1),
+      );
+      schedulePlayback(() => {
+        presentationTimelineIndex += 1;
+        presentationBusy = false;
+        queueMicrotask(() => void driveEventPresentation());
+      }, Math.round(productionDurationForFrame(timelineEntry.frame) * playbackTimeScale));
+      return;
+    }
+
+    if (!serverAtHead) return;
+    if (awaitingCompletedStep) return;
+    if (presentation.frameCursor < resolution.playback.frames.length) {
+      if (!presentationCountdownComplete) {
+        startPlaybackCountdown();
+        return;
+      }
+      const frameIndex = presentation.frameCursor;
+      const frame = resolution.playback.frames[frameIndex];
+      const stepKey = `${presentation.segment}:${frameIndex}`;
+      presentationBusy = true;
+      showPlaybackFrame(frame, frameIndex, resolution.playback.frames.length);
+      schedulePlayback(() => {
+        awaitingCompletedStep = stepKey;
+        void persistPresentationEventWithRetry({
+          reveal: () => writePresentationEvent(() =>
+            RoomService.completePresentationStep(
+              services!.db,
+              services!.user,
+              roomCode,
+              {
+                turnId: presentation.turnId,
+                turnNumber: presentation.turnNumber,
+                segment: presentation.segment,
+                frameIndex,
+              },
+            )
+          ),
+          shouldContinue: () =>
+            tabletopMounted &&
+            serverAtHead &&
+            state.presentationTurn?.turnNumber === presentation.turnNumber &&
+            state.presentationTurn.segment === presentation.segment &&
+            state.presentationTurn.frameCursor === frameIndex,
+          onRetry: (nextError, delay) => {
+            console.error(nextError);
+            error = `The tabletop could not record animation step ${frameIndex + 1}. Retrying in ${Math.ceil(delay / 1_000)} seconds…`;
+          },
+          onSuccess: () => { error = ""; },
+        }).finally(() => {
+          presentationBusy = false;
+          queueMicrotask(() => void driveEventPresentation());
+        });
+      }, Math.round(productionDurationForFrame(frame) * playbackTimeScale));
+      return;
+    }
+
+    const waitingForPlayer = !!(
+      resolution.pendingOptionDecision ||
+      resolution.nextOptionChoiceUid ||
+      resolution.nextReentryUid
+    );
+    playbackPhase = waitingForPlayer ? "waiting" : "complete";
+    playbackStage = null;
+    playbackActorUid = null;
+    playbackCardId = null;
+    playbackTrace = [];
+    if (!waitingForPlayer) {
+      playbackRegister = null;
+      playbackRobots = undefined;
+      playbackLaserBeams = [];
     }
   }
 
@@ -563,7 +618,17 @@
 <svelte:head><title>Robo Rally · Tabletop</title></svelte:head>
 <svelte:window onkeydown={handleTabletopKeydown} />
 
-<main class="tabletop" data-e2e-tabletop data-room-code={roomCode}>
+<main
+  class="tabletop"
+  data-e2e-tabletop
+  data-room-code={roomCode}
+  data-presentation-cursor={state.presentationTurn?.frameCursor ?? -1}
+  data-presentation-frame-count={state.resolution?.playback.frames.length ?? 0}
+  data-presentation-timeline-index={presentationTimelineIndex}
+  data-presentation-timeline-count={state.presentationTurn?.timeline.length ?? 0}
+  data-presentation-server-head={serverAtHead}
+  data-presentation-busy={presentationBusy}
+>
   <p
     class="sr-only"
     role="status"
@@ -797,7 +862,7 @@
               {@const revealed =
                 resolutionIsCurrent &&
                 (playbackPhase === "complete" ||
-                  (playbackPhase === "register" &&
+                  (["register", "waiting"].includes(playbackPhase) &&
                     cardIndex + 1 <= (playbackRegister ?? 0)))}
               {@const register = programPlayer?.registers[cardIndex]}
               {@const locked = register?.locked ?? false}
@@ -850,7 +915,7 @@
 
     <div
       class:playback-active={playbackPhase === "register" && !!playbackRegister}
-      class:decision-active={!!pendingOptionDecision && !!pendingOptionRobot}
+      class:decision-active={!!waitingPlayer}
       class="course-wrap"
     >
       {#if state.setup}
@@ -859,17 +924,17 @@
           robots={presentedRobots}
           animateRobots={playbackIsActive}
           transitionDurationMs={playbackTransitionMs}
-          laserBeams={playbackLaserBeams}
+          laserBeams={presentationSettled ? [] : playbackLaserBeams}
           presentationOnly
         />
-        {#if pendingOptionDecision && pendingOptionRobot}
+        {#if waitingPlayer}
           <div
             class:side-facing={tabletopLayout === "side-seats"}
             class="course-decision"
             role="status"
             aria-live="assertive"
             data-testid="tabletop-damage-prompt"
-            data-decision-id={pendingOptionDecision.decisionId}
+            data-decision-id={pendingOptionDecision?.decisionId ?? pendingPresentationDecisionKey}
           >
             {#each ["near", "far"] as position}
               <div
@@ -886,12 +951,16 @@
                     : "south"}
               >
                 <small
-                  >{pendingOptionDecision.timing === "damage"
+                  >{pendingOptionDecision?.timing === "damage"
                     ? "DAMAGE DECISION"
-                    : "OPTION DECISION"} · DOCK ORDER</small
+                    : pendingOptionDecision
+                      ? "OPTION DECISION"
+                      : state.resolution?.nextReentryUid
+                        ? "RE-ENTRY DECISION"
+                        : "OPTION LOSS"} · WAITING FOR</small
                 >
-                <strong>{pendingOptionRobot.name}</strong>
-                <span>{pendingOptionDecision.tabletopPrompt}</span>
+                <strong>{waitingPlayer.name}</strong>
+                <span>{waitingPrompt}</span>
               </div>
             {/each}
           </div>

@@ -44,6 +44,7 @@ import {
   resolveProgrammedTurn,
   type OptionDecision,
   type ProgramResolution,
+  type ProgramPlaybackFrame,
   type ReentryChoice
 } from './game/movement';
 
@@ -77,6 +78,8 @@ export type RoomEventType =
   | 'game/roster-transferred'
   | 'game/rematch-redirected'
   | 'presentation/decision-revealed'
+  | 'presentation/turn-started'
+  | 'presentation/step-completed'
   | 'power-down/responded';
 
 export interface GameCreatedPayload {
@@ -155,6 +158,41 @@ export interface PresentationDecisionRevealedPayload {
   decisionKey: string;
 }
 
+export interface PresentationTurnStartedPayload {
+  turnId: TurnId;
+  turnNumber: number;
+}
+
+export interface PresentationStepCompletedPayload {
+  turnId: TurnId;
+  turnNumber: number;
+  segment: number;
+  frameIndex: number;
+}
+
+export type PresentationTimelineEntry =
+  | {
+      kind: 'frame';
+      eventId: string;
+      segment: number;
+      frameIndex: number;
+      frame: ProgramPlaybackFrame;
+    }
+  | {
+      kind: 'decision';
+      eventId: string;
+      decisionKey: string;
+      actorUid: string;
+    };
+
+export interface PresentationTurnState {
+  turnId: TurnId;
+  turnNumber: number;
+  segment: number;
+  frameCursor: number;
+  timeline: PresentationTimelineEntry[];
+}
+
 export type EffectDraft =
   | {
       kind: 'reentry';
@@ -188,6 +226,8 @@ export type RoomEventPayload =
   | GameRosterTransferredPayload
   | GameRematchRedirectedPayload
   | PresentationDecisionRevealedPayload
+  | PresentationTurnStartedPayload
+  | PresentationStepCompletedPayload
   | PowerDownRespondedPayload;
 
 export interface RoomEvent {
@@ -262,6 +302,8 @@ export interface RoomState {
   pendingOptionUid: string | null;
   /** The resolution decision the shared tabletop has actually reached. */
   revealedDecisionKey: string | null;
+  /** Durable animation progress for the current event-driven presentation turn. */
+  presentationTurn: PresentationTurnState | null;
   acceptedEventIds: string[];
   diagnostics: ReplayDiagnostic[];
 }
@@ -289,6 +331,7 @@ export function emptyRoomState(): RoomState {
     effectDrafts: [],
     pendingOptionUid: null,
     revealedDecisionKey: null,
+    presentationTurn: null,
     acceptedEventIds: [],
     diagnostics: []
   };
@@ -315,6 +358,73 @@ export function presentationDecisionKey(state: RoomState): string | null {
     return `next-turn:${state.nextProgramming.turnId}`;
   }
   return null;
+}
+
+function resolutionTurnId(state: RoomState): TurnId | null {
+  const turnNumber = state.resolution?.turnNumber;
+  if (!turnNumber) return null;
+  if (state.programming?.turnNumber === turnNumber) return state.programming.turnId;
+  return `turn-${String(turnNumber).padStart(3, '0')}` as TurnId;
+}
+
+export function presentationUsesEventStream(state: RoomState): boolean {
+  return !!state.resolution &&
+    state.presentationTurn?.turnNumber === state.resolution.turnNumber &&
+    state.presentationTurn.turnId === resolutionTurnId(state);
+}
+
+export function presentationPlaybackComplete(state: RoomState): boolean {
+  if (!state.resolution) return false;
+  if (!presentationUsesEventStream(state)) return false;
+  return state.presentationTurn!.frameCursor >= state.resolution.playback.frames.length;
+}
+
+/**
+ * A live controller may expose the pending control only after every animation
+ * frame before it has its own accepted event. Legacy rooms retain the former
+ * reveal checkpoint so an in-progress deployed game remains replayable.
+ */
+export function presentationDecisionAvailable(state: RoomState): boolean {
+  const decisionKey = presentationDecisionKey(state);
+  if (!decisionKey) return false;
+  return presentationUsesEventStream(state)
+    ? presentationPlaybackComplete(state)
+    : state.revealedDecisionKey === decisionKey;
+}
+
+function firstChangedFrameIndex(
+  previous: readonly ProgramPlaybackFrame[],
+  next: readonly ProgramPlaybackFrame[]
+): number | null {
+  const sharedLength = Math.min(previous.length, next.length);
+  for (let index = 0; index < sharedLength; index += 1) {
+    if (JSON.stringify(previous[index]) !== JSON.stringify(next[index])) return index;
+  }
+  return previous.length === next.length ? null : sharedLength;
+}
+
+function recordPresentedDecision(
+  state: RoomState,
+  event: RoomEvent,
+  decisionKey: string,
+  previousFrames: readonly ProgramPlaybackFrame[]
+) {
+  const presentation = state.presentationTurn;
+  if (!presentation || !state.resolution || presentation.turnNumber !== state.resolution.turnNumber) {
+    return;
+  }
+  presentation.timeline.push({
+    kind: 'decision',
+    eventId: event.id,
+    decisionKey,
+    actorUid: event.actorUid
+  });
+  presentation.segment += 1;
+  const nextFrames = state.resolution.playback.frames;
+  const changedFrame = firstChangedFrameIndex(previousFrames, nextFrames);
+  presentation.frameCursor = changedFrame === null
+    ? Math.min(presentation.frameCursor, nextFrames.length)
+    : changedFrame;
 }
 
 export function normalizeRoomCode(value: string): string {
@@ -844,6 +954,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         state.optionDecisions = [];
         state.effectDrafts = [];
         state.revealedDecisionKey = null;
+        state.presentationTurn = null;
         refreshPowerDownPending(state);
       }
     } else if (event.type === 'program/draft-updated') {
@@ -1060,6 +1171,74 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       if (state.programming?.phase === 'programmed') {
         resolveReadyProgramming(state);
       }
+    } else if (event.type === 'presentation/turn-started') {
+      const payload = event.payload as PresentationTurnStartedPayload;
+      const turnId = resolutionTurnId(state);
+      if (
+        !payload ||
+        !state.resolution ||
+        payload.turnId !== turnId ||
+        payload.turnNumber !== state.resolution.turnNumber
+      ) {
+        diagnostic(
+          state,
+          event,
+          'invalid-presentation',
+          'A tabletop can only start presentation for the current resolved turn.'
+        );
+        continue;
+      }
+      if (!state.presentationTurn || state.presentationTurn.turnNumber !== payload.turnNumber) {
+        state.presentationTurn = {
+          turnId: payload.turnId,
+          turnNumber: payload.turnNumber,
+          segment: 0,
+          frameCursor: 0,
+          timeline: []
+        };
+      }
+      state.revealedDecisionKey = null;
+    } else if (event.type === 'presentation/step-completed') {
+      const payload = event.payload as PresentationStepCompletedPayload;
+      const presentation = state.presentationTurn;
+      const duplicate = presentation?.timeline.some(
+        (entry) =>
+          entry.kind === 'frame' &&
+          presentation.turnId === payload?.turnId &&
+          presentation.turnNumber === payload?.turnNumber &&
+          entry.segment === payload?.segment &&
+          entry.frameIndex === payload?.frameIndex
+      );
+      if (!duplicate) {
+        const frame = state.resolution?.playback.frames[payload?.frameIndex];
+        if (
+          !payload ||
+          !presentation ||
+          !state.resolution ||
+          payload.turnId !== presentation.turnId ||
+          payload.turnNumber !== presentation.turnNumber ||
+          payload.turnNumber !== state.resolution.turnNumber ||
+          payload.segment !== presentation.segment ||
+          payload.frameIndex !== presentation.frameCursor ||
+          !frame
+        ) {
+          diagnostic(
+            state,
+            event,
+            'invalid-presentation',
+            'A tabletop can only complete the next deterministic animation frame.'
+          );
+          continue;
+        }
+        presentation.timeline.push({
+          kind: 'frame',
+          eventId: event.id,
+          segment: payload.segment,
+          frameIndex: payload.frameIndex,
+          frame: JSON.parse(JSON.stringify(frame)) as ProgramPlaybackFrame
+        });
+        presentation.frameCursor += 1;
+      }
     } else if (event.type === 'presentation/decision-revealed') {
       const payload = event.payload as PresentationDecisionRevealedPayload;
       const expectedDecisionKey = presentationDecisionKey(state);
@@ -1159,6 +1338,29 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         diagnostic(state, event, 'invalid-effect', 'The effect choice is malformed.');
         continue;
       }
+      const expectedPresentationDecision = presentationDecisionKey(state);
+      const chosenPresentationDecision =
+        payload.choice.kind === 'option-decision'
+          ? `option-decision:${payload.choice.decisionId}`
+          : payload.choice.kind === 'option-loss'
+            ? `option-loss:${state.resolution.turnNumber}:${event.actorUid}`
+            : payload.choice.kind === 'reentry'
+              ? `reentry:${state.resolution.turnNumber}:${event.actorUid}`
+              : null;
+      if (
+        presentationUsesEventStream(state) &&
+        chosenPresentationDecision === expectedPresentationDecision &&
+        !presentationPlaybackComplete(state)
+      ) {
+        diagnostic(
+          state,
+          event,
+          'invalid-effect',
+          'A private decision cannot be answered before its animation checkpoint.'
+        );
+        continue;
+      }
+      const previousPlaybackFrames = state.resolution.playback.frames;
       if (payload.choice.kind === 'option-decision') {
         const pendingDecision = state.resolution.pendingOptionDecision;
         const decisionId = payload.choice.decisionId;
@@ -1192,6 +1394,14 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         state.revealedDecisionKey = null;
         resolveReadyProgramming(state);
         projectNextProgramming(state);
+        if (expectedPresentationDecision) {
+          recordPresentedDecision(
+            state,
+            event,
+            expectedPresentationDecision,
+            previousPlaybackFrames
+          );
+        }
         state.acceptedEventIds.push(event.id);
         continue;
       }
@@ -1256,6 +1466,14 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       }
       state.resolution = next;
       state.revealedDecisionKey = null;
+      if (expectedPresentationDecision && payload.choice?.kind !== 'option-plan') {
+        recordPresentedDecision(
+          state,
+          event,
+          expectedPresentationDecision,
+          previousPlaybackFrames
+        );
+      }
       state.effectDrafts = state.effectDrafts.filter(
         ({ uid, turnId }) => uid !== event.actorUid || turnId !== payload.turnId
       );
@@ -1298,6 +1516,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
       state.optionDecisions = [];
       state.effectDrafts = [];
       state.revealedDecisionKey = null;
+      state.presentationTurn = null;
       refreshPowerDownPending(state);
     } else if (event.type === 'game/rematch-redirected') {
       const payload = event.payload as GameRematchRedirectedPayload;

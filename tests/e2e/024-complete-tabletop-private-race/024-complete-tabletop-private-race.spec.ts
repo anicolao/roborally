@@ -207,9 +207,14 @@ async function documentPowerChoices(
 
 async function documentPrivateDecision(
   steps: TestStepHelper,
+  table: Page,
   racer: RacerController,
   turn: number
 ) {
+  if (await privateDecisionVisible(racer)) {
+    await expect(table.getByTestId('tabletop-damage-prompt')).toBeVisible();
+    await expect(table.getByTestId('tabletop-damage-prompt')).toContainText(racer.name);
+  }
   const takeDamage = racer.page.getByRole('button', { name: 'TAKE THIS DAMAGE' });
   if (await takeDamage.isVisible()) {
     const answered = await documentBeforeClick(
@@ -314,21 +319,27 @@ async function finishDocumentedTurn(
 ) {
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
+    const pendingPlaybackSteps = await table.evaluate(
+      () => window.__roborallyE2ePlaybackClock?.pending?.() ?? 0
+    );
+    if (pendingPlaybackSteps > 0) {
+      const earlyDecisionCounts = await Promise.all(racers.map(privateDecisionVisible));
+      expect(
+        earlyDecisionCounts,
+        `Turn ${turn} controllers stay paused while the tabletop has animation events to complete`
+      ).toEqual(earlyDecisionCounts.map(() => 0));
+      await table.evaluate(() => window.__roborallyE2ePlaybackClock?.runAll?.() ?? 0);
+      continue;
+    }
+
     let answeredDecision = false;
     for (const racer of racers) {
-      if (await documentPrivateDecision(steps, racer, turn)) {
+      if (await documentPrivateDecision(steps, table, racer, turn)) {
         answeredDecision = true;
         break;
       }
     }
     if (answeredDecision) continue;
-
-    if (await table.evaluate(
-      () => (window.__roborallyE2ePlaybackClock?.pending?.() ?? 0) > 0
-    )) {
-      await table.evaluate(() => window.__roborallyE2ePlaybackClock?.runAll?.() ?? 0);
-      continue;
-    }
 
     const raceDialog = table.getByRole('dialog', { name: 'Race finished' });
     if (await raceDialog.isVisible()) {
@@ -371,7 +382,16 @@ async function finishDocumentedTurn(
     }
     await table.waitForTimeout(50);
   }
-  throw new Error(`Turn ${turn} did not reach the next round or the race finish.`);
+  const presentation = await table.locator('[data-e2e-tabletop]').evaluate((element) =>
+    Object.fromEntries(
+      [...element.attributes]
+        .filter(({ name }) => name.startsWith('data-presentation-'))
+        .map(({ name, value }) => [name, value])
+    )
+  );
+  throw new Error(
+    `Turn ${turn} did not reach the next round or the race finish: ${JSON.stringify(presentation)}`
+  );
 }
 
 test('two private phone controllers complete a fully documented tabletop race', async ({

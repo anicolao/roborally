@@ -26,6 +26,7 @@
     emptyRoomState,
     normalizeRoomCode,
     normalizePlayerName,
+    presentationDecisionAvailable,
     presentationDecisionKey,
     programmingOptionCardIds,
     type RobotId,
@@ -54,6 +55,7 @@
   let status = 'Connecting to the tabletop…';
   let error = '';
   let pending = false;
+  let serverAtHead = false;
   let unsubscribe: Unsubscribe | undefined;
 
   $: player = state.players.find((candidate) => candidate.uid === uid);
@@ -82,8 +84,9 @@
   $: canRespondPowerDown = !!player && state.pendingPowerDownUid === player.uid;
   $: canonicalPresentationDecisionKey = presentationDecisionKey(state);
   $: presentationDecisionVisible =
+    serverAtHead &&
     !!canonicalPresentationDecisionKey &&
-    state.revealedDecisionKey === canonicalPresentationDecisionKey;
+    presentationDecisionAvailable(state);
   $: canonicalReentryChoices = player && state.resolution
     ? legalReentryChoices(state.resolution, player.uid)
     : [];
@@ -195,22 +198,40 @@
           (!next.resolution || nextActiveProgramming.turnNumber > next.resolution.turnNumber);
         const nextPresentationDecisionKey = presentationDecisionKey(next);
         const nextPresentationDecisionVisible =
+          serverAtHead &&
           !!nextPresentationDecisionKey &&
-          next.revealedDecisionKey === nextPresentationDecisionKey;
+          presentationDecisionAvailable(next);
         const nextPendingOptionDecision = nextPresentationDecisionVisible
           ? next.resolution?.pendingOptionDecision ?? null
           : null;
         const nextPendingOptionRobot = next.resolution?.robots.find(
           ({ uid: robotUid }) => robotUid === nextPendingOptionDecision?.uid
         );
-        status = nextPresentationDecisionKey && !nextPresentationDecisionVisible
-          ? 'Watch the shared tabletop—the next decision will appear here when playback reaches it.'
+        const nextOptionLossUid = nextPresentationDecisionVisible
+          ? next.resolution?.nextOptionChoiceUid ?? null
+          : null;
+        const nextReentryUid = nextPresentationDecisionVisible
+          ? next.resolution?.nextReentryUid ?? null
+          : null;
+        const nextWaitingRobot = next.resolution?.robots.find(
+          ({ uid: robotUid }) => robotUid === (nextOptionLossUid ?? nextReentryUid)
+        );
+        status = programmingIsAhead
+          ? `Choose five registers privately for turn ${nextActiveProgramming.turnNumber}.`
+          : nextPresentationDecisionKey && !nextPresentationDecisionVisible
+            ? 'Watch the shared tabletop—the next decision will appear here when playback reaches it.'
           : nextPendingOptionDecision?.uid === uid
           ? `Choose: ${nextPendingOptionDecision.heading}.`
           : nextPendingOptionDecision
             ? `Waiting for ${nextPendingOptionRobot?.name ?? 'the next robot'} to resolve an Option.`
-          : programmingIsAhead
-          ? `Choose five registers privately for turn ${nextActiveProgramming.turnNumber}.`
+          : nextOptionLossUid === uid
+            ? 'Choose an Option to discard after destruction.'
+          : nextOptionLossUid
+            ? `Waiting for ${nextWaitingRobot?.name ?? 'the next robot'} to discard an Option.`
+          : nextReentryUid === uid
+            ? 'Choose your robot’s re-entry position and facing.'
+          : nextReentryUid
+            ? `Waiting for ${nextWaitingRobot?.name ?? 'the next robot'} to re-enter.`
           : next.resolution
             ? 'Watch the shared tabletop for execution.'
             : next.programming
@@ -220,7 +241,29 @@
               : nextPlayer
                 ? 'The tabletop is choosing the course and settings.'
                 : `Claim position ${requestedSeat} from this phone.`;
-      }, (nextError) => { error = nextError.message; });
+      }, (nextError) => { error = nextError.message; }, (sync) => {
+        if (sync.source === 'server' && !sync.hasPendingWrites) serverAtHead = true;
+        if (!serverAtHead) return;
+        const decision = state.resolution?.pendingOptionDecision;
+        if (decision && presentationDecisionAvailable(state)) {
+          const robot = state.resolution?.robots.find(({ uid: robotUid }) => robotUid === decision.uid);
+          status = decision.uid === uid
+            ? `Choose: ${decision.heading}.`
+            : `Waiting for ${robot?.name ?? 'the next robot'} to resolve an Option.`;
+        } else if (presentationDecisionAvailable(state) && state.resolution?.nextOptionChoiceUid) {
+          const choiceUid = state.resolution.nextOptionChoiceUid;
+          const robot = state.resolution.robots.find(({ uid: robotUid }) => robotUid === choiceUid);
+          status = choiceUid === uid
+            ? 'Choose an Option to discard after destruction.'
+            : `Waiting for ${robot?.name ?? 'the next robot'} to discard an Option.`;
+        } else if (presentationDecisionAvailable(state) && state.resolution?.nextReentryUid) {
+          const reentryUid = state.resolution.nextReentryUid;
+          const robot = state.resolution.robots.find(({ uid: robotUid }) => robotUid === reentryUid);
+          status = reentryUid === uid
+            ? 'Choose your robot’s re-entry position and facing.'
+            : `Waiting for ${robot?.name ?? 'the next robot'} to re-enter.`;
+        }
+      });
     } catch (nextError) { error = nextError instanceof Error ? nextError.message : 'Could not connect'; }
   });
   onDestroy(() => unsubscribe?.());

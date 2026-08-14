@@ -541,14 +541,18 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expect(
       table.getByTestId('tabletop-register-playback').locator('[data-table-facing="east"]')
     ).toHaveCount(1);
-    for (
-      let advance = 0;
-      advance < 100 && (await table.locator('.program-card.revealed').count()) < 10;
-      advance += 1
-    ) {
+    for (let advance = 0; advance < 150; advance += 1) {
+      const playback = table.getByTestId('tabletop-register-playback');
+      const stage = await playback.count() ? await playback.getAttribute('data-stage') : null;
+      if ((await table.locator('.program-card.revealed').count()) === 10 &&
+        stage === 'express-conveyors') break;
       await advanceSyntheticPlayback([table]);
     }
     await expect(table.locator('.program-card.revealed')).toHaveCount(10);
+    await expect(table.getByTestId('tabletop-register-playback')).toHaveAttribute(
+      'data-stage',
+      'express-conveyors'
+    );
     await steps.step('animated-program-execution', {
       description: 'The tabletop reveals both Programs during staged register playback',
       verifications: [
@@ -576,7 +580,10 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     });
     await finishSyntheticPlayback([table]);
     await completePrivateResolutionChoices(table, [firstPhone, secondPhone]);
-    await expect.poll(() => table.locator('.damage-track i.taken').count()).toBeGreaterThan(0);
+    await expect.poll(async () =>
+      await table.locator('.damage-track i.taken').count() +
+      await table.locator('.life-track i:not(.remaining)').count()
+    ).toBeGreaterThan(0);
     await expect(firstPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toBeVisible();
     await expect(secondPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toBeVisible();
     await expect
@@ -776,10 +783,11 @@ test('a replacement tabletop releases controls after replay catches up', async (
         events: { type: string; actorUid: string }[];
       };
       const creator = cache.events.find(({ type }) => type === 'game/created');
-      const reveal = cache.events.find(
-        ({ type }) => type === 'presentation/decision-revealed'
+      const replacementPresentation = cache.events.find(
+        ({ type, actorUid }) =>
+          type === 'presentation/step-completed' && actorUid !== creator?.actorUid
       );
-      return !!creator && !!reveal && creator.actorUid !== reveal.actorUid;
+      return !!creator && !!replacementPresentation;
     }, roomCode)).toBe(true);
   } finally {
     await Promise.all([

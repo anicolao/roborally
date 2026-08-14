@@ -185,6 +185,15 @@ ID. A visible scratch-replay control clears the cache and rebuilds from
 Firestore. Writes from the same actor are serialized so two rapid controls
 cannot claim the same client sequence.
 
+Tabletop presentation uses that same durable stream. Each resolved turn begins
+with a `presentation/turn-started` event, and every completed animation frame
+appends a `presentation/step-completed` event before a private control can be
+accepted. Controllers expose a pending decision only after Firestore has
+confirmed the current query head and every preceding frame event is present.
+Historical frame and decision events replay without prompting; at the live head
+the tabletop pauses with a visible “waiting for” indicator until the named
+player's decision event arrives.
+
 Nix is always available and is the mandatory entry point for every tooling,
 development, test, build, emulator, formatting, and dependency-management
 command. Do not invoke Bun, Firebase, Playwright, TypeScript, Git hooks, or
