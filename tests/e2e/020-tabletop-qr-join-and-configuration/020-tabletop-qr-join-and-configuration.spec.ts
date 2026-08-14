@@ -184,48 +184,45 @@ async function completePrivateResolutionChoices(
   pages: import('@playwright/test').Page[],
   nextTurnNumber = 2
 ) {
-  await expect.poll(async () => {
-    const tabletopPlaybackPending = await table.evaluate(
-      () => (window.__roborallyE2ePlaybackClock?.pending?.() ?? 0) > 0
-    );
-    if (tabletopPlaybackPending) {
-      const visiblePrivateDecisions = await Promise.all(
-        pages.map((page) =>
-          page.locator(
-            '[data-decision-id], [aria-label="Destroyed robot Option loss"], [aria-label="Re-entry facing"]'
-          ).count()
-        )
-      );
-      if (visiblePrivateDecisions.some((count) => count > 0)) return false;
-      await table.evaluate(() => window.__roborallyE2ePlaybackClock?.runAll?.() ?? 0);
-      return false;
-    }
+  for (let decision = 0; decision < 50; decision += 1) {
+    await finishSyntheticPlayback([table]);
+    let handledDecision = false;
     for (const page of pages) {
       const takeDamage = page.getByRole('button', { name: 'TAKE THIS DAMAGE' });
       if (await takeDamage.isVisible()) {
         await takeDamage.click();
-        return false;
+        await expect(takeDamage).toBeHidden();
+        handledDecision = true;
+        break;
       }
       const optionLoss = page.getByLabel('Destroyed robot Option loss').getByRole('button');
       if (await optionLoss.first().isVisible()) {
         await optionLoss.first().click();
-        return false;
+        await expect(optionLoss.first()).toBeHidden();
+        handledDecision = true;
+        break;
       }
 
       const reentry = page.getByRole('group', { name: 'Re-entry facing' });
       if (await reentry.isVisible()) {
         await chooseReentry(page);
         await page.getByRole('button', { name: 'CONFIRM RE-ENTRY' }).click();
-        return false;
+        await expect(reentry).toBeHidden();
+        handledDecision = true;
+        break;
       }
     }
+    if (handledDecision) continue;
+
     const nextTurnVisible = await Promise.all(
       pages.map((page) =>
         page.getByRole('button', { name: `BEGIN TURN ${nextTurnNumber}` }).isVisible()
       )
     );
-    return nextTurnVisible.every(Boolean);
-  }, { timeout: 30_000 }).toBe(true);
+    if (nextTurnVisible.every(Boolean)) return;
+  }
+
+  throw new Error(`Private resolution did not reach turn ${nextTurnNumber}`);
 }
 
 async function phoneWithPowerChoice(
