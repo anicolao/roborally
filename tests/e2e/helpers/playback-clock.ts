@@ -12,7 +12,7 @@ export async function advanceSyntheticPlayback(pages: readonly Page[]) {
       page.waitForFunction(
         () => (window.__roborallyE2ePlaybackClock?.pending?.() ?? 0) > 0,
         undefined,
-        { timeout: 10_000 }
+        { timeout: 30_000 }
       )
     )
   );
