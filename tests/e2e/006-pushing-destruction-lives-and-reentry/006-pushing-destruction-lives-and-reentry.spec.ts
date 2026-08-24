@@ -42,6 +42,9 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
     await host.getByRole('button', { name: 'Configure Risky Exchange' }).click();
     await guest.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Ready for race' }).click();
+    const table = await host.context().newPage();
+    await table.goto(`/tt/?room=${roomCode}`);
+    await expect(table.locator('[data-e2e-tabletop]')).toHaveAttribute('data-room-code', roomCode);
     await host.getByRole('button', { name: 'Open programming console' }).click();
     await guest.getByRole('button', { name: 'Open programming console' }).click();
     await stayActiveInDockOrder([host, guest]);
@@ -89,6 +92,7 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
           spec: 'Destroyed robots leave the board immediately',
           check: async () => {
             await expect(host.locator('.race-robot')).toHaveCount(0);
+            await expect(table.locator('[data-playback-robot]')).toHaveCount(0);
           }
         },
         {
