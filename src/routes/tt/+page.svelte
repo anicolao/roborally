@@ -91,11 +91,14 @@
   let optionInspection: OptionInspection | undefined;
   let optionInspector: HTMLDivElement | undefined;
   let playbackTimers: PlaybackTimer[] = [];
+  let manualReplayActive = false;
   const PRODUCTION_PROGRAM_CARD_MS = 2_000;
   const PRODUCTION_FACTORY_STAGE_MS = 1_000;
   const PRODUCTION_COUNTDOWN_STEP_MS = 1_000;
   const playbackTimeScale =
     import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true" ? 0.1 : 1;
+  const reviewPlaybackTimeScale =
+    import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true" ? 0.02 : 0.2;
 
   $: selectedCourse = PUBLISHED_COURSES_BY_ID.get(selectedCourseId)!;
   $: selectedCourseSupportsRoom = selectedCourse.players.includes(
@@ -111,7 +114,8 @@
   $: playbackIsActive =
     playbackPhase === "countdown" || playbackPhase === "register";
   $: playbackTransitionMs = Math.round(
-    playbackProductionDurationMs * playbackTimeScale,
+    playbackProductionDurationMs *
+      (manualReplayActive ? reviewPlaybackTimeScale : playbackTimeScale),
   );
   $: countdownStepMs = Math.round(
     PRODUCTION_COUNTDOWN_STEP_MS * playbackTimeScale,
@@ -143,10 +147,15 @@
     !state.resolution?.nextReentryUid;
   $: presentedRobots = robotsForPlaybackPresentation(
     state.resolution,
-    presentationSettled ? undefined : playbackRobots,
+    presentationSettled && !manualReplayActive ? undefined : playbackRobots,
     resolutionPlaybackKey,
     playbackKey,
   );
+  $: manualReplayAvailable =
+    presentationSettled &&
+    !manualReplayActive &&
+    playbackPhase === "complete" &&
+    !!state.resolution?.playback.frames.length;
   $: pendingPresentationDecisionKey = presentationDecisionKey(state);
   $: presentationDecisionVisible =
     serverAtHead &&
@@ -180,6 +189,7 @@
     .map((uid) => state.players.find((player) => player.uid === uid))
     .filter((player) => player !== undefined);
   $: finishOverlayVisible =
+    !manualReplayActive &&
     state.resolution?.phase === "race-finished" &&
     !!state.resolution.summary &&
     (presentationUsesEventStream(state)
@@ -334,6 +344,7 @@
     presentationCountdownComplete = false;
     attemptedPresentationStart = "";
     awaitingCompletedStep = "";
+    manualReplayActive = false;
   }
 
   function schedulePlayback(callback: () => void, delay: number) {
@@ -386,6 +397,47 @@
     playbackProductionDurationMs = productionDurationForFrame(frame);
   }
 
+  function replayCompletedRound() {
+    const playback = state.resolution?.playback;
+    if (!playback || !manualReplayAvailable) return;
+
+    clearPlaybackTimers();
+    manualReplayActive = true;
+    playbackPhase = "register";
+    playbackRegister = null;
+    playbackStage = null;
+    playbackActorUid = null;
+    playbackCardId = null;
+    playbackRobots = playback.initialRobots;
+    playbackTrace = [];
+    playbackLaserBeams = [];
+    playbackFrameIndex = 0;
+    playbackFrameCount = playback.frames.length;
+
+    let frameStart = 0;
+    for (const [frameIndex, frame] of playback.frames.entries()) {
+      schedulePlayback(
+        () => showPlaybackFrame(frame, frameIndex, playback.frames.length),
+        frameStart,
+      );
+      frameStart += Math.max(
+        50,
+        Math.round(productionDurationForFrame(frame) * reviewPlaybackTimeScale),
+      );
+    }
+    schedulePlayback(() => {
+      playbackPhase = "complete";
+      playbackRegister = null;
+      playbackStage = null;
+      playbackActorUid = null;
+      playbackCardId = null;
+      playbackRobots = undefined;
+      playbackTrace = [];
+      playbackLaserBeams = [];
+      manualReplayActive = false;
+    }, frameStart);
+  }
+
   async function writePresentationEvent(write: () => Promise<void>) {
     if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true") {
       window.__roborallyE2ePresentationRevealAttempts =
@@ -409,11 +461,18 @@
     presentationTimelineIndex;
     presentationBusy;
     presentationCountdownComplete;
+    manualReplayActive;
     void driveEventPresentation();
   }
 
   async function driveEventPresentation() {
-    if (!services || !tabletopMounted || !state.resolution || presentationBusy) return;
+    if (
+      !services ||
+      !tabletopMounted ||
+      !state.resolution ||
+      presentationBusy ||
+      manualReplayActive
+    ) return;
     const resolution = state.resolution;
     const turnId: TurnId = state.programming?.turnNumber === resolution.turnNumber
       ? state.programming.turnId
@@ -676,6 +735,11 @@
             : "The final flag was touched simultaneously. The victory is shared."}
         </p>
         <div class="finish-actions">
+          {#if manualReplayAvailable}
+            <button type="button" class="finish-replay" onclick={replayCompletedRound}>
+              FAST REPLAY · TURN {state.resolution?.turnNumber}
+            </button>
+          {/if}
           <button type="button" onclick={rematchRace} disabled={pending}>
             {pending ? "CONNECTING REMATCH…" : "REMATCH · CHOOSE COURSE"}
           </button>
@@ -917,6 +981,7 @@
       class:playback-active={playbackPhase === "register" && !!playbackRegister}
       class:decision-active={!!waitingPlayer}
       class="course-wrap"
+      data-review-replay={manualReplayActive}
     >
       {#if state.setup}
         <CourseBoard
@@ -924,7 +989,7 @@
           robots={presentedRobots}
           animateRobots={playbackIsActive}
           transitionDurationMs={playbackTransitionMs}
-          laserBeams={presentationSettled ? [] : playbackLaserBeams}
+          laserBeams={presentationSettled && !manualReplayActive ? [] : playbackLaserBeams}
           presentationOnly
         />
         {#if waitingPlayer}
@@ -1003,6 +1068,11 @@
               </div>
             {/each}
           </div>
+        {/if}
+        {#if manualReplayAvailable && !finishOverlayVisible}
+          <button class="round-replay" type="button" onclick={replayCompletedRound}>
+            Fast replay · Turn {state.resolution?.turnNumber}
+          </button>
         {/if}
       {:else}
         <div class="course-control" aria-label="Tabletop race configuration">
@@ -1161,6 +1231,22 @@
   .program-countdown span {
     color: #ffcf4b;
     font-size: clamp(22px, 4vw, 50px);
+  }
+  .round-replay {
+    position: absolute;
+    z-index: 18;
+    left: 50%;
+    bottom: clamp(8px, 1.2vw, 22px);
+    min-height: 44px;
+    padding: 8px 16px;
+    border: 2px solid #d2ff37;
+    border-radius: 6px;
+    color: #101718;
+    background: #d2ff37;
+    font: 700 clamp(12px, 1.2vw, 20px) "Space Mono", monospace;
+    text-transform: uppercase;
+    transform: translateX(-50%);
+    box-shadow: 0 4px 18px #000b;
   }
   .race-finish-overlay {
     position: fixed;

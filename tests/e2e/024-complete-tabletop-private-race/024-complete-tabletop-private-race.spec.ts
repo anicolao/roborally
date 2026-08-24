@@ -352,6 +352,9 @@ async function finishDocumentedTurn(
         async () => {
           await expect(raceDialog).toContainText('Ada WINS!');
           await expect(raceDialog).toContainText('Ada touched every flag in order.');
+          await expect(
+            raceDialog.getByRole('button', { name: `FAST REPLAY · TURN ${turn}` })
+          ).toBeVisible();
         }
       );
       expect(finalTurn).toBe(true);

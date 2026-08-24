@@ -611,6 +611,30 @@ test('the tabletop owns configuration and seat QR codes open private controllers
       .toBeGreaterThanOrEqual(2);
     await expect(table.getByRole('alert')).toHaveCount(0);
 
+    const revealAttemptsBeforeReplay = await table.evaluate(
+      () => window.__roborallyE2ePresentationRevealAttempts ?? 0
+    );
+    const fastReplay = table.getByRole('button', { name: 'Fast replay · Turn 1' });
+    await expect(fastReplay).toBeVisible();
+    await fastReplay.click();
+    await expect(table.locator('.course-wrap')).toHaveAttribute('data-review-replay', 'true');
+    await advanceSyntheticPlayback([table]);
+    await expect(table.getByTestId('tabletop-register-playback')).toBeVisible();
+    await expect(firstPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toBeVisible();
+    for (let advance = 0; advance < 500; advance += 1) {
+      if ((await table.locator('.course-wrap').getAttribute('data-review-replay')) === 'false') {
+        break;
+      }
+      await advanceSyntheticPlayback([table]);
+    }
+    await expect(table.locator('.course-wrap')).toHaveAttribute('data-review-replay', 'false');
+    await expect(fastReplay).toBeVisible();
+    await expect
+      .poll(() =>
+        table.evaluate(() => window.__roborallyE2ePresentationRevealAttempts ?? 0)
+      )
+      .toBe(revealAttemptsBeforeReplay);
+
     const firstTurnTwoCards = 9 - await adaSeat.locator('.damage-track i.taken').count();
     const secondTurnTwoCards =
       9 - await table.locator('[data-seat="2"] .damage-track i.taken').count();
