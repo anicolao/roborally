@@ -39,9 +39,9 @@
   >({});
   const displayedRobots = $derived(
     robots
-      // During playback keep destroyed/shutdown robots in the animated frame so
-      // the tabletop can show the complete register effect before cleanup.
-      ?.filter(({ status }) => animateRobots || status === 'active')
+      // Destruction frames retain a robot's last coordinates for the resolution
+      // record. Status determines whether it is still physically on the course.
+      ?.filter(({ status }) => status === 'active')
       .map((robot) => ({
         ...robot,
         name: setup.players.find(({ uid }) => uid === robot.uid)?.name ?? robot.uid,
