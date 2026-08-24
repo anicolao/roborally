@@ -83,19 +83,44 @@ async function expectFixedPrivateViewport(page: import('@playwright/test').Page)
 
   const editorGeometry = await page.evaluate(() => {
     const editor = document.querySelector<HTMLElement>('.program-editor')!;
+    const hand = editor.querySelector<HTMLElement>('.program-hand')!;
+    const handBounds = hand.getBoundingClientRect();
     const controls = [...editor.querySelectorAll<HTMLElement>('button')].map((control) => {
       const bounds = control.getBoundingClientRect();
+      return { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom };
+    });
+    const cardFaces = [...hand.querySelectorAll<HTMLElement>('.program-card')].map((face) => {
+      const bounds = face.getBoundingClientRect();
       return { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom };
     });
     return {
       clientHeight: editor.clientHeight,
       scrollHeight: editor.scrollHeight,
+      hand: {
+        clientWidth: hand.clientWidth,
+        clientHeight: hand.clientHeight,
+        scrollWidth: hand.scrollWidth,
+        scrollHeight: hand.scrollHeight,
+        left: handBounds.left,
+        top: handBounds.top,
+        right: handBounds.right,
+        bottom: handBounds.bottom
+      },
+      cardFaces,
       controls,
       viewportWidth: innerWidth,
       viewportHeight: innerHeight
     };
   });
   expect(editorGeometry.scrollHeight).toBeLessThanOrEqual(editorGeometry.clientHeight);
+  expect(editorGeometry.hand.scrollWidth).toBeLessThanOrEqual(editorGeometry.hand.clientWidth);
+  expect(editorGeometry.hand.scrollHeight).toBeLessThanOrEqual(editorGeometry.hand.clientHeight);
+  for (const face of editorGeometry.cardFaces) {
+    expect(face.left).toBeGreaterThanOrEqual(editorGeometry.hand.left);
+    expect(face.top).toBeGreaterThanOrEqual(editorGeometry.hand.top);
+    expect(face.right).toBeLessThanOrEqual(editorGeometry.hand.right);
+    expect(face.bottom).toBeLessThanOrEqual(editorGeometry.hand.bottom);
+  }
   for (const control of editorGeometry.controls) {
     expect(control.left).toBeGreaterThanOrEqual(0);
     expect(control.top).toBeGreaterThanOrEqual(0);
@@ -114,8 +139,9 @@ async function expectReadablePrivateProgramCards(page: import('@playwright/test'
     })
   );
   for (const card of bounds) {
-    expect(card.width).toBeGreaterThanOrEqual(100);
-    expect(card.height).toBeGreaterThanOrEqual(140);
+    expect(card.width).toBeGreaterThanOrEqual(75);
+    expect(card.width).toBeLessThanOrEqual(100);
+    expect(card.height).toBeGreaterThanOrEqual(105);
     expect(card.height / card.width).toBeGreaterThan(1.35);
   }
 }
@@ -425,11 +451,11 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expectFixedPrivateViewport(firstPhone);
     await expectFixedPrivateViewport(secondPhone);
     await phoneSteps.step('private-programming-controller', {
-      description: 'The private phone presents a large, tightly packed portrait Program hand',
+      description: 'The private phone presents a compact, bounded portrait Program hand',
       status: 'skip',
       verifications: [
         {
-          spec: 'Nine Program cards remain legible while the fixed controller viewport does not scroll',
+          spec: 'Nine smaller Program cards remain legible without scrolling or clipped faces',
           check: async () => {
             await expectReadablePrivateProgramCards(firstPhone);
             await expectFixedPrivateViewport(firstPhone);
@@ -468,6 +494,9 @@ test('the tabletop owns configuration and seat QR codes open private controllers
         }
       ]
     });
+    await firstPhone.setViewportSize({ width: 430, height: 740 });
+    await expectFixedPrivateViewport(firstPhone);
+    await expectProportionalPrivateProgramCards(firstPhone, 70);
     await firstPhone.setViewportSize({ width: 820, height: 1180 });
     await expectFixedPrivateViewport(firstPhone);
     await firstPhone.setViewportSize({ width: 852, height: 393 });

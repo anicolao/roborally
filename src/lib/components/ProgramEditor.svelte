@@ -450,20 +450,22 @@
     .instructions { font-size: 17px; }
     .editor-actions button { width: 100%; min-height: 48px; }
     .viewport-fit .program-hand {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       grid-template-rows: none;
       grid-auto-rows: max-content;
+      align-content: center;
       gap: 4px;
     }
+    .viewport-fit .program-hand button:last-child:nth-child(4n + 1) { grid-column: 2; }
     .viewport-fit .editor-actions button { min-height: 44px; }
   }
 
   @media (max-height: 720px) and (max-width: 820px) and (orientation: portrait) {
     .program-editor { gap: 2px; }
     .instructions, .preview-note { display: none; }
-    .program-hand { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; }
+    .program-hand { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; }
     .viewport-fit .program-hand {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       grid-template-rows: repeat(3, minmax(0, 1fr));
       grid-auto-rows: auto;
       align-content: stretch;
@@ -487,6 +489,12 @@
       font-size: 12px;
     }
     .submission-state { padding: 3px; font-size: 12px; }
+  }
+
+  @media (max-width: 359px) and (orientation: portrait) {
+    .program-hand,
+    .viewport-fit .program-hand { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .viewport-fit .program-hand button:last-child:nth-child(4n + 1) { grid-column: auto; }
   }
 
   @media (max-height: 720px) and (orientation: landscape) {
