@@ -98,7 +98,9 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     await advanceSyntheticPlayback([host, guest]);
     await expect(registerPlayback).toHaveAttribute('data-stage', 'gears');
     await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '1000');
-    await expect(host.locator('[data-playback-robot]')).toHaveCount(2);
+    // Grace has already fallen into the pit in this frame, so only Ada remains
+    // physically present in the animated board layer.
+    await expect(host.locator('[data-playback-robot]')).toHaveCount(1);
     const playbackEvidence = {
       countdownObserved: true,
       stageDurationsObserved: true,
