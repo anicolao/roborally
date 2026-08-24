@@ -98,6 +98,12 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
         {
           spec: 'Only the first destroyed robot owner receives the first re-entry control',
           check: async () => {
+            const archivePreview = host.getByRole('button', {
+              name: 'Re-entry square (6,16)'
+            });
+            await expect(host.getByLabel('Legal re-entry squares')).toBeVisible();
+            await expect(archivePreview).toHaveAttribute('aria-pressed', 'true');
+            await expect(archivePreview.locator('.board-tile')).toBeVisible();
             await expect(host.getByRole('group', { name: 'Re-entry facing' })).toBeVisible();
             await expect(host.getByText('Archive (6,16) is clear.')).toBeVisible();
             for (const facing of ['north', 'east', 'south', 'west']) {

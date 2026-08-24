@@ -92,72 +92,73 @@
         {radius} spaces away.
       {/if}
     </p>
-    <fieldset class="placement-control">
-      <legend>Re-entry square</legend>
-      <div
-        class="placement-grid"
-        style={`--reentry-grid-size: ${diameter}`}
-        aria-label="Legal re-entry squares"
-      >
-        {#each placementCells as cell (cell.key)}
-          {#if cell.choice}
-            <button
-              type="button"
-              class="placement-cell"
-              class:selected={effectiveCell === cell.key}
-              aria-label={`Re-entry square (${cell.x},${cell.y})`}
-              aria-pressed={effectiveCell === cell.key}
-              onclick={() => chooseCell(cell.key)}
-            >
-              <BoardTile
-                embedded
-                elements={cell.manifestCell?.elements ?? []}
-                walls={cell.walls}
-                x={cell.x}
-                y={cell.y}
-              />
-              <span class="tile-coordinate">{cell.x},{cell.y}</span>
-            </button>
-          {:else if cell.key === archiveCell}
-            <span
-              class="archive-cell"
-              aria-label={`Occupied archive (${archive.x},${archive.y})${archiveOccupantName
-                ? `, ${archiveOccupantName}`
-                : ''}`}
-              title={archiveOccupantName || 'Occupied archive'}
-            >
-              <BoardTile
-                embedded
-                elements={cell.manifestCell?.elements ?? []}
-                walls={cell.walls}
-                x={cell.x}
-                y={cell.y}
-              />
-              <span class="archive-marker" aria-hidden="true">A</span>
-              <span class="tile-coordinate">{cell.x},{cell.y}</span>
-            </span>
-          {:else}
-            <span
-              class:outside-course={!cell.manifestCell}
-              class="unavailable-cell"
-              aria-hidden="true"
-            >
-              {#if cell.manifestCell}
-                <BoardTile
-                  embedded
-                  elements={cell.manifestCell.elements}
-                  walls={cell.walls}
-                  x={cell.x}
-                  y={cell.y}
-                />
-                <span class="tile-coordinate">{cell.x},{cell.y}</span>
-              {/if}
-            </span>
-          {/if}
-        {/each}
-      </div>
-    </fieldset>
   {/if}
+
+  <fieldset class="placement-control">
+    <legend>Re-entry square</legend>
+    <div
+      class="placement-grid"
+      style={`--reentry-grid-size: ${diameter}`}
+      aria-label="Legal re-entry squares"
+    >
+      {#each placementCells as cell (cell.key)}
+        {#if cell.choice}
+          <button
+            type="button"
+            class="placement-cell"
+            class:selected={effectiveCell === cell.key}
+            aria-label={`Re-entry square (${cell.x},${cell.y})`}
+            aria-pressed={effectiveCell === cell.key}
+            onclick={() => chooseCell(cell.key)}
+          >
+            <BoardTile
+              embedded
+              elements={cell.manifestCell?.elements ?? []}
+              walls={cell.walls}
+              x={cell.x}
+              y={cell.y}
+            />
+            <span class="tile-coordinate">{cell.x},{cell.y}</span>
+          </button>
+        {:else if cell.key === archiveCell}
+          <span
+            class="archive-cell"
+            aria-label={`Occupied archive (${archive.x},${archive.y})${archiveOccupantName
+              ? `, ${archiveOccupantName}`
+              : ''}`}
+            title={archiveOccupantName || 'Occupied archive'}
+          >
+            <BoardTile
+              embedded
+              elements={cell.manifestCell?.elements ?? []}
+              walls={cell.walls}
+              x={cell.x}
+              y={cell.y}
+            />
+            <span class="archive-marker" aria-hidden="true">A</span>
+            <span class="tile-coordinate">{cell.x},{cell.y}</span>
+          </span>
+        {:else}
+          <span
+            class:outside-course={!cell.manifestCell}
+            class="unavailable-cell"
+            aria-hidden="true"
+          >
+            {#if cell.manifestCell}
+              <BoardTile
+                embedded
+                elements={cell.manifestCell.elements}
+                walls={cell.walls}
+                x={cell.x}
+                y={cell.y}
+              />
+              <span class="tile-coordinate">{cell.x},{cell.y}</span>
+            {/if}
+          </span>
+        {/if}
+      {/each}
+    </div>
+  </fieldset>
 
   <fieldset class="facing-control" aria-label="Re-entry facing" disabled={!effectiveCell}>
     <legend>Facing</legend>
