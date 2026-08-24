@@ -1354,9 +1354,17 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 - [x] Every discardable Option and the selected destruction penalty are visible on the private controller
 
+## Ada selects Re-entry square (10,8)
+
+![Ada selects Re-entry square (10,8)](./screenshots/169-turn-10-ada-select-reentry-square-desktop.png)
+
+**Verifications:**
+
+- [x] The occupied archive and selected nearest legal square are visible
+
 ## Ada selects re-entry facing north
 
-![Ada selects re-entry facing north](./screenshots/169-turn-10-ada-select-reentry-desktop.png)
+![Ada selects re-entry facing north](./screenshots/170-turn-10-ada-select-reentry-desktop.png)
 
 **Verifications:**
 
@@ -1364,7 +1372,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Ada confirms re-entry
 
-![Ada confirms re-entry](./screenshots/170-turn-10-ada-confirm-reentry-desktop.png)
+![Ada confirms re-entry](./screenshots/171-turn-10-ada-confirm-reentry-desktop.png)
 
 **Verifications:**
 
@@ -1372,7 +1380,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## The tabletop completes Turn 10 playback
 
-![The tabletop completes Turn 10 playback](./screenshots/171-turn-10-tabletop-playback-complete-desktop.png)
+![The tabletop completes Turn 10 playback](./screenshots/172-turn-10-tabletop-playback-complete-desktop.png)
 
 **Verifications:**
 
@@ -1380,7 +1388,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Ada opens the private Turn 11 hand
 
-![Ada opens the private Turn 11 hand](./screenshots/172-turn-11-ada-begin-desktop.png)
+![Ada opens the private Turn 11 hand](./screenshots/173-turn-11-ada-begin-desktop.png)
 
 **Verifications:**
 
@@ -1388,7 +1396,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Grace opens the private Turn 11 hand
 
-![Grace opens the private Turn 11 hand](./screenshots/173-turn-11-grace-begin-desktop.png)
+![Grace opens the private Turn 11 hand](./screenshots/174-turn-11-grace-begin-desktop.png)
 
 **Verifications:**
 
@@ -1396,7 +1404,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Ada chooses Register 1: move-2 priority 750
 
-![Ada chooses Register 1: move-2 priority 750](./screenshots/174-turn-11-ada-register-1-desktop.png)
+![Ada chooses Register 1: move-2 priority 750](./screenshots/175-turn-11-ada-register-1-desktop.png)
 
 **Verifications:**
 
@@ -1404,7 +1412,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Ada chooses Register 2: rotate-right priority 150
 
-![Ada chooses Register 2: rotate-right priority 150](./screenshots/175-turn-11-ada-register-2-desktop.png)
+![Ada chooses Register 2: rotate-right priority 150](./screenshots/176-turn-11-ada-register-2-desktop.png)
 
 **Verifications:**
 
@@ -1412,7 +1420,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Ada chooses Register 3: rotate-right priority 70
 
-![Ada chooses Register 3: rotate-right priority 70](./screenshots/176-turn-11-ada-register-3-desktop.png)
+![Ada chooses Register 3: rotate-right priority 70](./screenshots/177-turn-11-ada-register-3-desktop.png)
 
 **Verifications:**
 
@@ -1420,7 +1428,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Ada chooses Register 4: rotate-left priority 100
 
-![Ada chooses Register 4: rotate-left priority 100](./screenshots/177-turn-11-ada-register-4-desktop.png)
+![Ada chooses Register 4: rotate-left priority 100](./screenshots/178-turn-11-ada-register-4-desktop.png)
 
 **Verifications:**
 
@@ -1428,7 +1436,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Ada chooses Register 5: back-up priority 450
 
-![Ada chooses Register 5: back-up priority 450](./screenshots/178-turn-11-ada-register-5-desktop.png)
+![Ada chooses Register 5: back-up priority 450](./screenshots/179-turn-11-ada-register-5-desktop.png)
 
 **Verifications:**
 
@@ -1436,7 +1444,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Ada locks the Turn 11 program
 
-![Ada locks the Turn 11 program](./screenshots/179-turn-11-ada-lock-program-desktop.png)
+![Ada locks the Turn 11 program](./screenshots/180-turn-11-ada-lock-program-desktop.png)
 
 **Verifications:**
 
@@ -1444,7 +1452,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Grace chooses Register 1: move-1 priority 630
 
-![Grace chooses Register 1: move-1 priority 630](./screenshots/180-turn-11-grace-register-1-desktop.png)
+![Grace chooses Register 1: move-1 priority 630](./screenshots/181-turn-11-grace-register-1-desktop.png)
 
 **Verifications:**
 
@@ -1452,7 +1460,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Grace chooses Register 2: rotate-left priority 160
 
-![Grace chooses Register 2: rotate-left priority 160](./screenshots/181-turn-11-grace-register-2-desktop.png)
+![Grace chooses Register 2: rotate-left priority 160](./screenshots/182-turn-11-grace-register-2-desktop.png)
 
 **Verifications:**
 
@@ -1460,7 +1468,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Grace chooses Register 3: rotate-left priority 300
 
-![Grace chooses Register 3: rotate-left priority 300](./screenshots/182-turn-11-grace-register-3-desktop.png)
+![Grace chooses Register 3: rotate-left priority 300](./screenshots/183-turn-11-grace-register-3-desktop.png)
 
 **Verifications:**
 
@@ -1468,7 +1476,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Grace chooses Register 4: rotate-left priority 120
 
-![Grace chooses Register 4: rotate-left priority 120](./screenshots/183-turn-11-grace-register-4-desktop.png)
+![Grace chooses Register 4: rotate-left priority 120](./screenshots/184-turn-11-grace-register-4-desktop.png)
 
 **Verifications:**
 
@@ -1476,7 +1484,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Grace chooses Register 5: u-turn priority 50
 
-![Grace chooses Register 5: u-turn priority 50](./screenshots/184-turn-11-grace-register-5-desktop.png)
+![Grace chooses Register 5: u-turn priority 50](./screenshots/185-turn-11-grace-register-5-desktop.png)
 
 **Verifications:**
 
@@ -1484,7 +1492,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Grace locks the Turn 11 program
 
-![Grace locks the Turn 11 program](./screenshots/185-turn-11-grace-lock-program-desktop.png)
+![Grace locks the Turn 11 program](./screenshots/186-turn-11-grace-lock-program-desktop.png)
 
 **Verifications:**
 
@@ -1492,7 +1500,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Ada chooses STAY ACTIVE after Turn 11 programming
 
-![Ada chooses STAY ACTIVE after Turn 11 programming](./screenshots/186-turn-11-ada-stay-active-desktop.png)
+![Ada chooses STAY ACTIVE after Turn 11 programming](./screenshots/187-turn-11-ada-stay-active-desktop.png)
 
 **Verifications:**
 
@@ -1500,7 +1508,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Grace answers the Option decision with Store no card
 
-![Grace answers the Option decision with Store no card](./screenshots/187-turn-11-grace-option-store-no-card-desktop.png)
+![Grace answers the Option decision with Store no card](./screenshots/188-turn-11-grace-option-store-no-card-desktop.png)
 
 **Verifications:**
 
@@ -1508,7 +1516,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## The tabletop completes Turn 11 playback
 
-![The tabletop completes Turn 11 playback](./screenshots/188-turn-11-tabletop-playback-complete-desktop.png)
+![The tabletop completes Turn 11 playback](./screenshots/189-turn-11-tabletop-playback-complete-desktop.png)
 
 **Verifications:**
 
@@ -1516,7 +1524,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Ada opens the private Turn 12 hand
 
-![Ada opens the private Turn 12 hand](./screenshots/189-turn-12-ada-begin-desktop.png)
+![Ada opens the private Turn 12 hand](./screenshots/190-turn-12-ada-begin-desktop.png)
 
 **Verifications:**
 
@@ -1524,7 +1532,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Grace opens the private Turn 12 hand
 
-![Grace opens the private Turn 12 hand](./screenshots/190-turn-12-grace-begin-desktop.png)
+![Grace opens the private Turn 12 hand](./screenshots/191-turn-12-grace-begin-desktop.png)
 
 **Verifications:**
 
@@ -1532,7 +1540,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Ada chooses Register 1: move-1 priority 500
 
-![Ada chooses Register 1: move-1 priority 500](./screenshots/191-turn-12-ada-register-1-desktop.png)
+![Ada chooses Register 1: move-1 priority 500](./screenshots/192-turn-12-ada-register-1-desktop.png)
 
 **Verifications:**
 
@@ -1540,7 +1548,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Ada chooses Register 2: u-turn priority 50
 
-![Ada chooses Register 2: u-turn priority 50](./screenshots/192-turn-12-ada-register-2-desktop.png)
+![Ada chooses Register 2: u-turn priority 50](./screenshots/193-turn-12-ada-register-2-desktop.png)
 
 **Verifications:**
 
@@ -1548,7 +1556,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Ada chooses Register 3: move-3 priority 840
 
-![Ada chooses Register 3: move-3 priority 840](./screenshots/193-turn-12-ada-register-3-desktop.png)
+![Ada chooses Register 3: move-3 priority 840](./screenshots/194-turn-12-ada-register-3-desktop.png)
 
 **Verifications:**
 
@@ -1556,7 +1564,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Ada chooses Register 4: rotate-right priority 210
 
-![Ada chooses Register 4: rotate-right priority 210](./screenshots/194-turn-12-ada-register-4-desktop.png)
+![Ada chooses Register 4: rotate-right priority 210](./screenshots/195-turn-12-ada-register-4-desktop.png)
 
 **Verifications:**
 
@@ -1564,7 +1572,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Ada chooses Register 5: move-1 priority 560
 
-![Ada chooses Register 5: move-1 priority 560](./screenshots/195-turn-12-ada-register-5-desktop.png)
+![Ada chooses Register 5: move-1 priority 560](./screenshots/196-turn-12-ada-register-5-desktop.png)
 
 **Verifications:**
 
@@ -1572,7 +1580,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Ada locks the Turn 12 program
 
-![Ada locks the Turn 12 program](./screenshots/196-turn-12-ada-lock-program-desktop.png)
+![Ada locks the Turn 12 program](./screenshots/197-turn-12-ada-lock-program-desktop.png)
 
 **Verifications:**
 
@@ -1580,7 +1588,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Grace chooses Register 1: move-1 priority 530
 
-![Grace chooses Register 1: move-1 priority 530](./screenshots/197-turn-12-grace-register-1-desktop.png)
+![Grace chooses Register 1: move-1 priority 530](./screenshots/198-turn-12-grace-register-1-desktop.png)
 
 **Verifications:**
 
@@ -1588,7 +1596,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Grace chooses Register 2: rotate-right priority 270
 
-![Grace chooses Register 2: rotate-right priority 270](./screenshots/198-turn-12-grace-register-2-desktop.png)
+![Grace chooses Register 2: rotate-right priority 270](./screenshots/199-turn-12-grace-register-2-desktop.png)
 
 **Verifications:**
 
@@ -1596,7 +1604,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Grace chooses Register 3: rotate-left priority 200
 
-![Grace chooses Register 3: rotate-left priority 200](./screenshots/199-turn-12-grace-register-3-desktop.png)
+![Grace chooses Register 3: rotate-left priority 200](./screenshots/200-turn-12-grace-register-3-desktop.png)
 
 **Verifications:**
 
@@ -1604,7 +1612,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Grace chooses Register 4: move-1 priority 540
 
-![Grace chooses Register 4: move-1 priority 540](./screenshots/200-turn-12-grace-register-4-desktop.png)
+![Grace chooses Register 4: move-1 priority 540](./screenshots/201-turn-12-grace-register-4-desktop.png)
 
 **Verifications:**
 
@@ -1612,7 +1620,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Grace chooses Register 5: move-3 priority 790
 
-![Grace chooses Register 5: move-3 priority 790](./screenshots/201-turn-12-grace-register-5-desktop.png)
+![Grace chooses Register 5: move-3 priority 790](./screenshots/202-turn-12-grace-register-5-desktop.png)
 
 **Verifications:**
 
@@ -1620,7 +1628,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Grace locks the Turn 12 program
 
-![Grace locks the Turn 12 program](./screenshots/202-turn-12-grace-lock-program-desktop.png)
+![Grace locks the Turn 12 program](./screenshots/203-turn-12-grace-lock-program-desktop.png)
 
 **Verifications:**
 
@@ -1628,7 +1636,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Ada chooses STAY ACTIVE after Turn 12 programming
 
-![Ada chooses STAY ACTIVE after Turn 12 programming](./screenshots/203-turn-12-ada-stay-active-desktop.png)
+![Ada chooses STAY ACTIVE after Turn 12 programming](./screenshots/204-turn-12-ada-stay-active-desktop.png)
 
 **Verifications:**
 
@@ -1636,7 +1644,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## Grace answers the Option decision with Store no card
 
-![Grace answers the Option decision with Store no card](./screenshots/204-turn-12-grace-option-store-no-card-desktop.png)
+![Grace answers the Option decision with Store no card](./screenshots/205-turn-12-grace-option-store-no-card-desktop.png)
 
 **Verifications:**
 
@@ -1644,7 +1652,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 ## The tabletop announces the winner after Turn 12
 
-![The tabletop announces the winner after Turn 12](./screenshots/205-turn-12-race-finished-desktop.png)
+![The tabletop announces the winner after Turn 12](./screenshots/206-turn-12-race-finished-desktop.png)
 
 **Verifications:**
 
