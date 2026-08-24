@@ -66,6 +66,7 @@
   });
 
   function chooseCell(cell: string) {
+    if (cell === effectiveCell) return;
     onselectionchange(cell, '');
   }
 
