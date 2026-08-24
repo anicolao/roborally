@@ -8,7 +8,7 @@ These items were reported during production game `8MMBQR`. They are recorded for
 | --- | --- | --- | --- | --- |
 | GA-03 | Tabletop QR codes are unnecessarily small | Resolved | P2 | Joining and reconnecting are harder than necessary |
 | GA-04 | Destroyed robots remain on the board as ghosts | Resolved | P1 | The displayed board state is incorrect or misleading |
-| GA-05 | Re-entry preview disappears when only the center square is legal | Open | P1 | Players cannot orient their robot confidently |
+| GA-05 | Re-entry preview disappears when only the center square is legal | Resolved | P1 | Players cannot orient their robot confidently |
 | GA-06 | Completed rounds cannot be replayed manually at high speed | Open | P2 | Players cannot review a confusing resolution |
 | GA-07 | Private mobile hands are oversized and clipped | Open | P1 | Cards or controls may be unusable on a phone |
 | GA-08 | Powered-down prompt incorrectly tells the player to program | Open | P1 | The UI requests an impossible action |
