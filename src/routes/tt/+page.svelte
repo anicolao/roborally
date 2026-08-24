@@ -1534,6 +1534,7 @@
   }
   .seat.open {
     border-color: #7e9130;
+    grid-template-rows: auto minmax(0, 1fr);
   }
   .top-bottom-seats .seat-1 {
     grid-column: 1;
@@ -1733,24 +1734,33 @@
   }
   .seat-join {
     display: grid;
-    grid-template-columns: minmax(66px, 86px) 1fr;
-    align-items: center;
-    gap: 10px;
+    min-width: 0;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr) auto;
+    justify-items: center;
+    gap: clamp(4px, 1cqh, 10px);
     color: #eef4ee;
     text-decoration: none;
   }
   .seat-join img {
     display: block;
-    width: 100%;
+    width: min(100%, calc(100cqh - 52px));
+    max-height: 100%;
+    aspect-ratio: 1;
     border: 3px solid #eef4ee;
     border-radius: 5px;
     background: #eef4ee;
     image-rendering: pixelated;
+    object-fit: contain;
   }
   .seat-join span {
     display: grid;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
     gap: 5px;
     min-width: 0;
+    text-align: center;
   }
   .seat-join strong {
     color: #d2ff37;
@@ -1762,6 +1772,18 @@
   .qr-placeholder {
     color: #aebbb9;
     font-size: 14px;
+  }
+  @container (width < 130px) {
+    .seat-join {
+      gap: 2px;
+    }
+    .seat-join img {
+      width: min(100%, calc(100cqh - 24px));
+      border-width: 2px;
+    }
+    .seat-join span {
+      display: none;
+    }
   }
   .program-cards {
     display: grid;

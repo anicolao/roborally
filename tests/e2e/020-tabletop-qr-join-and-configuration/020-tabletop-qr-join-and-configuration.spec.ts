@@ -34,6 +34,25 @@ async function expectFixedViewport(page: import('@playwright/test').Page) {
   });
 }
 
+async function expectJoinQrsUseSeatSpace(page: import('@playwright/test').Page) {
+  const geometry = await page.locator('.seat.open').evaluateAll((seats) =>
+    seats.map((seat) => {
+      const seatBounds = seat.getBoundingClientRect();
+      const qrBounds = seat.querySelector('img')!.getBoundingClientRect();
+      return {
+        seatWidth: seatBounds.width,
+        qrWidth: qrBounds.width,
+        qrHeight: qrBounds.height
+      };
+    })
+  );
+  expect(geometry).toHaveLength(8);
+  for (const { seatWidth, qrWidth, qrHeight } of geometry) {
+    expect(qrWidth).toBeGreaterThanOrEqual(Math.min(150, seatWidth - 16));
+    expect(Math.abs(qrHeight - qrWidth)).toBeLessThanOrEqual(1);
+  }
+}
+
 async function expectFixedPrivateViewport(page: import('@playwright/test').Page) {
   const geometry = await page.evaluate(() => {
     const root = document.scrollingElement!;
@@ -280,6 +299,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expect(table.locator('header, footer')).toHaveCount(0);
     await expectFixedViewport(table);
     await expect(table.getByRole('img', { name: /QR code to join position/ })).toHaveCount(8);
+    await expectJoinQrsUseSeatSpace(table);
     await expect(table.getByLabel('Tabletop race configuration')).toBeVisible();
     await expect(table.getByRole('button', { name: 'CONFIGURE RACE' })).toBeDisabled();
     await expect(table.getByLabel('Setup seed')).toHaveValue(roomCode);
@@ -301,6 +321,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
           spec: 'Eight open positions expose seat-specific QR join links',
           check: async () => {
             await expect(table.getByRole('img', { name: /QR code to join position/ })).toHaveCount(8);
+            await expectJoinQrsUseSeatSpace(table);
             expect(positionSevenUrl).toContain(`/hand/?room=${roomCode}&seat=7`);
             expect(positionTwoUrl).toContain(`/hand/?room=${roomCode}&seat=2`);
           }
