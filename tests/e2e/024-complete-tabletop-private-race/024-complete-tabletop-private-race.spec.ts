@@ -181,7 +181,9 @@ async function documentPowerChoices(
       const control = racer.page.getByLabel('Power-down choice');
       if (answered.has(racer.page) || !(await control.isVisible())) continue;
       const choice = racer === powerDownRacer ? 'POWER DOWN' : 'STAY ACTIVE';
-      const button = control.getByRole('button', { name: choice });
+      const button = control.getByRole('button', {
+        name: racer === powerDownRacer ? /POWER DOWN/ : /(STAY ACTIVE|POWER UP)/
+      });
       if (!(await button.isEnabled())) continue;
       await documentBeforeClick(
         steps,

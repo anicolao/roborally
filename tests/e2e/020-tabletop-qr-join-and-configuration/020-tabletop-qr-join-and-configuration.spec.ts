@@ -277,14 +277,14 @@ async function phoneWithPowerChoice(
   await expect.poll(async () => {
     for (const [index, page] of pages.entries()) {
       const choice = page.getByLabel('Power-down choice');
-      const enabledStayActive = await choice
-        .getByRole('button', { name: 'STAY ACTIVE' })
+      const enabledResponse = await choice
+        .getByRole('button')
         .evaluateAll((buttons) =>
           buttons.some((button) => !(button as HTMLButtonElement).disabled)
         );
       if (
         (await choice.isVisible()) &&
-        enabledStayActive
+        enabledResponse
       ) {
         selected = index;
         return selected;
@@ -589,11 +589,29 @@ test('the tabletop owns configuration and seat QR codes open private controllers
       table.getByTestId('tabletop-register-playback').locator('[data-table-facing="east"]')
     ).toHaveCount(1);
     for (let advance = 0; advance < 150; advance += 1) {
-      const playback = table.getByTestId('tabletop-register-playback');
-      const stage = await playback.count() ? await playback.getAttribute('data-stage') : null;
+      const frame = await table.evaluate(() => {
+        const playback = document.querySelector<HTMLElement>(
+          '[data-testid="tabletop-register-playback"]'
+        );
+        return playback ? {
+          frame: playback.dataset.frame,
+          register: playback.dataset.register,
+          stage: playback.dataset.stage
+        } : null;
+      });
       if ((await table.locator('.program-card.revealed').count()) === 10 &&
-        stage === 'express-conveyors') break;
+        frame?.stage === 'express-conveyors') break;
       await advanceSyntheticPlayback([table]);
+      await expect.poll(() => table.evaluate(() => {
+        const playback = document.querySelector<HTMLElement>(
+          '[data-testid="tabletop-register-playback"]'
+        );
+        return playback ? {
+          frame: playback.dataset.frame,
+          register: playback.dataset.register,
+          stage: playback.dataset.stage
+        } : null;
+      })).not.toEqual(frame);
     }
     await expect(table.locator('.program-card.revealed')).toHaveCount(10);
     await expect(table.getByTestId('tabletop-register-playback')).toHaveAttribute(
@@ -737,6 +755,8 @@ test('the tabletop owns configuration and seat QR codes open private controllers
 
     await firstPhone.getByRole('button', { name: 'BEGIN TURN 3' }).click();
     await secondPhone.getByRole('button', { name: 'BEGIN TURN 3' }).click();
+    await expect(shutdownPhone.locator('.identity')).toContainText('Powered down for turn 3.');
+    await expect(shutdownPhone.getByText(/Choose five registers privately for turn 3/)).toHaveCount(0);
     const activePhoneNeedsPowerChoice =
       (await activePhone.getByLabel('Your Program hand').getByRole('button').count()) < 9;
     await submitVisibleProgram(activePhone);
@@ -749,9 +769,13 @@ test('the tabletop owns configuration and seat QR codes open private controllers
       activePhoneResponded = true;
     }
 
-    await expect(shutdownPhone.getByRole('heading', { name: 'Next-turn power' })).toBeVisible();
-    await expect(shutdownPhone.getByRole('button', { name: 'POWER DOWN' })).toBeEnabled();
-    await expect(shutdownPhone.getByRole('button', { name: 'STAY ACTIVE' })).toBeEnabled();
+    await expect(shutdownPhone.getByRole('heading', { name: 'Turn 4 power' })).toBeVisible();
+    await expect(
+      shutdownPhone.getByRole('button', { name: 'REMAIN POWERED DOWN', exact: true })
+    ).toBeEnabled();
+    await expect(
+      shutdownPhone.getByRole('button', { name: 'POWER UP FOR TURN 4', exact: true })
+    ).toBeEnabled();
     await expect(shutdownPhone.getByRole('heading', { name: 'Program deck' })).toHaveCount(0);
     await expect(
       shutdownPhone.getByRole('button', { name: 'READY · WATCH THE TABLE' })
@@ -765,17 +789,22 @@ test('the tabletop owns configuration and seat QR codes open private controllers
         {
           spec: 'A powered-down controller can remain shut down or return active without exposing a hand',
           check: async () => {
-            await expect(shutdownPhone.getByRole('heading', { name: 'Next-turn power' })).toBeVisible();
-            await expect(shutdownPhone.getByRole('button', { name: 'POWER DOWN' })).toBeEnabled();
-            await expect(shutdownPhone.getByRole('button', { name: 'STAY ACTIVE' })).toBeEnabled();
+            await expect(shutdownPhone.getByRole('heading', { name: 'Turn 4 power' })).toBeVisible();
+            await expect(
+              shutdownPhone.getByRole('button', { name: 'REMAIN POWERED DOWN', exact: true })
+            ).toBeEnabled();
+            await expect(
+              shutdownPhone.getByRole('button', { name: 'POWER UP FOR TURN 4', exact: true })
+            ).toBeEnabled();
             await expect(shutdownPhone.getByRole('heading', { name: 'Program deck' })).toHaveCount(0);
+            await expect(shutdownPhone.getByText(/Choose five registers privately/)).toHaveCount(0);
           }
         }
       ]
     });
     steps.setPage(table);
 
-    await shutdownPhone.getByRole('button', { name: 'STAY ACTIVE' }).click();
+    await shutdownPhone.getByRole('button', { name: 'POWER UP FOR TURN 4', exact: true }).click();
     if (activePhoneNeedsPowerChoice && !activePhoneResponded) {
       const nextIndex = await phoneWithPowerChoice(phones);
       expect(phones[nextIndex]).toBe(activePhone);
