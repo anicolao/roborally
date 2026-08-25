@@ -941,8 +941,10 @@ test("powered-down private controller can resolve incoming damage", async ({
       1,
       facingAfter(guestTurnOne),
     );
-    await expect(host.getByRole("heading", { name: "Next-turn power" })).toBeVisible();
-    await host.getByRole("button", { name: "STAY ACTIVE" }).click();
+    await expect(host.getByRole("heading", { name: "Turn 3 power" })).toBeVisible();
+    await expect(host.locator(".identity")).toContainText("Powered down for turn 2.");
+    await expect(host.getByText(/Choose five registers privately/)).toHaveCount(0);
+    await host.getByRole("button", { name: "POWER UP FOR TURN 3", exact: true }).click();
     await guest.getByRole("button", { name: "Stay active" }).click();
 
     const decision = host.getByLabel("Damage prevention choice");

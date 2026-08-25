@@ -58,6 +58,34 @@
   let serverAtHead = false;
   let unsubscribe: Unsubscribe | undefined;
 
+  function isPoweredDownForTurn(snapshot: RoomState, turnNumber: number, playerUid: string) {
+    const robot = snapshot.resolution?.robots.find(({ uid: robotUid }) => robotUid === playerUid);
+    if (!robot) return false;
+    return robot.poweredDown ||
+      (robot.powerDownNextTurn && turnNumber > (snapshot.resolution?.turnNumber ?? 0));
+  }
+
+  function poweredDownStatus(snapshot: RoomState, turnNumber: number, playerUid: string) {
+    const turnId = `turn-${String(turnNumber).padStart(3, '0')}`;
+    const choiceTurnNumber = turnNumber + 1;
+    const responded = snapshot.powerDownResponses.some(
+      (response) => response.turnId === turnId && response.uid === playerUid
+    );
+    if (responded) {
+      return `Powered down for turn ${turnNumber}. Your turn ${choiceTurnNumber} power choice is locked; watch the tabletop.`;
+    }
+    if (snapshot.pendingPowerDownUid === playerUid) {
+      return `Powered down for turn ${turnNumber}. Choose whether to remain powered down or power up for turn ${choiceTurnNumber}.`;
+    }
+    const pendingPlayer = snapshot.players.find(
+      ({ uid: candidateUid }) => candidateUid === snapshot.pendingPowerDownUid
+    );
+    if (pendingPlayer) {
+      return `Powered down for turn ${turnNumber}. Waiting for ${pendingPlayer.name} in original Dock order before choosing power for turn ${choiceTurnNumber}.`;
+    }
+    return `Powered down for turn ${turnNumber}. Watch the tabletop while the other robots program.`;
+  }
+
   $: player = state.players.find((candidate) => candidate.uid === uid);
   $: seatPlayer = state.players.find((candidate) => candidate.seat === requestedSeat);
   $: unavailableRobots = new Set(state.players.map((candidate) => candidate.robotId));
@@ -69,6 +97,9 @@
       ? state.nextProgramming
       : state.programming;
   $: programming = activeProgramming?.players.find((candidate) => candidate.uid === uid);
+  $: poweredDownForActiveTurn = !!activeProgramming &&
+    isPoweredDownForTurn(state, activeProgramming.turnNumber, uid);
+  $: powerChoiceTurnNumber = (activeProgramming?.turnNumber ?? state.resolution?.turnNumber ?? 0) + 1;
   $: openSlots = programming?.registers.filter((register) => !register.locked).length ?? 5;
   $: selected = programming ? draftCardIdsInRegisterOrder(programming, draftSlots) : [];
   $: turnId = activeProgramming?.turnId ?? 'turn-001';
@@ -217,7 +248,11 @@
           ({ uid: robotUid }) => robotUid === (nextOptionLossUid ?? nextReentryUid)
         );
         status = programmingIsAhead
-          ? `Choose five registers privately for turn ${nextActiveProgramming.turnNumber}.`
+          ? nextProgrammingPlayer
+            ? `Choose five registers privately for turn ${nextActiveProgramming.turnNumber}.`
+            : isPoweredDownForTurn(next, nextActiveProgramming.turnNumber, uid)
+              ? poweredDownStatus(next, nextActiveProgramming.turnNumber, uid)
+              : `Watch the tabletop during turn ${nextActiveProgramming.turnNumber}.`
           : nextPresentationDecisionKey && !nextPresentationDecisionVisible
             ? 'Watch the shared tabletop—the next decision will appear here when playback reaches it.'
           : nextPendingOptionDecision?.uid === uid
@@ -277,7 +312,11 @@
       : Array.from({ length: REGISTER_COUNT }, () => null);
     draftDirty = false;
     draftWriteQueue = Promise.resolve();
-    status = `Choose five registers privately for turn ${requestedTurnNumber}.`;
+    status = nextPlayer
+      ? `Choose five registers privately for turn ${requestedTurnNumber}.`
+      : isPoweredDownForTurn(state, requestedTurnNumber, uid)
+        ? poweredDownStatus(state, requestedTurnNumber, uid)
+        : `Watch the tabletop during turn ${requestedTurnNumber}.`;
   }
 
   async function persistReentryDraft(
@@ -665,11 +704,19 @@
       </section>
     {:else if powerDownChoiceVisible}
       <section class="power-control" aria-label="Power-down choice">
-        <h2>Next-turn power</h2>
-        <p>Your Program is locked. Choose whether your robot will shut down for the next turn.</p>
+        <h2>Turn {powerChoiceTurnNumber} power</h2>
+        {#if poweredDownForActiveTurn}
+          <p>Your robot is powered down this turn. Choose whether it remains powered down or powers up for turn {powerChoiceTurnNumber}.</p>
+        {:else}
+          <p>Your Program is locked. Choose whether your robot shuts down or stays active for turn {powerChoiceTurnNumber}.</p>
+        {/if}
         <div>
-          <button onclick={() => respondPowerDown(true)} disabled={pending}>POWER DOWN</button>
-          <button onclick={() => respondPowerDown(false)} disabled={pending}>STAY ACTIVE</button>
+          <button onclick={() => respondPowerDown(true)} disabled={pending}>
+            {poweredDownForActiveTurn ? 'REMAIN POWERED DOWN' : `POWER DOWN FOR TURN ${powerChoiceTurnNumber}`}
+          </button>
+          <button onclick={() => respondPowerDown(false)} disabled={pending}>
+            {poweredDownForActiveTurn ? `POWER UP FOR TURN ${powerChoiceTurnNumber}` : `STAY ACTIVE FOR TURN ${powerChoiceTurnNumber}`}
+          </button>
         </div>
       </section>
     {:else if programming}
