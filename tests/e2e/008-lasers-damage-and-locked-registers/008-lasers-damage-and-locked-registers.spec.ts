@@ -225,6 +225,14 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
       await margaretHand.nth(index).click();
     }
     await margaret.getByRole('button', { name: 'Submit immutable program' }).click();
+    const margaretLockedProgram = margaret.getByRole('list', { name: 'Locked Program' });
+    await expect(margaretLockedProgram.getByRole('listitem')).toHaveCount(5);
+    await expect(margaretLockedProgram.getByRole('listitem').nth(0)).toContainText('committed');
+    await expect(margaretLockedProgram.getByRole('listitem').nth(1)).toContainText('committed');
+    await expect(margaretLockedProgram.getByRole('listitem').nth(2)).toContainText('committed');
+    await expect(margaretLockedProgram.getByRole('listitem').nth(3)).toContainText('damage locked');
+    await expect(margaretLockedProgram.getByRole('listitem').nth(4)).toContainText('damage locked');
+    await expect(margaretLockedProgram.getByRole('button')).toHaveCount(0);
 
     const margaretDock = table.locator('[data-seat="4"]');
     await expect(margaretDock).toContainText('Margaret');
@@ -263,6 +271,14 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
             await expect(
               margaretDock.getByRole('img', { name: 'Register 5 locked' })
             ).toBeVisible();
+          }
+        },
+        {
+          spec: 'The owner distinguishes committed cards from damage-locked registers',
+          check: async () => {
+            await expect(margaretLockedProgram).toContainText('committed');
+            await expect(margaretLockedProgram).toContainText('damage locked');
+            await expect(margaretLockedProgram.getByRole('button')).toHaveCount(0);
           }
         }
       ]

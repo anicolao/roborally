@@ -275,7 +275,7 @@ test('a keyboard and touch-operable race completes at every target viewport', as
           spec: 'Immutable submission is communicated in text, independent of color',
           check: async () => {
             await expect(
-              host.getByText('Program committed. It cannot be inspected or changed.')
+              host.getByText('Program committed. It is locked and cannot be changed.')
             ).toBeVisible();
           }
         }

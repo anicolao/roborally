@@ -9,7 +9,7 @@ Two clients receive one seeded round-robin deal. Programs cross the immutable ev
 **Verifications:**
 
 - [x] Both hands came from one 84-card deal with 66 cards left undealt
-- [x] The submitter can no longer inspect, rearrange, or resubmit the program
+- [x] The submitter can inspect all five locked registers but cannot edit or resubmit
 - [x] The observer sees five face-down registers and no card priorities
 - [x] The last programmer receives the active canonical deadline
 

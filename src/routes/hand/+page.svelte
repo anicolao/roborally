@@ -733,7 +733,7 @@
             viewportFit
             instructionsVisible={false}
             submitLabel="Lock program"
-            submittedMessage="Program locked. Watch the tabletop for execution."
+            submittedMessage="Program committed. It is locked and cannot be changed. Watch the tabletop for execution."
             {recompileOptionCardIds}
             {recompileUsed}
             ondraftchange={persistDraft}

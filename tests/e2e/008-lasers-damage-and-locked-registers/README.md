@@ -32,3 +32,4 @@ Four ordinary Programs create repeated unobstructed robot-laser snapshots. Marga
 - [x] The three unlocked registers return to face-down card backs for Turn 2
 - [x] Registers 4 and 5 retain their exact locked cards in the player dock
 - [x] Each locked register has a visible, accessible lock icon
+- [x] The owner distinguishes committed cards from damage-locked registers

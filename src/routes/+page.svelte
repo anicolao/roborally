@@ -1145,7 +1145,11 @@
               <h2 id="hand-heading" tabindex="-1" bind:this={programHeadingElement}>
                 Your hand · {programmingPlayer.hand.length || 'submitted'}
               </h2>
-              <span>{selectedProgramCardIds.length}/{openRegisterCount} open</span>
+              <span>
+                {programmingPlayer.submitted
+                  ? 'locked'
+                  : `${selectedProgramCardIds.length}/${openRegisterCount} open`}
+              </span>
             </div>
             <p class="conservation" data-testid="program-conservation">
               {programCardZones(activeProgramming).size}/84 cards accounted ·
