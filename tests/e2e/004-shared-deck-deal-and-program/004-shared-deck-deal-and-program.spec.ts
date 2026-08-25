@@ -169,10 +169,14 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
           }
         },
         {
-          spec: 'The submitter can no longer inspect, rearrange, or resubmit the program',
+          spec: 'The submitter can inspect all five locked registers but cannot edit or resubmit',
           check: async () => {
             await expect(guest.getByText(/Program committed/)).toBeVisible();
             await expect(guest.getByLabel('Your Program hand')).toHaveCount(0);
+            const lockedProgram = guest.getByRole('list', { name: 'Locked Program' });
+            await expect(lockedProgram.getByRole('listitem')).toHaveCount(5);
+            await expect(lockedProgram).toContainText('committed');
+            await expect(lockedProgram.getByRole('button')).toHaveCount(0);
             await expect(guest.getByRole('button', { name: 'Submit immutable program' })).toHaveCount(0);
           }
         },
@@ -230,6 +234,11 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
     ).toContainText(preservedPriorities[1]);
 
     await host.getByRole('button', { name: 'Fill timed-out program' }).click();
+    await expect
+      .poll(() =>
+        host.evaluate(() => window.__roborallyE2ePlaybackClock?.pending?.() ?? 0)
+      )
+      .toBeGreaterThan(0);
     await finishSyntheticPlayback([host, guest]);
     await expect(host.getByTestId('register-playback')).toBeHidden();
 
@@ -273,6 +282,11 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
             await guest.reload();
             await guest.getByRole('button', { name: 'Open programming console' }).click();
             await expect(guest.getByText(/Program committed/)).toBeVisible();
+            await expect(
+              guest.getByRole('list', { name: 'Locked Program' }).getByRole('listitem')
+            ).toHaveCount(5);
+            await expect(guest.getByRole('list', { name: 'Locked Program' }).getByRole('button'))
+              .toHaveCount(0);
           }
         }
       ]

@@ -12,7 +12,7 @@ These items were reported during production game `8MMBQR`. They are recorded for
 | GA-06 | Completed rounds cannot be replayed manually at high speed | Resolved | P2 | Players cannot review a confusing resolution |
 | GA-07 | Private mobile hands are oversized and clipped | Resolved | P1 | Cards or controls may be unusable on a phone |
 | GA-08 | Powered-down prompt incorrectly tells the player to program | Resolved | P1 | The UI requests an impossible action |
-| GA-09 | A player cannot inspect their own Program after locking it | Open | P2 | Players lose access to information they just committed |
+| GA-09 | A player cannot inspect their own Program after locking it | Resolved | P2 | Players lose access to information they just committed |
 
 ## GA-03 — Enlarge tabletop QR codes
 

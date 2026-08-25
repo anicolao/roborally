@@ -16,7 +16,7 @@
   export let instructionsVisible = true;
   export let viewportFit = false;
   export let submitLabel = 'Submit immutable program';
-  export let submittedMessage = 'Program committed. It cannot be inspected or changed.';
+  export let submittedMessage = 'Program committed. It is locked and cannot be changed.';
   export let previewText = '';
   export let ondraftchange: (slots: (ProgramCard['id'] | null)[]) => void;
   export let onprogramsubmit: () => void | Promise<void>;
@@ -182,15 +182,36 @@
   }
 </script>
 
-<section class:viewport-fit={viewportFit} class="program-editor" aria-label="Program editor">
+<section
+  class:viewport-fit={viewportFit}
+  class:submitted={player.submitted}
+  class="program-editor"
+  aria-label="Program editor"
+>
   {#if showHeading}
     <div class="editor-heading">
       <h2>{heading}</h2>
-      <span>{selectedCardIds.length}/{openRegisterCount} open</span>
+      <span>{player.submitted ? 'locked' : `${selectedCardIds.length}/${openRegisterCount} open`}</span>
     </div>
   {/if}
   {#if player.submitted}
     <p class="submission-state">{submittedMessage}</p>
+    <ol class="chosen-registers locked-program" aria-label="Locked Program">
+      {#each player.registers as register, index}
+        {@const card = cardForId(register.cardId)}
+        <li>
+          <div
+            class:damage-locked={register.locked}
+            class="locked-register filled"
+            aria-label={`Register ${index + 1}, ${card ? `${card.action} priority ${card.priority}` : 'empty'}, ${register.locked ? 'damage locked' : 'committed'}`}
+          >
+            <span>R{index + 1}</span>
+            <strong>{card ? `${card.action} ${card.priority}` : 'empty'}</strong>
+            <small>{register.locked ? 'damage locked' : 'committed'}</small>
+          </div>
+        </li>
+      {/each}
+    </ol>
   {:else}
     <p class:visually-hidden={!instructionsVisible} class="instructions" id="register-order-help">
       Tap a card for the next empty register, or select a register first. Tap an assigned card or
@@ -303,6 +324,9 @@
     grid-template-rows: auto minmax(0, 1fr) auto auto;
     overflow: hidden;
   }
+  .program-editor.viewport-fit.submitted {
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
   .editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   h2 { margin: 0; color: #eef4ee; font: 700 20px 'Space Mono', monospace; text-transform: uppercase; }
   .editor-heading span { color: #d2ff37; font: 16px 'Space Mono', monospace; text-transform: uppercase; }
@@ -372,7 +396,8 @@
     list-style: none;
   }
   .chosen-registers li { min-width: 0; min-height: 44px; }
-  .chosen-registers button {
+  .chosen-registers button,
+  .chosen-registers .locked-register {
     display: grid;
     width: 100%;
     height: 100%;
@@ -389,6 +414,16 @@
     text-transform: uppercase;
     white-space: nowrap;
     touch-action: none;
+  }
+  .chosen-registers .locked-register {
+    border-color: #53613b;
+    color: #eef4ee;
+    background: #151d13;
+  }
+  .chosen-registers .locked-register.damage-locked {
+    border-color: #ffcf4b;
+    color: #ffcf4b;
+    background: #211d12;
   }
   .chosen-registers button.targeted {
     border-color: #d2ff37;
@@ -419,6 +454,7 @@
     text-overflow: ellipsis;
   }
   .chosen-registers small { color: #ffcf4b; font-size: 9px; }
+  .chosen-registers .locked-register:not(.damage-locked) small { color: #d2ff37; }
   .preview-note, .submission-state { margin: 0; color: #778487; font-size: 16px; line-height: 1.35; }
   .submission-state {
     padding: 9px;
@@ -478,8 +514,11 @@
       aspect-ratio: 1014 / 1424;
     }
     .chosen-registers { gap: 2px; }
-    .chosen-registers li, .chosen-registers button { min-height: 38px; }
-    .chosen-registers button { font-size: 10px; }
+    .chosen-registers li,
+    .chosen-registers button,
+    .chosen-registers .locked-register { min-height: 38px; }
+    .chosen-registers button,
+    .chosen-registers .locked-register { font-size: 10px; }
     .editor-actions { display: flex; gap: 2px; }
     .editor-actions button {
       flex: 1 1 0;
@@ -528,8 +567,10 @@
       gap: 2px;
     }
     .viewport-fit .chosen-registers li,
-    .viewport-fit .chosen-registers button { min-height: 30px; }
-    .viewport-fit .chosen-registers button { font-size: 9px; }
+    .viewport-fit .chosen-registers button,
+    .viewport-fit .chosen-registers .locked-register { min-height: 30px; }
+    .viewport-fit .chosen-registers button,
+    .viewport-fit .chosen-registers .locked-register { font-size: 9px; }
     .viewport-fit .editor-actions {
       display: flex;
       grid-column: 2;
@@ -544,5 +585,20 @@
       font-size: 12px;
     }
     .viewport-fit .submission-state { padding: 3px; font-size: 12px; }
+    .program-editor.viewport-fit.submitted {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto minmax(0, 1fr);
+    }
+    .program-editor.viewport-fit.submitted .editor-heading,
+    .program-editor.viewport-fit.submitted .submission-state,
+    .program-editor.viewport-fit.submitted .chosen-registers {
+      grid-column: 1;
+    }
+    .program-editor.viewport-fit.submitted .editor-heading { grid-row: 1; }
+    .program-editor.viewport-fit.submitted .submission-state { grid-row: 2; }
+    .program-editor.viewport-fit.submitted .chosen-registers {
+      grid-row: 3;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
   }
 </style>
