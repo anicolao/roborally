@@ -41,6 +41,22 @@ export function robotsForPlaybackPresentation(
   return resolution?.robots;
 }
 
+export function programCardIdForPlayback(
+  frames: readonly ProgramPlaybackFrame[],
+  actorUid: string,
+  register: number,
+  programmedCardId: ProgramPlaybackFrame['cardId']
+): ProgramPlaybackFrame['cardId'] {
+  return (
+    frames.find(
+      (frame) =>
+        frame.stage === 'program-card' &&
+        frame.actorUid === actorUid &&
+        frame.register === register
+    )?.cardId ?? programmedCardId
+  );
+}
+
 function sameFrame(left: ProgramPlaybackFrame, right: ProgramPlaybackFrame): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
