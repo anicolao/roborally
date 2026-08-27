@@ -2004,6 +2004,59 @@ describe('priority Program movement', () => {
     expect(dual).toMatchObject({ x: 3, y: 6, facing: 'east' });
   });
 
+  it('executes the Dual Processor rotation when a wall blocks movement', () => {
+    const config = riskyExchangeConfig('DUAL-PROCESSOR-BLOCKED-RUNTIME');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'dual', name: 'Dual', robotId: 'axle' },
+        { uid: 'other', name: 'Other', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const rotateRight = card('rotate-right');
+    programming.players.find(({ uid }) => uid === 'dual')!.unusedCardIds = [
+      rotateRight.id
+    ];
+    const dual = raceRobot({
+      uid: 'dual',
+      name: 'Dual',
+      x: 6,
+      y: 15,
+      facing: 'east',
+      options: [{ cardId: 'dual-processor', spent: 0, storedProgramCardId: null }]
+    });
+    const decisionId = 'r1-program-dual-dual-processor';
+    const trace: ResolutionTraceEntry[] = [];
+
+    applyProgramCard(
+      [dual],
+      'dual',
+      card('move-2'),
+      1,
+      trace,
+      undefined,
+      undefined,
+      {
+        [decisionId]: {
+          decisionId,
+          uid: 'dual',
+          choiceId: `pair:${rotateRight.id}`
+        }
+      },
+      programming
+    );
+
+    expect(dual).toMatchObject({ x: 6, y: 15, facing: 'south' });
+    expect(trace.map(({ kind }) => kind)).toEqual(
+      expect.arrayContaining(['option-effect', 'blocked-wall'])
+    );
+    expect(trace.at(-1)).toMatchObject({
+      kind: 'option-effect',
+      text: "Dual's dual processor rotated from east to south."
+    });
+  });
+
   it('stores and substitutes an unused Conditional Program card', () => {
     const config = riskyExchangeConfig('CONDITIONAL-RUNTIME');
     const setup = deriveRaceSetup(

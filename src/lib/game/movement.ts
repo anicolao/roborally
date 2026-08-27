@@ -874,7 +874,8 @@ export function applyProgramCard(
       optionDecisions
     );
     if (result.pendingOptionDecision) return result.pendingOptionDecision;
-    if (!result.moved || result.actorDestroyed) return null;
+    if (result.actorDestroyed) return null;
+    if (!result.moved) break;
   }
   if (rotationAfterMovement) {
     const before = robot.facing;
