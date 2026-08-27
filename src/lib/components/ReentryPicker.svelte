@@ -45,7 +45,7 @@
     return byCell;
   }, new Map());
   $: radius = Math.max(
-    0,
+    1,
     ...cellChoices.map(({ x, y }) => Math.max(Math.abs(x - archive.x), Math.abs(y - archive.y)))
   );
   $: diameter = radius * 2 + 1;
