@@ -1894,21 +1894,25 @@ export function resolveLaserSnapshot(
     const [dx, dy] = steps[shooter.facing];
     let cursorX = shooter.x;
     let cursorY = shooter.y;
-    let obstruction = false;
+    let obstructionPassed = false;
+    let targetBeyondObstruction = false;
     while (courseContains(cursorX, cursorY, course)) {
       if (movementBlockedByWall(cursorX, cursorY, shooter.facing, course)) {
-        obstruction = true;
-        break;
+        if (obstructionPassed) break;
+        obstructionPassed = true;
       }
       cursorX += dx;
       cursorY += dy;
       if (!courseContains(cursorX, cursorY, course)) break;
       if (activeRobotAt(activeSnapshot, cursorX, cursorY, shooter.uid)) {
-        obstruction = true;
-        break;
+        if (obstructionPassed) {
+          targetBeyondObstruction = true;
+          break;
+        }
+        obstructionPassed = true;
       }
     }
-    if (!obstruction) continue;
+    if (!targetBeyondObstruction) continue;
     const decisionId = `r${register}-laser-${shooter.uid}-high-power-laser`;
     const decision = optionDecisions[decisionId];
     if (
