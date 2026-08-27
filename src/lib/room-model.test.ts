@@ -483,6 +483,130 @@ describe('immutable room replay', () => {
     expect(state.diagnostics).toEqual([]);
   });
 
+  it('opens an all-powered-down turn and resolves it after ordered power choices', () => {
+    const joinedHost = event('host', 2, 'player/joined', {
+      uid: 'host',
+      name: 'Ada',
+      robotId: 'axle'
+    }, 2);
+    const joinedGuest = event('guest', 1, 'player/joined', {
+      uid: 'guest',
+      name: 'Grace',
+      robotId: 'bit'
+    }, 3);
+    const configured = event('host', 3, 'race/configured', {
+      config: riskyExchangeConfig('ALL-DOWN-1')
+    }, 4);
+    const hostReady = event('host', 4, 'player/ready', {
+      uid: 'host',
+      configurationEventId: configured.id
+    }, 5);
+    const guestReady = event('guest', 2, 'player/ready', {
+      uid: 'guest',
+      configurationEventId: configured.id
+    }, 6);
+    const firstTurnEvents = [
+      created,
+      joinedHost,
+      joinedGuest,
+      configured,
+      hostReady,
+      guestReady,
+      event('host', 5, 'program/submitted', {
+        uid: 'host',
+        turnId: 'turn-001',
+        cardIds: [
+          'program-800',
+          'program-230',
+          'program-250',
+          'program-110',
+          'program-700'
+        ]
+      }, 1_000),
+      event('guest', 3, 'program/submitted', {
+        uid: 'guest',
+        turnId: 'turn-001',
+        cardIds: [
+          'program-790',
+          'program-830',
+          'program-840',
+          'program-270',
+          'program-590'
+        ]
+      }, 2_000)
+    ];
+    const afterFirstTurn = replayRoom(firstTurnEvents);
+    const hostHand = afterFirstTurn.nextProgramming!.players.find(
+      ({ uid }) => uid === 'host'
+    )!.hand;
+    const guestHand = afterFirstTurn.nextProgramming!.players.find(
+      ({ uid }) => uid === 'guest'
+    )!.hand;
+    const secondTurnEvents = [
+      ...firstTurnEvents,
+      event('host', 6, 'program/submitted', {
+        uid: 'host',
+        turnId: 'turn-002',
+        cardIds: hostHand.slice(0, 5)
+      }, 3_000),
+      event('guest', 4, 'program/submitted', {
+        uid: 'guest',
+        turnId: 'turn-002',
+        cardIds: guestHand.slice(0, 5)
+      }, 4_000),
+      event('guest', 5, 'power-down/responded', {
+        uid: 'guest',
+        turnId: 'turn-002',
+        powerDownNextTurn: true
+      }, 5_000),
+      event('host', 7, 'power-down/responded', {
+        uid: 'host',
+        turnId: 'turn-002',
+        powerDownNextTurn: true
+      }, 6_000)
+    ];
+
+    const opened = replayRoom(secondTurnEvents);
+
+    expect(opened.resolution).toMatchObject({ turnNumber: 2, phase: 'turn-complete' });
+    expect(opened.programming).toMatchObject({
+      turnId: 'turn-003',
+      phase: 'programmed',
+      players: []
+    });
+    expect(opened.nextProgramming).toBeNull();
+    expect(opened.powerDownResponses).toEqual([]);
+    expect(opened.pendingPowerDownUid).toBe('guest');
+    expect(opened.diagnostics).toEqual([]);
+
+    const guestPowersUp = event('guest', 6, 'power-down/responded', {
+      uid: 'guest',
+      turnId: 'turn-003',
+      powerDownNextTurn: false
+    }, 7_000);
+    const afterGuest = replayRoom([...secondTurnEvents, guestPowersUp]);
+    expect(afterGuest.pendingPowerDownUid).toBe('host');
+
+    const hostPowersUp = event('host', 8, 'power-down/responded', {
+      uid: 'host',
+      turnId: 'turn-003',
+      powerDownNextTurn: false
+    }, 8_000);
+    const skipped = replayRoom([...secondTurnEvents, guestPowersUp, hostPowersUp]);
+
+    expect(skipped.resolution).toMatchObject({ turnNumber: 3, phase: 'turn-complete' });
+    expect(skipped.nextProgramming).toMatchObject({
+      turnId: 'turn-004',
+      phase: 'programming'
+    });
+    expect(skipped.nextProgramming?.players.map(({ uid }) => uid)).toEqual([
+      'guest',
+      'host'
+    ]);
+    expect(skipped.pendingPowerDownUid).toBeNull();
+    expect(skipped.diagnostics).toEqual([]);
+  });
+
   it('resolves ordinary Programs from the corrected Risky Exchange Docking Bay', () => {
     const joinedHost = event('host', 2, 'player/joined', {
       uid: 'host',

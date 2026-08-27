@@ -634,7 +634,7 @@ function projectNextProgramming(state: RoomState) {
         | null) ?? null
     ])
   );
-  state.nextProgramming = createProgrammingState(
+  const nextProgramming = createProgrammingState(
     state.setup,
     state.configuration,
     damageByUid,
@@ -644,6 +644,22 @@ function projectNextProgramming(state: RoomState) {
     optionIdsByUid,
     storedProgramCardIdsByUid
   );
+  if (nextProgramming.players.length === 0) {
+    // With every active robot powered down there is no Program submission to
+    // activate the projected turn. Open it immediately so the usual ordered
+    // power decisions can resolve the empty turn and project the next one.
+    state.programming = nextProgramming;
+    state.nextProgramming = null;
+    state.powerDownResponses = [];
+    state.optionPlans = [];
+    state.optionDecisions = state.optionDecisions.filter(
+      ({ turnId }) => turnId === nextProgramming.turnId
+    );
+    state.effectDrafts = [];
+    refreshPowerDownPending(state);
+    return;
+  }
+  state.nextProgramming = nextProgramming;
 }
 
 function resolveReadyProgramming(state: RoomState) {
