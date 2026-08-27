@@ -102,6 +102,9 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
               name: 'Re-entry square (6,16)'
             });
             await expect(host.getByLabel('Legal re-entry squares')).toBeVisible();
+            await expect(
+              host.getByLabel('Legal re-entry squares').locator(':scope > *')
+            ).toHaveCount(9);
             await expect(archivePreview).toHaveAttribute('aria-pressed', 'true');
             await expect(archivePreview.locator('.board-tile')).toBeVisible();
             await expect(host.getByRole('group', { name: 'Re-entry facing' })).toBeVisible();
