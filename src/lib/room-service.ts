@@ -389,12 +389,14 @@ export async function submitProgram(
   user: User,
   roomCode: string,
   cardIds: ProgramSubmittedPayload['cardIds'],
-  turnId: ProgramSubmittedPayload['turnId'] = 'turn-001'
+  turnId: ProgramSubmittedPayload['turnId'] = 'turn-001',
+  pairedSlots?: ProgramSubmittedPayload['pairedSlots']
 ) {
   await appendRoomEvent(db, user, roomCode, 'program/submitted', {
     uid: user.uid,
     turnId,
-    cardIds
+    cardIds,
+    ...(pairedSlots ? { pairedSlots } : {})
   });
 }
 
@@ -404,13 +406,15 @@ export async function updateProgramDraft(
   roomCode: string,
   cardIds: ProgramDraftUpdatedPayload['cardIds'],
   turnId: ProgramDraftUpdatedPayload['turnId'] = 'turn-001',
-  slots?: ProgramDraftUpdatedPayload['slots']
+  slots?: ProgramDraftUpdatedPayload['slots'],
+  pairedSlots?: ProgramDraftUpdatedPayload['pairedSlots']
 ) {
   await appendRoomEvent(db, user, roomCode, 'program/draft-updated', {
     uid: user.uid,
     turnId,
     cardIds,
-    ...(slots ? { slots } : {})
+    ...(slots ? { slots } : {}),
+    ...(pairedSlots ? { pairedSlots } : {})
   });
 }
 

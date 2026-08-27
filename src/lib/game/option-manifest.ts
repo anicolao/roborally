@@ -116,7 +116,7 @@ export const OPTION_CARDS = Object.freeze([
     id: 'crab-legs',
     name: 'Crab Legs',
     kind: 'movement',
-    timing: ['programming', 'program-movement'],
+    timing: ['programming'],
     optional: true,
     payload: null,
     summary: 'Pairs Move 1 with a quarter turn to sidestep without rotating.'
@@ -137,7 +137,7 @@ export const OPTION_CARDS = Object.freeze([
     timing: ['programming', 'program-movement'],
     optional: true,
     payload: null,
-    summary: 'Pairs movement and rotation; movement is shortened before rotation.'
+    summary: 'Programs a movement and rotation in one register; movement is shortened before rotation.'
   },
   {
     id: 'extra-memory',

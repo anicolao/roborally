@@ -1463,7 +1463,7 @@ test("Crab Legs pairs an unused Rotate card with Move 1", async ({
   }
 });
 
-test("Dual Processor pairs an unused Rotate card with movement", async ({
+test("Dual Processor pairs movement and rotation during programming", async ({
   browser,
   page: host,
 }, testInfo) => {
@@ -1475,20 +1475,29 @@ test("Dual Processor pairs an unused Rotate card with movement", async ({
     "move-3",
   );
   try {
-    await chooseProgram(host, "move-3", true);
+    const hand = host.getByLabel("Your Program hand");
+    await hand.getByRole("button", { name: /^move-3 priority/ }).first().click();
+    const firstRegister = host
+      .getByRole("list", { name: "Chosen registers" })
+      .getByRole("button")
+      .first();
+    await firstRegister.click();
+    const rotation = hand
+      .getByRole("button", { name: /^(?:rotate-left|rotate-right|u-turn) priority/ })
+      .first();
+    await rotation.click();
+    await expect(firstRegister).toHaveAttribute("aria-label", /paired with/);
+
+    await chooseProgram(host);
     await chooseProgram(guest);
 
-    const decision = host.getByLabel("Option decision");
-    await expect(decision).toContainText("Use Dual Processor?");
-    const pair = decision.getByRole("button", { name: /^Pair / }).first();
-    await expect(pair).toBeVisible();
-    await pair.click();
+    await expect(host.getByText("Use Dual Processor?")).toHaveCount(0);
 
     await expect(host.locator(".full-resolution")).toContainText(
-      /Ada paired (?:rotate-left|rotate-right|u-turn) with Dual Processor./,
+      /Ada programmed (?:rotate-left|rotate-right|u-turn) with Dual Processor./,
     );
     await expect(guest.locator(".full-resolution")).toContainText(
-      /Ada paired (?:rotate-left|rotate-right|u-turn) with Dual Processor./,
+      /Ada programmed (?:rotate-left|rotate-right|u-turn) with Dual Processor./,
     );
   } finally {
     await guestContext.close();

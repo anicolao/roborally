@@ -1,5 +1,11 @@
 import { PROGRAM_CARDS, type ProgramCard } from './program-manifest';
-import { createPrng, type RaceConfig, type RaceSetup } from './setup';
+import {
+  RACE_REDUCER_VERSION,
+  createPrng,
+  type RaceConfig,
+  type RaceReducerVersion,
+  type RaceSetup
+} from './setup';
 import type { OptionCardId } from './option-manifest';
 
 export const PROGRAMMING_DURATION_MS = 30_000;
@@ -12,6 +18,8 @@ export function recompileDecisionId(turnNumber: number, uid: string) {
 
 export interface ProgramRegister {
   cardId: ProgramCard['id'] | null;
+  /** A rotation committed with this movement card through Dual Processor. */
+  pairedCardId?: ProgramCard['id'] | null;
   locked: boolean;
 }
 
@@ -26,11 +34,17 @@ export interface ProgrammingPlayer {
   draftCardIds: ProgramCard['id'][];
   /** Five positional draft slots. Locked registers remain null until submission. */
   draftSlots: (ProgramCard['id'] | null)[];
+  /** Optional second card in each register, used by race-v2 Dual Processor. */
+  pairedDraftSlots?: (ProgramCard['id'] | null)[];
+  /** Options owned while this hand was dealt. */
+  optionCardIds?: OptionCardId[];
   submitted: boolean;
   timedOut: boolean;
 }
 
 export interface ProgrammingState {
+  /** Governs rules whose behavior must remain deterministic for old room histories. */
+  reducerVersion?: RaceReducerVersion;
   turnId: TurnId;
   turnNumber: number;
   phase: 'programming' | 'programmed';
@@ -41,6 +55,13 @@ export interface ProgrammingState {
   deadlinePlayerUid: string | null;
   diagnostics: string[];
 }
+
+type LockedProgramValue =
+  | ProgramCard['id']
+  | { cardId: ProgramCard['id']; pairedCardId?: ProgramCard['id'] | null };
+type LockedProgramsByUid = Readonly<
+  Record<string, Readonly<Partial<Record<1 | 2 | 3 | 4 | 5, LockedProgramValue>>>>
+>;
 
 export function handSizeForDamage(damage: number, extraMemory = false): number {
   if (!Number.isInteger(damage) || damage < 0 || damage > 9) {
@@ -74,9 +95,7 @@ export function createProgrammingState(
   setup: RaceSetup,
   config: RaceConfig,
   damageByUid: Readonly<Record<string, number>> = {},
-  lockedRegistersByUid: Readonly<
-    Record<string, Readonly<Partial<Record<1 | 2 | 3 | 4 | 5, ProgramCard['id']>>>>
-  > = {},
+  lockedRegistersByUid: LockedProgramsByUid = {},
   turnNumber = 1,
   eligibleUids: ReadonlySet<string> = new Set(setup.players.map(({ uid }) => uid)),
   optionIdsByUid: Readonly<Record<string, readonly OptionCardId[]>> = {},
@@ -86,7 +105,13 @@ export function createProgrammingState(
     throw new Error('Turn number must be a positive integer.');
   }
   const lockedCardIds = Object.values(lockedRegistersByUid).flatMap((registers) =>
-    Object.values(registers)
+    Object.values(registers).flatMap((value) =>
+      typeof value === 'string'
+        ? [value]
+        : value
+          ? [value.cardId, ...(value.pairedCardId ? [value.pairedCardId] : [])]
+          : []
+    )
   );
   if (new Set(lockedCardIds).size !== lockedCardIds.length) {
     throw new Error('A locked Program card cannot occupy more than one register.');
@@ -108,11 +133,19 @@ export function createProgrammingState(
       hand: [] as ProgramCard['id'][],
       unusedCardIds: [] as ProgramCard['id'][],
       registers: Array.from({ length: REGISTER_COUNT }, (_, index) => {
-        const cardId = locked[(index + 1) as 1 | 2 | 3 | 4 | 5] ?? null;
-        return { cardId, locked: cardId !== null };
+        const lockedValue = locked[(index + 1) as 1 | 2 | 3 | 4 | 5];
+        const cardId = typeof lockedValue === 'string' ? lockedValue : lockedValue?.cardId ?? null;
+        const pairedCardId = typeof lockedValue === 'string' ? null : lockedValue?.pairedCardId ?? null;
+        return {
+          cardId,
+          ...(pairedCardId ? { pairedCardId } : {}),
+          locked: cardId !== null
+        };
       }),
       draftCardIds: [],
       draftSlots: Array.from({ length: REGISTER_COUNT }, () => null),
+      pairedDraftSlots: Array.from({ length: REGISTER_COUNT }, () => null),
+      optionCardIds: [...(optionIdsByUid[uid] ?? [])],
       submitted: false,
       timedOut: false
     };
@@ -148,6 +181,7 @@ export function createProgrammingState(
   }
 
   return {
+    reducerVersion: config.reducerVersion,
     turnId: `turn-${String(turnNumber).padStart(3, '0')}`,
     turnNumber,
     phase: players.length === 0 ? 'programmed' : 'programming',
@@ -169,12 +203,37 @@ function cloneState(state: ProgrammingState): ProgrammingState {
       unusedCardIds: [...player.unusedCardIds],
       registers: player.registers.map((register) => ({ ...register })),
       draftCardIds: [...player.draftCardIds],
-      draftSlots: draftSlotsForPlayer(player)
+      draftSlots: draftSlotsForPlayer(player),
+      pairedDraftSlots: pairedDraftSlotsForPlayer(player),
+      optionCardIds: [...(player.optionCardIds ?? [])]
     })),
     drawPile: [...state.drawPile],
     currentTurnDiscard: [...state.currentTurnDiscard],
     diagnostics: [...state.diagnostics]
   };
+}
+
+export function pairedDraftSlotsForPlayer(
+  player: Pick<ProgrammingPlayer, 'pairedDraftSlots'>
+): (ProgramCard['id'] | null)[] {
+  return Array.isArray(player.pairedDraftSlots) && player.pairedDraftSlots.length === REGISTER_COUNT
+    ? [...player.pairedDraftSlots]
+    : Array.from({ length: REGISTER_COUNT }, () => null);
+}
+
+function cardForId(cardId: ProgramCard['id'] | null | undefined) {
+  return PROGRAM_CARDS.find((card) => card.id === cardId);
+}
+
+export function isDualProcessorPair(
+  primaryCardId: ProgramCard['id'] | null | undefined,
+  pairedCardId: ProgramCard['id'] | null | undefined
+): boolean {
+  const primary = cardForId(primaryCardId);
+  const paired = cardForId(pairedCardId);
+  return !!primary && !!paired &&
+    ['move-1', 'move-2', 'move-3', 'back-up'].includes(primary.action) &&
+    ['rotate-left', 'rotate-right', 'u-turn'].includes(paired.action);
 }
 
 export function draftSlotsForPlayer(
@@ -208,7 +267,8 @@ export function updateProgramDraft(
   current: ProgrammingState,
   actorUid: string,
   cardIds: readonly ProgramCard['id'][],
-  draftSlots?: readonly (ProgramCard['id'] | null)[]
+  draftSlots?: readonly (ProgramCard['id'] | null)[],
+  pairedDraftSlots?: readonly (ProgramCard['id'] | null)[]
 ): ProgrammingState {
   const state = cloneState(current);
   const player = state.players.find(({ uid }) => uid === actorUid);
@@ -229,23 +289,44 @@ export function updateProgramDraft(
         })()
     : [];
   const positionalCardIds = player ? draftCardIdsInRegisterOrder(player, nextSlots) : [];
+  const nextPairedSlots = player
+    ? pairedDraftSlots
+      ? [...pairedDraftSlots]
+      : pairedDraftSlotsForPlayer(player)
+    : [];
+  const pairedCardIds = nextPairedSlots.filter(
+    (cardId): cardId is ProgramCard['id'] => cardId !== null
+  );
+  const dualProcessorEnabled =
+    state.reducerVersion === RACE_REDUCER_VERSION &&
+    player?.optionCardIds?.includes('dual-processor');
   if (
     state.phase !== 'programming' ||
     !player ||
     player.submitted ||
     nextSlots.length !== REGISTER_COUNT ||
+    nextPairedSlots.length !== REGISTER_COUNT ||
     player.registers.some(({ locked }, index) => locked && nextSlots[index] !== null) ||
     cardIds.length > openRegisters.length ||
     positionalCardIds.length !== cardIds.length ||
     positionalCardIds.some((cardId, index) => cardId !== cardIds[index]) ||
     new Set(positionalCardIds).size !== positionalCardIds.length ||
-    positionalCardIds.some((cardId) => !player.hand.includes(cardId))
+    positionalCardIds.some((cardId) => !player.hand.includes(cardId)) ||
+    (!dualProcessorEnabled && pairedCardIds.length > 0) ||
+    player.registers.some(({ locked }, index) => locked && nextPairedSlots[index] !== null) ||
+    pairedCardIds.some((cardId) => !player.hand.includes(cardId)) ||
+    new Set([...positionalCardIds, ...pairedCardIds]).size !==
+      positionalCardIds.length + pairedCardIds.length ||
+    nextPairedSlots.some((pairedCardId, index) =>
+      pairedCardId !== null && !isDualProcessorPair(nextSlots[index], pairedCardId)
+    )
   ) {
     state.diagnostics.push(`invalid-program-draft:${actorUid}`);
     return state;
   }
   player.draftCardIds = positionalCardIds;
   player.draftSlots = nextSlots;
+  player.pairedDraftSlots = nextPairedSlots;
   return state;
 }
 
@@ -271,6 +352,7 @@ export function recompileProgramHand(
   player.hand = pool.splice(0, handSize);
   player.draftCardIds = [];
   player.draftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
+  player.pairedDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
   state.drawPile = pool;
   return state;
 }
@@ -286,27 +368,60 @@ function placeProgram(
   state: ProgrammingState,
   player: ProgrammingPlayer,
   cardIds: readonly ProgramCard['id'][],
-  timedOut: boolean
+  timedOut: boolean,
+  pairedSlots: readonly (ProgramCard['id'] | null)[] = Array.from(
+    { length: REGISTER_COUNT },
+    () => null
+  )
 ) {
   const openRegisters = player.registers.filter(({ locked }) => !locked);
   if (cardIds.length !== openRegisters.length || new Set(cardIds).size !== cardIds.length) {
     state.diagnostics.push(`invalid-program:${player.uid}`);
     return false;
   }
-  if (cardIds.some((cardId) => !player.hand.includes(cardId))) {
+  const pairedCardIds = pairedSlots.filter(
+    (cardId): cardId is ProgramCard['id'] => cardId !== null
+  );
+  const dualProcessorEnabled =
+    state.reducerVersion === RACE_REDUCER_VERSION &&
+    player.optionCardIds?.includes('dual-processor');
+  if (
+    pairedSlots.length !== REGISTER_COUNT ||
+    (!dualProcessorEnabled && pairedCardIds.length > 0) ||
+    new Set([...cardIds, ...pairedCardIds]).size !== cardIds.length + pairedCardIds.length ||
+    cardIds.some((cardId) => !player.hand.includes(cardId)) ||
+    pairedCardIds.some((cardId) => !player.hand.includes(cardId))
+  ) {
     state.diagnostics.push(`card-not-in-hand:${player.uid}`);
+    return false;
+  }
+  let validationCardIndex = 0;
+  if (player.registers.some((register, registerIndex) => {
+    if (register.locked) return pairedSlots[registerIndex] !== null;
+    const primaryCardId = cardIds[validationCardIndex++];
+    const pairedCardId = pairedSlots[registerIndex];
+    return pairedCardId !== null && !isDualProcessorPair(primaryCardId, pairedCardId);
+  })) {
+    state.diagnostics.push(`invalid-dual-processor-pair:${player.uid}`);
     return false;
   }
 
   let cardIndex = 0;
-  for (const register of player.registers) {
-    if (!register.locked) register.cardId = cardIds[cardIndex++];
+  for (const [registerIndex, register] of player.registers.entries()) {
+    if (!register.locked) {
+      register.cardId = cardIds[cardIndex++];
+      const pairedCardId = pairedSlots[registerIndex];
+      if (pairedCardId) register.pairedCardId = pairedCardId;
+      else delete register.pairedCardId;
+    }
   }
-  player.unusedCardIds = player.hand.filter((cardId) => !cardIds.includes(cardId));
+  const programmedCardIds = new Set([...cardIds, ...pairedCardIds]);
+  player.unusedCardIds = player.hand.filter((cardId) => !programmedCardIds.has(cardId));
   state.currentTurnDiscard.push(...player.unusedCardIds);
   player.hand = [];
   player.draftCardIds = [];
   player.draftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
+  player.pairedDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
   player.submitted = true;
   player.timedOut = timedOut;
   return true;
@@ -316,7 +431,8 @@ export function submitProgram(
   current: ProgrammingState,
   actorUid: string,
   cardIds: readonly ProgramCard['id'][],
-  createdAt: number
+  createdAt: number,
+  pairedSlots?: readonly (ProgramCard['id'] | null)[]
 ): ProgrammingState {
   const state = cloneState(current);
   if (state.phase !== 'programming') {
@@ -328,7 +444,7 @@ export function submitProgram(
     state.diagnostics.push(`invalid-submission:${actorUid}`);
     return state;
   }
-  if (!placeProgram(state, player, cardIds, false)) return state;
+  if (!placeProgram(state, player, cardIds, false, pairedSlots)) return state;
 
   const remaining = state.players.filter(({ submitted }) => !submitted);
   if (remaining.length === 1) {
@@ -364,6 +480,7 @@ export function timeOutProgram(
   // authoritative for both an owner- and opponent-claimed timeout; the payload
   // remains accepted for replaying older rooms.
   const persistedDraftSlots = draftSlotsForPlayer(target);
+  const persistedPairedDraftSlots = pairedDraftSlotsForPlayer(target);
   const effectiveDraftSlots = persistedDraftSlots.some(Boolean)
     ? persistedDraftSlots
     : (() => {
@@ -392,7 +509,12 @@ export function timeOutProgram(
   // Dock order, so it is the canonical stable identity for timeout randomization.
   const targetDealIndex = state.players.indexOf(target);
   const random = createPrng(`${seed}:${state.turnId}:timeout:dock-${targetDealIndex + 1}`);
-  const preserved = new Set(effectivePreservedCardIds);
+  const preserved = new Set([
+    ...effectivePreservedCardIds,
+    ...persistedPairedDraftSlots.filter(
+      (cardId): cardId is ProgramCard['id'] => cardId !== null
+    )
+  ]);
   const available = target.hand.filter((cardId) => !preserved.has(cardId));
   for (let index = available.length - 1; index > 0; index -= 1) {
     const selected = Math.floor(random() * (index + 1));
@@ -404,7 +526,7 @@ export function timeOutProgram(
     if (register.locked) return [];
     return [effectiveDraftSlots[registerIndex] ?? randomFill[fillIndex++]];
   });
-  placeProgram(state, target, completedCardIds, true);
+  placeProgram(state, target, completedCardIds, true, persistedPairedDraftSlots);
   closeProgrammingIfComplete(state);
   return state;
 }
@@ -417,6 +539,9 @@ export function programCardZones(state: ProgrammingState): Map<ProgramCard['id']
     for (const cardId of player.hand) zones.set(cardId, `hand:${player.uid}`);
     for (const [index, register] of player.registers.entries()) {
       if (register.cardId) zones.set(register.cardId, `register:${player.uid}:${index + 1}`);
+      if (register.pairedCardId) {
+        zones.set(register.pairedCardId, `register:${player.uid}:${index + 1}:paired`);
+      }
     }
   }
   return zones;

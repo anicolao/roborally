@@ -5,11 +5,17 @@
   import {
     REGISTER_COUNT,
     draftCardIdsInRegisterOrder,
+    isDualProcessorPair,
     type ProgrammingPlayer
   } from '$lib/game/programming';
 
   export let player: ProgrammingPlayer;
   export let draftSlots: (ProgramCard['id'] | null)[];
+  export let pairedDraftSlots: (ProgramCard['id'] | null)[] = Array.from(
+    { length: REGISTER_COUNT },
+    () => null
+  );
+  export let dualProcessorEnabled = false;
   export let pending = false;
   export let heading = 'Program deck';
   export let showHeading = true;
@@ -18,7 +24,10 @@
   export let submitLabel = 'Submit immutable program';
   export let submittedMessage = 'Program committed. It is locked and cannot be changed.';
   export let previewText = '';
-  export let ondraftchange: (slots: (ProgramCard['id'] | null)[]) => void;
+  export let ondraftchange: (
+    slots: (ProgramCard['id'] | null)[],
+    pairedSlots: (ProgramCard['id'] | null)[]
+  ) => void;
   export let onprogramsubmit: () => void | Promise<void>;
   export let recompileOptionCardIds: OptionCardId[] = [];
   export let recompileUsed = false;
@@ -51,14 +60,24 @@
     return !player.submitted && !player.registers[index]?.locked;
   }
 
-  function updateDraft(nextSlots: (ProgramCard['id'] | null)[]) {
+  function selectedRegisterForCard(cardId: ProgramCard['id']) {
+    const primaryIndex = draftSlots.indexOf(cardId);
+    return primaryIndex >= 0 ? primaryIndex : pairedDraftSlots.indexOf(cardId);
+  }
+
+  function updateDraft(
+    nextSlots: (ProgramCard['id'] | null)[],
+    nextPairedSlots = pairedDraftSlots
+  ) {
     draftSlots = nextSlots;
-    ondraftchange(nextSlots);
+    pairedDraftSlots = nextPairedSlots;
+    ondraftchange(nextSlots, nextPairedSlots);
   }
 
   function placeCard(cardId: ProgramCard['id'], registerIndex?: number) {
     if (player.submitted) return;
-    const existingIndex = draftSlots.indexOf(cardId);
+    const existingPrimaryIndex = draftSlots.indexOf(cardId);
+    const existingPairedIndex = pairedDraftSlots.indexOf(cardId);
     const targetIndex = registerIndex ??
       (selectedRegisterIndex !== null && editableRegister(selectedRegisterIndex)
         ? selectedRegisterIndex
@@ -66,10 +85,27 @@
     if (targetIndex < 0 || !editableRegister(targetIndex)) return;
 
     const nextSlots = [...draftSlots];
-    if (existingIndex >= 0 && existingIndex !== targetIndex) nextSlots[existingIndex] = null;
-    nextSlots[targetIndex] = cardId;
+    const nextPairedSlots = [...pairedDraftSlots];
+    if (existingPrimaryIndex >= 0 && existingPrimaryIndex !== targetIndex) {
+      nextSlots[existingPrimaryIndex] = null;
+      nextPairedSlots[existingPrimaryIndex] = null;
+    }
+    if (existingPairedIndex >= 0 && existingPairedIndex !== targetIndex) {
+      nextPairedSlots[existingPairedIndex] = null;
+    }
+
+    const targetCardId = nextSlots[targetIndex];
+    if (dualProcessorEnabled && targetCardId && isDualProcessorPair(targetCardId, cardId)) {
+      nextPairedSlots[targetIndex] = cardId;
+    } else if (dualProcessorEnabled && targetCardId && isDualProcessorPair(cardId, targetCardId)) {
+      nextSlots[targetIndex] = cardId;
+      nextPairedSlots[targetIndex] = targetCardId;
+    } else {
+      nextSlots[targetIndex] = cardId;
+      nextPairedSlots[targetIndex] = null;
+    }
     selectedRegisterIndex = null;
-    updateDraft(nextSlots);
+    updateDraft(nextSlots, nextPairedSlots);
   }
 
   function tapCard(cardId: ProgramCard['id']) {
@@ -78,12 +114,17 @@
       return;
     }
     if (player.submitted) return;
-    const existingIndex = draftSlots.indexOf(cardId);
+    const existingIndex = selectedRegisterForCard(cardId);
     if (existingIndex >= 0) {
       const nextSlots = [...draftSlots];
-      nextSlots[existingIndex] = null;
+      const nextPairedSlots = [...pairedDraftSlots];
+      if (nextPairedSlots[existingIndex] === cardId) nextPairedSlots[existingIndex] = null;
+      else {
+        nextSlots[existingIndex] = null;
+        nextPairedSlots[existingIndex] = null;
+      }
       selectedRegisterIndex = existingIndex;
-      updateDraft(nextSlots);
+      updateDraft(nextSlots, nextPairedSlots);
       return;
     }
     placeCard(cardId);
@@ -92,10 +133,16 @@
   function tapSlot(registerIndex: number) {
     if (!editableRegister(registerIndex)) return;
     const nextSlots = [...draftSlots];
+    const nextPairedSlots = [...pairedDraftSlots];
+    if (dualProcessorEnabled && nextSlots[registerIndex] && !nextPairedSlots[registerIndex]) {
+      selectedRegisterIndex = registerIndex;
+      return;
+    }
     const changed = nextSlots[registerIndex] !== null;
     nextSlots[registerIndex] = null;
+    nextPairedSlots[registerIndex] = null;
     selectedRegisterIndex = registerIndex;
-    if (changed) updateDraft(nextSlots);
+    if (changed) updateDraft(nextSlots, nextPairedSlots);
   }
 
   function startCardDrag(event: DragEvent, cardId: ProgramCard['id']) {
@@ -178,7 +225,10 @@
 
   function clearDraft() {
     selectedRegisterIndex = null;
-    updateDraft(Array.from({ length: REGISTER_COUNT }, () => null));
+    updateDraft(
+      Array.from({ length: REGISTER_COUNT }, () => null),
+      Array.from({ length: REGISTER_COUNT }, () => null)
+    );
   }
 </script>
 
@@ -199,14 +249,16 @@
     <ol class="chosen-registers locked-program" aria-label="Locked Program">
       {#each player.registers as register, index}
         {@const card = cardForId(register.cardId)}
+        {@const pairedCard = cardForId(register.pairedCardId ?? null)}
         <li>
           <div
             class:damage-locked={register.locked}
             class="locked-register filled"
-            aria-label={`Register ${index + 1}, ${card ? `${card.action} priority ${card.priority}` : 'empty'}, ${register.locked ? 'damage locked' : 'committed'}`}
+            aria-label={`Register ${index + 1}, ${card ? `${card.action} priority ${card.priority}` : 'empty'}${pairedCard ? ` paired with ${pairedCard.action} priority ${pairedCard.priority}` : ''}, ${register.locked ? 'damage locked' : 'committed'}`}
           >
             <span>R{index + 1}</span>
             <strong>{card ? `${card.action} ${card.priority}` : 'empty'}</strong>
+            {#if pairedCard}<strong class="paired-card">+ {pairedCard.action} {pairedCard.priority}</strong>{/if}
             <small>{register.locked ? 'damage locked' : 'committed'}</small>
           </div>
         </li>
@@ -214,13 +266,18 @@
     </ol>
   {:else}
     <p class:visually-hidden={!instructionsVisible} class="instructions" id="register-order-help">
-      Tap a card for the next empty register, or select a register first. Tap an assigned card or
-      filled register to remove it and select that slot. You can also drag cards onto registers.
+      Tap a card for the next empty register, or select a register first. Tap an assigned card to
+      remove it. You can also drag cards onto registers.{dualProcessorEnabled
+        ? ' With Dual Processor, select a filled movement register and add a rotation card.'
+        : ''}
     </p>
     <div class="program-hand" aria-label="Your Program hand">
       {#each player.hand as cardId}
         {@const card = cardForId(cardId)}
-        {@const selectedIndex = draftSlots.indexOf(cardId)}
+        {@const primarySelectedIndex = draftSlots.indexOf(cardId)}
+        {@const pairedSelectedIndex = pairedDraftSlots.indexOf(cardId)}
+        {@const selectedIndex = primarySelectedIndex >= 0 ? primarySelectedIndex : pairedSelectedIndex}
+        {@const paired = pairedSelectedIndex >= 0}
         <button
           type="button"
           class:selected={selectedIndex >= 0}
@@ -237,7 +294,7 @@
           onclick={() => tapCard(cardId)}
         >
           {#if card}<ProgramCardFace {card} compact variant="adaptive" />{/if}
-          {#if selectedIndex >= 0}<span class="register-badge">R{selectedIndex + 1}</span>{/if}
+          {#if selectedIndex >= 0}<span class="register-badge">R{selectedIndex + 1}{paired ? '+' : ''}</span>{/if}
         </button>
       {/each}
     </div>
@@ -245,6 +302,7 @@
       {#each Array(REGISTER_COUNT) as _, index}
         {@const register = player.registers[index]}
         {@const card = cardForId(register.locked ? register.cardId : draftSlots[index])}
+        {@const pairedCard = cardForId(register.locked ? register.pairedCardId ?? null : pairedDraftSlots[index])}
         <li>
           <button
             type="button"
@@ -252,7 +310,7 @@
             class:filled={!!card}
             class:locked={register.locked}
             class:pointer-targeted={pointerDrag?.targetIndex === index}
-            aria-label={`Register ${index + 1}, ${card ? `${card.action} priority ${card.priority}` : 'empty'}${register.locked ? ', locked' : selectedRegisterIndex === index ? ', selected' : ''}`}
+            aria-label={`Register ${index + 1}, ${card ? `${card.action} priority ${card.priority}` : 'empty'}${pairedCard ? ` paired with ${pairedCard.action} priority ${pairedCard.priority}` : ''}${register.locked ? ', locked' : selectedRegisterIndex === index ? ', selected' : ''}`}
             aria-pressed={!register.locked && selectedRegisterIndex === index}
             data-register-slot={index + 1}
             disabled={register.locked}
@@ -264,6 +322,7 @@
           >
             <span>R{index + 1}</span>
             <strong>{card ? `${card.action} ${card.priority}` : 'empty'}</strong>
+            {#if pairedCard}<strong class="paired-card">+ {pairedCard.action} {pairedCard.priority}</strong>{/if}
             {#if register.locked}<small>· locked</small>{/if}
           </button>
         </li>
@@ -453,6 +512,7 @@
     font: inherit;
     text-overflow: ellipsis;
   }
+  .chosen-registers strong.paired-card { color: #d2ff37; }
   .chosen-registers small { color: #ffcf4b; font-size: 9px; }
   .chosen-registers .locked-register:not(.damage-locked) small { color: #d2ff37; }
   .preview-note, .submission-state { margin: 0; color: #778487; font-size: 16px; line-height: 1.35; }
