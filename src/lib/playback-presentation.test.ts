@@ -4,6 +4,7 @@ import {
   facingDegrees,
   firstChangedPlaybackFrame,
   nextFacingDegrees,
+  programCardIdForPlayback,
   robotsForPlaybackPresentation
 } from './playback-presentation';
 
@@ -48,5 +49,25 @@ describe('playback presentation', () => {
 
     expect(robotsForPlaybackPresentation(resolution, undefined, 'race:2', 'race:1')).toBe(initial);
     expect(robotsForPlaybackPresentation(resolution, undefined, 'race:2', 'race:2')).toBe(final);
+  });
+
+  it('shows the effective card used by a scrambled register', () => {
+    const frames: ProgramPlaybackFrame[] = [
+      {
+        register: 2,
+        stage: 'program-card',
+        actorUid: 'target',
+        cardId: 'program-010',
+        robots: [],
+        trace: []
+      }
+    ];
+
+    expect(programCardIdForPlayback(frames, 'target', 2, 'program-650')).toBe(
+      'program-010'
+    );
+    expect(programCardIdForPlayback(frames, 'other', 2, 'program-650')).toBe(
+      'program-650'
+    );
   });
 });

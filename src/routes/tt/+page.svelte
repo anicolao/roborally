@@ -46,7 +46,10 @@
     type PlaybackTimer,
   } from "$lib/playback-clock";
   import { persistPresentationEventWithRetry } from "$lib/presentation-reveal";
-  import { robotsForPlaybackPresentation } from "$lib/playback-presentation";
+  import {
+    programCardIdForPlayback,
+    robotsForPlaybackPresentation,
+  } from "$lib/playback-presentation";
 
   type SeatQr = { seat: number; url: string; image: string };
   type PlaybackPhase = "idle" | "countdown" | "register" | "waiting" | "complete";
@@ -930,7 +933,14 @@
                     cardIndex + 1 <= (playbackRegister ?? 0)))}
               {@const register = programPlayer?.registers[cardIndex]}
               {@const locked = register?.locked ?? false}
-              {@const cardId = register?.cardId}
+              {@const cardId = programCardIdForPlayback(
+                resolutionIsCurrent
+                  ? (state.resolution?.playback.frames ?? [])
+                  : [],
+                player.uid,
+                cardIndex + 1,
+                register?.cardId ?? null,
+              )}
               {@const card = PROGRAM_CARDS.find((entry) => entry.id === cardId)}
               <span
                 class:revealed={revealed || locked}
