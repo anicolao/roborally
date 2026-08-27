@@ -823,6 +823,60 @@ describe('priority Program movement', () => {
     expect(resolved.laserBeams).toHaveLength(2);
   });
 
+  it('does not ask for High-Power Laser when passing an obstruction cannot hit another robot', () => {
+    const config = riskyExchangeConfig('HIGH-POWER-LASER');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'shooter', name: 'Shooter', robotId: 'axle' },
+        { uid: 'target', name: 'Target', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const shooter = raceRobot({
+      uid: 'shooter',
+      name: 'Shooter',
+      x: 1,
+      y: 6,
+      facing: 'east',
+      options: [{ cardId: 'high-power-laser', spent: 0, storedProgramCardId: null }]
+    });
+    const target = raceRobot({ uid: 'target', name: 'Target', x: 3, y: 6 });
+
+    const resolved = resolveLaserSnapshot([shooter, target], 1, [], programming, []);
+
+    expect(resolved.pendingOptionDecision).toBeNull();
+    expect(target.damage).toBe(1);
+    expect(resolved.laserBeams).toEqual([
+      expect.objectContaining({ sourceUid: 'shooter', targetUid: 'target' })
+    ]);
+  });
+
+  it('does not ask for High-Power Laser when a wall has no target behind it', () => {
+    const config = riskyExchangeConfig('HIGH-POWER-LASER');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'shooter', name: 'Shooter', robotId: 'axle' },
+        { uid: 'observer', name: 'Observer', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const shooter = raceRobot({
+      uid: 'shooter',
+      name: 'Shooter',
+      x: 4,
+      y: 5,
+      facing: 'east',
+      options: [{ cardId: 'high-power-laser', spent: 0, storedProgramCardId: null }]
+    });
+
+    const resolved = resolveLaserSnapshot([shooter], 1, [], programming, []);
+
+    expect(resolved.pendingOptionDecision).toBeNull();
+    expect(resolved.laserBeams).toEqual([]);
+  });
+
   it('asks for Pressor Beam and replaces main-laser damage with a push', () => {
     const config = riskyExchangeConfig('PRESSOR-BEAM');
     const setup = deriveRaceSetup(

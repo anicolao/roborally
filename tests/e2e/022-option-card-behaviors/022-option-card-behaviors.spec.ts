@@ -1131,7 +1131,7 @@ test("Gyroscopic Stabilizer asks once and ignores factory rotation all turn", as
   }
 });
 
-test("High-Power Laser asks at an obstruction and passes through a robot", async ({
+test("High-Power Laser does not ask when passing an obstruction cannot reach another target", async ({
   browser,
   page: host,
 }, testInfo) => {
@@ -1150,18 +1150,7 @@ test("High-Power Laser asks at an obstruction and passes through a robot", async
     await chooseProgram(host, "rotate-right");
     await chooseStationaryProgram(guest);
 
-    const decision = host.getByLabel("Option decision");
-    await expect(decision).toContainText("Use High-Power Laser?");
-    await expect(guest.getByLabel("Option decision")).toContainText(
-      "Waiting for Ada",
-    );
-    await decision
-      .getByRole("button", { name: "Pass the obstruction" })
-      .click();
-
-    await expect(host.locator(".full-resolution")).toContainText(
-      "Ada used high-power laser to pass one obstruction.",
-    );
+    await expect(host.getByLabel("Option decision")).toHaveCount(0);
     await expect(guest.getByLabel("Damage prevention choice")).toBeVisible();
     await guest
       .getByLabel("Damage prevention choice")
