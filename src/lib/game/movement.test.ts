@@ -24,7 +24,13 @@ import {
   type ResolutionTraceEntry
 } from './movement';
 import { createProgrammingState, submitProgram } from './programming';
-import { deriveRaceSetup, raceConfig, riskyExchangeConfig } from './setup';
+import {
+  LEGACY_RACE_REDUCER_VERSION,
+  deriveRaceSetup,
+  raceConfig,
+  riskyExchangeConfig,
+  type RaceConfig
+} from './setup';
 import { createOptionDeck } from './options';
 import { compilePlayableCourse } from './playable-courses';
 
@@ -2015,8 +2021,8 @@ describe('priority Program movement', () => {
     expect(crab).toMatchObject({ x: 2, y: 8, facing: 'north' });
   });
 
-  it('pairs movement and rotation with Dual Processor', () => {
-    const config = riskyExchangeConfig('DUAL-PROCESSOR-RUNTIME');
+  it('executes a movement and rotation paired during programming with Dual Processor', () => {
+    const config = riskyExchangeConfig('DUAL-PROCESSOR-PROGRAMMING');
     const setup = deriveRaceSetup(
       [
         { uid: 'dual', name: 'Dual', robotId: 'axle' },
@@ -2026,9 +2032,49 @@ describe('priority Program movement', () => {
     );
     const programming = createProgrammingState(setup, config);
     const rotateRight = card('rotate-right');
-    programming.players.find(({ uid }) => uid === 'dual')!.unusedCardIds = [
-      rotateRight.id
-    ];
+    programming.players.find(({ uid }) => uid === 'dual')!.registers[0] = {
+      cardId: card('move-3').id,
+      pairedCardId: rotateRight.id,
+      locked: false
+    };
+    const dual = raceRobot({
+      uid: 'dual',
+      name: 'Dual',
+      x: 3,
+      y: 8,
+      facing: 'north',
+      options: [{ cardId: 'dual-processor', spent: 0, storedProgramCardId: null }]
+    });
+    const pending = applyProgramCard(
+      [dual],
+      'dual',
+      card('move-3'),
+      1,
+      [],
+      undefined,
+      undefined,
+      {},
+      programming
+    );
+    expect(pending).toBeNull();
+    expect(dual).toMatchObject({ x: 3, y: 6, facing: 'east' });
+  });
+
+  it('replays the execution-time Dual Processor choice in legacy race-v1 rooms', () => {
+    const config: RaceConfig = {
+      ...riskyExchangeConfig('DUAL-PROCESSOR-LEGACY'),
+      reducerVersion: LEGACY_RACE_REDUCER_VERSION
+    };
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'dual', name: 'Dual', robotId: 'axle' },
+        { uid: 'other', name: 'Other', robotId: 'bit' }
+      ],
+      config
+    );
+    const programming = createProgrammingState(setup, config);
+    const rotateRight = card('rotate-right');
+    programming.players.find(({ uid }) => uid === 'dual')!.unusedCardIds = [rotateRight.id];
     const dual = raceRobot({
       uid: 'dual',
       name: 'Dual',
@@ -2038,6 +2084,7 @@ describe('priority Program movement', () => {
       options: [{ cardId: 'dual-processor', spent: 0, storedProgramCardId: null }]
     });
     const decisionId = 'r1-program-dual-dual-processor';
+
     applyProgramCard(
       [dual],
       'dual',
@@ -2055,11 +2102,12 @@ describe('priority Program movement', () => {
       },
       programming
     );
+
     expect(dual).toMatchObject({ x: 3, y: 6, facing: 'east' });
   });
 
-  it('executes the Dual Processor rotation when a wall blocks movement', () => {
-    const config = riskyExchangeConfig('DUAL-PROCESSOR-BLOCKED-RUNTIME');
+  it('executes a programmed Dual Processor rotation when a wall blocks movement', () => {
+    const config = riskyExchangeConfig('DUAL-PROCESSOR-BLOCKED-PROGRAMMING');
     const setup = deriveRaceSetup(
       [
         { uid: 'dual', name: 'Dual', robotId: 'axle' },
@@ -2069,9 +2117,11 @@ describe('priority Program movement', () => {
     );
     const programming = createProgrammingState(setup, config);
     const rotateRight = card('rotate-right');
-    programming.players.find(({ uid }) => uid === 'dual')!.unusedCardIds = [
-      rotateRight.id
-    ];
+    programming.players.find(({ uid }) => uid === 'dual')!.registers[0] = {
+      cardId: card('move-2').id,
+      pairedCardId: rotateRight.id,
+      locked: false
+    };
     const dual = raceRobot({
       uid: 'dual',
       name: 'Dual',
@@ -2080,7 +2130,6 @@ describe('priority Program movement', () => {
       facing: 'east',
       options: [{ cardId: 'dual-processor', spent: 0, storedProgramCardId: null }]
     });
-    const decisionId = 'r1-program-dual-dual-processor';
     const trace: ResolutionTraceEntry[] = [];
 
     applyProgramCard(
@@ -2091,13 +2140,7 @@ describe('priority Program movement', () => {
       trace,
       undefined,
       undefined,
-      {
-        [decisionId]: {
-          decisionId,
-          uid: 'dual',
-          choiceId: `pair:${rotateRight.id}`
-        }
-      },
+      {},
       programming
     );
 

@@ -14,7 +14,7 @@ import {
   type OwnedOption
 } from './options';
 import { recompileDecisionId, type ProgrammingState } from './programming';
-import type { PlayableCourseId, RaceSetup } from './setup';
+import { RACE_REDUCER_VERSION, type PlayableCourseId, type RaceSetup } from './setup';
 import { applyOptionEffect } from './option-effects';
 import { scenarioResolutionRules, type ScenarioResolutionRules } from './course-rules';
 
@@ -24,6 +24,7 @@ export type RegisterNumber = 1 | 2 | 3 | 4 | 5;
 export interface LockedRegisterState {
   register: RegisterNumber;
   cardId: ProgramCard['id'];
+  pairedCardId?: ProgramCard['id'] | null;
 }
 
 export interface RaceRobotPosition {
@@ -787,8 +788,35 @@ export function applyProgramCard(
   const crabUsed = optionDecisions[
     `r${register}-program-${robot.uid}-crab-legs`
   ]?.choiceId.startsWith('pair:') ?? false;
+  const programmedPair =
+    programming?.reducerVersion === RACE_REDUCER_VERSION &&
+    robot.options.some(({ cardId }) => cardId === 'dual-processor')
+      ? programmingPlayer?.registers[register - 1]?.pairedCardId
+      : null;
+  if (!crabUsed && signedDistance !== 0 && programmedPair) {
+    const pairedCard = PROGRAM_CARDS.find(({ id }) => id === programmedPair);
+    const effect = pairedCard
+      ? applyOptionEffect('dual-processor', {
+          action: card.action,
+          pairedAction: pairedCard.action
+        })
+      : null;
+    if (pairedCard && effect?.active && effect.movementDistance !== undefined) {
+      signedDistance = effect.movementDistance;
+      rotationAfterMovement = effect.rotationAfterMovement;
+      addTrace(
+        trace,
+        register,
+        robot.uid,
+        card,
+        'option-effect',
+        `${robot.name} programmed ${pairedCard.action} with Dual Processor.`
+      );
+    }
+  }
   if (
     !crabUsed &&
+    programming?.reducerVersion !== RACE_REDUCER_VERSION &&
     signedDistance !== 0 &&
     robot.options.some(({ cardId }) => cardId === 'dual-processor') &&
     availableRotations.length > 0
@@ -1197,11 +1225,15 @@ function synchronizeLockedRegisters(
   const expected = lockedRegisterNumbersForDamage(robot.damage);
   robot.lockedRegisters = expected.flatMap((register) => {
     const retained = robot.lockedRegisters.find((locked) => locked.register === register);
+    const programmedRegister = player?.registers[register - 1];
     const cardId =
       retained?.cardId ??
-      player?.registers[register - 1].cardId ??
+      programmedRegister?.cardId ??
       (robot.poweredDown ? programming.drawPile.shift() : undefined);
-    return cardId ? [{ register, cardId }] : [];
+    const pairedCardId = retained?.pairedCardId ?? programmedRegister?.pairedCardId ?? null;
+    return cardId
+      ? [{ register, cardId, ...(pairedCardId ? { pairedCardId } : {}) }]
+      : [];
   });
 }
 
@@ -2133,16 +2165,23 @@ export function resolveLaserSnapshot(
           });
           if (fireControlChoice.startsWith('lock:')) {
             const lockedRegister = Number(fireControlChoice.slice('lock:'.length)) as RegisterNumber;
-            const cardId = programming.players
+            const lockedProgram = programming.players
               .find(({ uid }) => uid === target.uid)
-              ?.registers[lockedRegister - 1]?.cardId;
+              ?.registers[lockedRegister - 1];
+            const cardId = lockedProgram?.cardId;
             if (
               cardId &&
               !target.lockedRegisters.some(({ register: existing }) =>
                 existing === lockedRegister
               )
             ) {
-              target.lockedRegisters.push({ register: lockedRegister, cardId });
+              target.lockedRegisters.push({
+                register: lockedRegister,
+                cardId,
+                ...(lockedProgram?.pairedCardId
+                  ? { pairedCardId: lockedProgram.pairedCardId }
+                  : {})
+              });
               target.lockedRegisters.sort((left, right) => left.register - right.register);
             }
             addTrace(

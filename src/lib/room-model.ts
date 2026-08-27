@@ -1,7 +1,7 @@
 import {
   EDITION_ID,
   PRNG_VERSION,
-  RACE_REDUCER_VERSION,
+  SUPPORTED_RACE_REDUCER_VERSIONS,
   PLAYABLE_COURSE_IDS,
   deriveRaceSetup,
   type PlayableCourseId,
@@ -109,6 +109,7 @@ export interface ProgramSubmittedPayload {
   uid: string;
   turnId: TurnId;
   cardIds: ProgramCard['id'][];
+  pairedSlots?: (ProgramCard['id'] | null)[];
 }
 
 export interface ProgramDraftUpdatedPayload {
@@ -116,6 +117,7 @@ export interface ProgramDraftUpdatedPayload {
   turnId: TurnId;
   cardIds: ProgramCard['id'][];
   slots?: (ProgramCard['id'] | null)[];
+  pairedSlots?: (ProgramCard['id'] | null)[];
 }
 
 export interface ProgramTimedOutPayload {
@@ -474,7 +476,7 @@ function isSupportedConfiguration(value: unknown, playerCount: number): value is
     config.courseManifestVersion === COURSE_MANIFEST_VERSION;
   return (
     config.editionId === EDITION_ID &&
-    config.reducerVersion === RACE_REDUCER_VERSION &&
+    SUPPORTED_RACE_REDUCER_VERSIONS.some((version) => config.reducerVersion === version) &&
     config.prngVersion === PRNG_VERSION &&
     config.programManifestVersion === PROGRAM_MANIFEST_VERSION &&
     config.optionManifestVersion === OPTION_MANIFEST_VERSION &&
@@ -611,7 +613,10 @@ function projectNextProgramming(state: RoomState) {
     nextRobots.map((robot) => [
       robot.uid,
       Object.fromEntries(
-        robot.lockedRegisters.map(({ register, cardId }) => [register, cardId])
+        robot.lockedRegisters.map(({ register, cardId, pairedCardId }) => [
+          register,
+          { cardId, ...(pairedCardId ? { pairedCardId } : {}) }
+        ])
       )
     ])
   );
@@ -986,6 +991,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         payload.uid !== event.actorUid ||
         !Array.isArray(payload.cardIds) ||
         (payload.slots !== undefined && !Array.isArray(payload.slots)) ||
+        (payload.pairedSlots !== undefined && !Array.isArray(payload.pairedSlots)) ||
         !eventProgramming
       ) {
         diagnostic(state, event, 'invalid-program', 'The Program draft is malformed.');
@@ -995,7 +1001,8 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         eventProgramming,
         event.actorUid,
         payload.cardIds,
-        payload.slots
+        payload.slots,
+        payload.pairedSlots
       );
       if (next.diagnostics.length !== eventProgramming.diagnostics.length) {
         diagnostic(state, event, 'invalid-program', 'The Program draft is not legal.');
@@ -1015,6 +1022,7 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         !payload ||
         payload.uid !== event.actorUid ||
         !Array.isArray(payload.cardIds) ||
+        (payload.pairedSlots !== undefined && !Array.isArray(payload.pairedSlots)) ||
         !eventProgramming
       ) {
         diagnostic(state, event, 'invalid-program', 'The Program submission is malformed.');
@@ -1025,7 +1033,8 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         eventProgramming,
         event.actorUid,
         payload.cardIds,
-        event.createdAt ?? 0
+        event.createdAt ?? 0,
+        payload.pairedSlots
       );
       if (next.diagnostics.length !== eventProgramming.diagnostics.length) {
         diagnostic(state, event, 'invalid-program', 'The Program submission is not legal.');

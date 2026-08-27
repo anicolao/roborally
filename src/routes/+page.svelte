@@ -29,6 +29,7 @@
     REGISTER_COUNT,
     draftCardIdsInRegisterOrder,
     draftSlotsForPlayer,
+    pairedDraftSlotsForPlayer,
     previewProgram,
     programCardZones,
     recompileDecisionId,
@@ -36,6 +37,7 @@
   } from '$lib/game/programming';
   import {
     PLAYABLE_COURSE_IDS,
+    RACE_REDUCER_VERSION,
     raceConfig,
     type PlayableCourseId
   } from '$lib/game/setup';
@@ -89,6 +91,10 @@
   let setupSeed = 'RALLY-2005';
   let setupLives: 3 | 4 = 3;
   let programDraftSlots: (ProgramCard['id'] | null)[] = Array.from(
+    { length: REGISTER_COUNT },
+    () => null
+  );
+  let programPairedDraftSlots: (ProgramCard['id'] | null)[] = Array.from(
     { length: REGISTER_COUNT },
     () => null
   );
@@ -169,6 +175,8 @@
             registers: Array.from({ length: 5 }, () => ({ cardId: null, locked: false })),
             draftCardIds: [],
             draftSlots: Array.from({ length: REGISTER_COUNT }, () => null),
+            pairedDraftSlots: Array.from({ length: REGISTER_COUNT }, () => null),
+            optionCardIds: [],
             submitted: true,
             timedOut: false
           } satisfies ProgrammingPlayer)
@@ -208,6 +216,9 @@
   $: recompileOptionCardIds = currentPlayer && activeProgramming
     ? programmingOptionCardIds(roomState, activeProgramming, currentPlayer.uid)
     : [];
+  $: dualProcessorEnabled =
+    activeProgramming?.reducerVersion === RACE_REDUCER_VERSION &&
+    recompileOptionCardIds.includes('dual-processor');
   $: recompileUsed = !!currentPlayer && !!activeProgramming && roomState.optionDecisions.some(
     ({ turnId, decisionId }) =>
       turnId === activeProgramming?.turnId &&
@@ -445,6 +456,7 @@
     formError = '';
     requestedTurnNumber = 1;
     programDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
+    programPairedDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
     programDraftDirty = false;
     programDraftWriteQueue = Promise.resolve();
     selectedReentryCell = '';
@@ -467,11 +479,16 @@
         const currentDraft = draftPlayer
           ? draftSlotsForPlayer(draftPlayer)
           : Array.from({ length: REGISTER_COUNT }, () => null);
+        const currentPairedDraft = draftPlayer
+          ? pairedDraftSlotsForPlayer(draftPlayer)
+          : Array.from({ length: REGISTER_COUNT }, () => null);
         if (
           !programDraftDirty ||
-          JSON.stringify(currentDraft) === JSON.stringify(programDraftSlots)
+          (JSON.stringify(currentDraft) === JSON.stringify(programDraftSlots) &&
+            JSON.stringify(currentPairedDraft) === JSON.stringify(programPairedDraftSlots))
         ) {
           programDraftSlots = currentDraft;
+          programPairedDraftSlots = currentPairedDraft;
           programDraftDirty = false;
         }
         const effectDraft = nextState.effectDrafts.find(
@@ -712,11 +729,18 @@
     }
   }
 
-  function writeProgramDraft(nextSlots: (ProgramCard['id'] | null)[]) {
+  function writeProgramDraft(
+    nextSlots: (ProgramCard['id'] | null)[],
+    nextPairedSlots: (ProgramCard['id'] | null)[]
+  ) {
     programDraftSlots = nextSlots;
+    programPairedDraftSlots = nextPairedSlots;
     programDraftDirty = true;
     const slots = [...nextSlots];
-    programDraftWriteQueue = programDraftWriteQueue.then(() => persistProgramDraft(slots));
+    const pairedSlots = [...nextPairedSlots];
+    programDraftWriteQueue = programDraftWriteQueue.then(() =>
+      persistProgramDraft(slots, pairedSlots)
+    );
   }
 
   async function openProgrammingConsole() {
@@ -726,7 +750,8 @@
   }
 
   async function persistProgramDraft(
-    slots: readonly (ProgramCard['id'] | null)[] = programDraftSlots
+    slots: readonly (ProgramCard['id'] | null)[] = programDraftSlots,
+    pairedSlots: readonly (ProgramCard['id'] | null)[] = programPairedDraftSlots
   ) {
     if (!services || !roomService || !activeProgramming || programmingPlayer?.submitted) return;
     const cardIds = programmingPlayer
@@ -739,7 +764,8 @@
         roomCode,
         cardIds,
         activeProgramming.turnId,
-        [...slots]
+        [...slots],
+        [...pairedSlots]
       );
     } catch (error) {
       console.error(error);
@@ -762,9 +788,11 @@
         services.user,
         roomCode,
         selectedProgramCardIds,
-        activeProgramming?.turnId
+        activeProgramming?.turnId,
+        [...programPairedDraftSlots]
       );
       programDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
+      programPairedDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
       programDraftDirty = false;
       programDraftWriteQueue = Promise.resolve();
     } catch (error) {
@@ -794,6 +822,7 @@
         activeProgramming.turnId
       );
       programDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
+      programPairedDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
       programDraftDirty = false;
       programDraftWriteQueue = Promise.resolve();
     } catch (error) {
@@ -818,6 +847,7 @@
         selectedProgramCardIds
       );
       programDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
+      programPairedDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
       programDraftDirty = false;
     } catch (error) {
       console.error(error);
@@ -961,6 +991,7 @@
       });
       requestedTurnNumber = 1;
       programDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
+      programPairedDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
       programDraftDirty = false;
     } catch (error) {
       console.error(error);
@@ -1217,6 +1248,8 @@
                 <ProgramEditor
                   player={programmingPlayer}
                   bind:draftSlots={programDraftSlots}
+                  bind:pairedDraftSlots={programPairedDraftSlots}
+                  {dualProcessorEnabled}
                   {pending}
                   showHeading={false}
                   instructionsVisible={false}

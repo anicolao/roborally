@@ -16,14 +16,20 @@ import { OPTION_MANIFEST_VERSION } from './option-manifest';
 
 export const EDITION_ID = 'avalon-hill-2005';
 export const PRNG_VERSION = 'xorshift32-v1';
-export const RACE_REDUCER_VERSION = 'race-v1';
+export const LEGACY_RACE_REDUCER_VERSION = 'race-v1';
+export const RACE_REDUCER_VERSION = 'race-v2';
+export const SUPPORTED_RACE_REDUCER_VERSIONS = [
+  LEGACY_RACE_REDUCER_VERSION,
+  RACE_REDUCER_VERSION
+] as const;
+export type RaceReducerVersion = (typeof SUPPORTED_RACE_REDUCER_VERSIONS)[number];
 
 export const PLAYABLE_COURSE_IDS = ['risky-exchange', 'factory-rejects', 'option-world'] as const;
 export type { PlayableCourseId } from './playable-courses';
 
 export interface RaceConfig {
   editionId: typeof EDITION_ID;
-  reducerVersion: typeof RACE_REDUCER_VERSION;
+  reducerVersion: RaceReducerVersion;
   prngVersion: typeof PRNG_VERSION;
   programManifestVersion: typeof PROGRAM_MANIFEST_VERSION;
   optionManifestVersion: typeof OPTION_MANIFEST_VERSION;

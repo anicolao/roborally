@@ -102,6 +102,48 @@ describe('shared Program deck', () => {
     expect(repeated.diagnostics).toContain(`invalid-submission:${host.uid}`);
   });
 
+  it('commits a Dual Processor rotation into the same register under race-v2', () => {
+    const initial = createProgrammingState(
+      setup,
+      config,
+      {},
+      {},
+      1,
+      new Set(setup.players.map(({ uid }) => uid)),
+      { [setup.players[0].uid]: ['dual-processor'] }
+    );
+    const host = initial.players[0];
+    const pairedCardId = 'program-130';
+    const cardIds = host.hand.filter((cardId) => cardId !== pairedCardId).slice(0, 5);
+    const pairedSlots = [pairedCardId, null, null, null, null] as const;
+    const submitted = submitProgram(initial, host.uid, cardIds, 1_000, pairedSlots);
+
+    expect(submitted.players[0].registers[0]).toMatchObject({
+      cardId: cardIds[0],
+      pairedCardId,
+      locked: false
+    });
+    expect(submitted.players[0].unusedCardIds).not.toContain(pairedCardId);
+    expect(programCardZones(submitted)).toHaveLength(PROGRAM_CARDS.length);
+  });
+
+  it('rejects paired register cards without Dual Processor', () => {
+    const initial = createProgrammingState(setup, config);
+    const host = initial.players[0];
+    const pairedCardId = 'program-130';
+    const cardIds = host.hand.filter((cardId) => cardId !== pairedCardId).slice(0, 5);
+    const submitted = submitProgram(
+      initial,
+      host.uid,
+      cardIds,
+      1_000,
+      [pairedCardId, null, null, null, null]
+    );
+
+    expect(submitted.players[0].submitted).toBe(false);
+    expect(submitted.diagnostics).toContain(`card-not-in-hand:${host.uid}`);
+  });
+
   it('rejects early timeout claims and deterministically fills after the deadline', () => {
     const initial = createProgrammingState(setup, config);
     const first = initial.players[0];
