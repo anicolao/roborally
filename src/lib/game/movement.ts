@@ -3062,7 +3062,6 @@ export function resolveProgrammedTurn(
       };
     }
   }
-  playback.initialRobots = cloneRaceRobots(robots);
   const effectiveOptionPlans: Record<string, OptionTurnPlan> = Object.fromEntries(
     robots.map(({ uid }) => [
       uid,

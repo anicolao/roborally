@@ -1622,6 +1622,69 @@ describe('priority Program movement', () => {
     );
   });
 
+  it('replays a Recompile discard from the pre-resolution robot snapshot', () => {
+    const config = riskyExchangeConfig('RECOMPILE-REPLAY');
+    const setup = deriveRaceSetup(
+      [
+        { uid: 'recompiler', name: 'Recompiler', robotId: 'axle' },
+        { uid: 'observer', name: 'Observer', robotId: 'bit' }
+      ],
+      config
+    );
+    let programming = createProgrammingState(setup, config);
+    for (const player of programming.players) {
+      programming = submitProgram(programming, player.uid, player.hand.slice(0, 5), 1_000);
+    }
+    const robots = createRaceRobotPositions(setup);
+    robots[0].options = [
+      { cardId: 'recompile', spent: 0, storedProgramCardId: null },
+      { cardId: 'double-barrel-laser', spent: 0, storedProgramCardId: null }
+    ];
+    const decisionId = 'turn-1-recompile-recompiler';
+    const decisions = {
+      [decisionId]: {
+        decisionId,
+        uid: 'recompiler',
+        choiceId: 'discard:double-barrel-laser'
+      }
+    };
+    const first = resolveProgrammedTurn(
+      programming,
+      setup,
+      robots,
+      createOptionDeck('RECOMPILE-REPLAY'),
+      {},
+      decisions
+    )!;
+
+    expect(first.pendingOptionDecision?.decisionId).not.toBe(decisionId);
+    expect(
+      first.robots.find(({ uid }) => uid === 'recompiler')?.options.map(({ cardId }) => cardId)
+    ).not.toContain('double-barrel-laser');
+    expect(
+      first.playback.initialRobots
+        .find(({ uid }) => uid === 'recompiler')
+        ?.options.map(({ cardId }) => cardId)
+    ).toContain('double-barrel-laser');
+
+    const replayed = resolveProgrammedTurn(
+      programming,
+      setup,
+      first.playback.initialRobots,
+      first.initialOptionDeck,
+      {},
+      decisions
+    )!;
+    expect(replayed.pendingOptionDecision?.decisionId ?? null).toBe(
+      first.pendingOptionDecision?.decisionId ?? null
+    );
+    expect(
+      replayed.robots
+        .find(({ uid }) => uid === 'recompiler')
+        ?.options.map(({ cardId }) => cardId)
+    ).not.toContain('double-barrel-laser');
+  });
+
   it('pauses simultaneous laser damage for persisted choices in Dock order', () => {
     const config = riskyExchangeConfig('DOCK-ORDERED-DAMAGE');
     const setup = deriveRaceSetup(
