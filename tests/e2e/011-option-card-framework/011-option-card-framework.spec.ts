@@ -112,6 +112,13 @@ test('face-up Options remain available for execution-time decisions', async (
           spec: 'Ada and Grace each own one visibly named graphical Option',
           check: async () => {
             const robots = host.getByRole('list', { name: 'Robot Life and damage state' });
+            for (const name of ['Ada', 'Grace']) {
+              const card = robots.getByRole('listitem').filter({ hasText: name });
+              await expect(card.locator('.life-track i')).toHaveCount(3);
+              await expect(card.locator('.damage-track i')).toHaveCount(10);
+              await expect(card.locator('.flag-track i')).toHaveCount(3);
+              await expect(card.getByLabel(`${name} program cards`).locator('[data-register]')).toHaveCount(5);
+            }
             await expect(
               robots.getByRole('listitem').filter({ hasText: 'Ada' }).locator('[data-option-icon]')
             ).toHaveCount(1);
@@ -123,9 +130,7 @@ test('face-up Options remain available for execution-time decisions', async (
         {
           spec: 'The observer sees the same face-up ownership',
           check: async () => {
-            await expect(guest.getByRole('list', { name: 'Robot Life and damage state' })).toContainText(
-              'Options'
-            );
+            await expect(guest.getByRole('list', { name: 'Robot Life and damage state' }).locator('[data-option-icon]')).toHaveCount(2);
           }
         }
       ]
@@ -251,7 +256,7 @@ test('face-up Options remain available for execution-time decisions', async (
     const optionIcon = host.locator('[data-option-icon]').first();
     const optionId = await optionIcon.getAttribute('data-option-icon');
     await optionIcon.click();
-    const inspection = host.getByRole('dialog', { name: /Option details/ });
+    const inspection = host.getByRole('dialog', { name: / Option inspection$/ });
     await steps.step('inspect-owned-option', {
       description: 'The shared tabletop icon opens readable Option rules without filling the sidebar',
       verifications: [{
@@ -277,7 +282,7 @@ test('face-up Options remain available for execution-time decisions', async (
       verifications: [{
         spec: 'The inspector fits 320 pixels without clipping its rules or close button',
         check: async () => {
-          await expect(inspection.getByRole('button', { name: 'Close Option details' })).toBeVisible();
+          await expect(inspection.getByRole('button', { name: 'Close Option inspection' })).toBeVisible();
           const fits = await inspection.evaluate((dialog) => dialog.scrollWidth <= dialog.clientWidth);
           expect(fits).toBe(true);
           const clips = await inspection.locator('.title, .copy, .continuation').evaluateAll(

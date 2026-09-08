@@ -10,7 +10,7 @@
   import type { FirebaseServices } from '$lib/firebase';
   import CourseBoard from '$lib/components/CourseBoard.svelte';
   import CourseCatalog from '$lib/components/CourseCatalog.svelte';
-  import OptionInventory from '$lib/components/OptionInventory.svelte';
+  import PlayerStatusCard from '$lib/components/PlayerStatusCard.svelte';
   import OptionCardFace from '$lib/components/OptionCardFace.svelte';
   import ProgramEditor from '$lib/components/ProgramEditor.svelte';
   import ReentryPicker from '$lib/components/ReentryPicker.svelte';
@@ -1255,28 +1255,17 @@
                 <ul class="robot-state" aria-label="Robot Life and damage state">
                   {#each presentedResolutionRobots ?? [] as robot}
                     <li>
-                      <strong>{robot.name}</strong>
-                      <span class="robot-vitals">
-                        {robot.status} · {robot.lives} Lives · {robot.damage} Damage
-                        {robot.poweredDown
-                          ? ' · Powered down'
-                          : robot.powerDownNextTurn
-                            ? ' · Shutdown announced'
-                            : ''}
-                        {robot.lockedRegisters.length
-                          ? ` · Locked ${robot.lockedRegisters.map(({ register }) => `R${register}`).join('/')}`
-                          : ''}
-                      </span>
-                      <span class="robot-progress">
-                        Flags {robot.touchedFlags.length ? robot.touchedFlags.join('→') : 'none'} ·
-                        Archive ({robot.archive.x},{robot.archive.y})
-                      </span>
-                      {#if robot.options.length > 0}
-                        <div class="robot-options-owned">
-                          <span>Options</span>
-                          <OptionInventory disabled={!!pendingOptionDecision} playerName={robot.name} cardIds={robot.options.map(({ cardId }) => cardId)} />
-                        </div>
-                      {/if}
+                      <PlayerStatusCard compact uid={robot.uid} playerName={robot.name}
+                        robotName={ROBOTS.find(({ id }) => id === robot.robotId)?.name}
+                        startingLives={roomState.setup.players.find(({ uid }) => uid === robot.uid)?.lives ?? roomState.configuration.lives}
+                        lives={robot.lives} damage={robot.damage}
+                        powerMode={robot.poweredDown ? 'down' : robot.powerDownNextTurn ? 'announced' : 'active'}
+                        touchedFlags={robot.touchedFlags} flags={configuredCourse?.flags ?? []}
+                        optionCardIds={robot.options.map(({ cardId }) => cardId)} optionsDisabled={!!pendingOptionDecision}
+                        status={robot.status} lockedRegisters={robot.lockedRegisters} archive={robot.archive}
+                        registers={activeProgramming.players.find(({ uid }) => uid === robot.uid)?.registers ?? []}
+                        playbackFrames={roomState.resolution.turnNumber === activeProgramming.turnNumber ? roomState.resolution.playback.frames : []}
+                        revealThrough={roomState.resolution.turnNumber === activeProgramming.turnNumber ? playbackPhase === 'complete' ? 5 : playbackPhase === 'register' ? playbackRegister ?? 0 : 0 : 0} />
                     </li>
                   {/each}
                 </ul>
@@ -2651,22 +2640,6 @@
     font: 14px 'Space Mono', monospace;
     animation: none;
   }
-  .robot-state strong { color: #eef4ee; }
-  .robot-state li:has(.robot-options-owned) {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: baseline;
-  }
-  .robot-state li:has(.robot-options-owned) .robot-vitals { text-align: right; }
-  .robot-state li:has(.robot-options-owned) .robot-progress { grid-column: 1 / -1; }
-  .robot-options-owned {
-    display: grid;
-    grid-column: 1 / -1;
-    gap: 3px;
-    min-width: 0;
-    color: #d2ff37;
-    text-transform: uppercase;
-  }
   .reentry-choice {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -2849,14 +2822,13 @@
   .setup-summary.resolution-active > .archive-note { display: none; }
     .setup-summary.resolution-active .setup-order.compact { display: none; }
     .setup-summary.resolution-active .resolution-console ol { max-height: 70px; }
-    .robot-state { grid-template-columns: minmax(0, 1fr); }
+    .robot-state { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .robot-state li { display: grid; grid-template-columns: minmax(0, 1fr); justify-content: stretch; gap: 4px; padding: 10px; border: 1px solid #4b5a5c; border-radius: 8px; background: #11191aee; }
     .robot-state li { align-content: flex-start; flex-wrap: wrap; overflow: hidden; }
-    .robot-progress { min-width: 0; overflow-wrap: anywhere; }
     .setup-summary.resolution-active.many-robots .robot-state {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     .setup-summary.resolution-active.many-robots .setup-facts,
-    .setup-summary.resolution-active.many-robots .robot-progress,
     .setup-summary.resolution-active.many-robots .reentry-policy {
       display: none;
     }
@@ -3278,7 +3250,8 @@
   .race-details .setup-facts { display: grid; }
   .race-details .setup-order.compact { display: grid; max-height: none; }
   .program-console, .resolution-console { max-height: none; overflow: visible; }
-  .robot-state { grid-template-columns: minmax(0, 1fr); }
+  .robot-state { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .robot-state li { display: grid; grid-template-columns: minmax(0, 1fr); justify-content: stretch; gap: 4px; padding: 10px; border: 1px solid #4b5a5c; border-radius: 8px; background: #11191aee; }
   .program-head h2 { font-size: 16px; }
   .program-head span { font-size: 13px; }
   .option-catalog summary { font-size: 12px; }

@@ -102,7 +102,7 @@ test('the 4K tabletop gives players wide seats and inspectable public Options', 
     const optionButton = adaOptions.locator('[data-option-icon]');
     const selectedCardId = await optionButton.getAttribute('data-option-icon');
     await optionButton.click();
-    const inspector = table.getByRole('dialog', { name: 'Ada Options' });
+    const inspector = table.getByRole('dialog', { name: 'Ada Option inspection' });
     await expect(inspector).toBeVisible();
     await expect(inspector.locator(`[data-card-id="${selectedCardId}"]`)).toBeVisible();
 
@@ -129,7 +129,7 @@ test('the 4K tabletop gives players wide seats and inspectable public Options', 
     });
 
     await inspector.getByRole('button', { name: 'Close Option inspection' }).click();
-    await expect(inspector).toHaveCount(0);
+    await expect(inspector).toBeHidden();
     steps.generateDocs();
   } finally {
     await adaContext.close();
