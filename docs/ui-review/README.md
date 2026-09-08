@@ -60,7 +60,8 @@ after links point to the same scenario and seeded state after the layout changes
 [Scenario 026](../../tests/e2e/026-board-first-shared-cards/README.md) shows the
 board, graphical selection and committed registers at phone, desktop, tablet and
 phone landscape sizes. Its assertions check square cells, desktop board emphasis,
-phone board visibility, exact selected card identities and opponent masking.
+phone board visibility, the course title in the footer, a board viewport filling its
+panel without redundant text, exact selected card identities and opponent masking.
 Direct views: [phone](../../tests/e2e/026-board-first-shared-cards/screenshots/001-graphical-registers-phone.png),
 [phone landscape](../../tests/e2e/026-board-first-shared-cards/screenshots/001-graphical-registers-mobile-landscape.png),
 [tablet](../../tests/e2e/026-board-first-shared-cards/screenshots/001-graphical-registers-tablet.png),
@@ -140,3 +141,11 @@ also passed all 112 browser cases (two intentional skips), static checks, unit a
 rules tests, and the production build. All 117 changed Linux captures were
 visually reviewed. The normal PR workflow compares these reviewed baselines
 before publishing the preview.
+
+The board-space refinement also passed the complete local verifier and the
+[Linux run](https://github.com/anicolao/roborally/actions/runs/34222357055), including
+all 112 browser cases on each platform. Its 87 changed screenshots per platform
+were visually reviewed. Scenario 026 checks the footer course title and that the
+board viewport fills its panel, apart from the border and padding, at all four
+viewports. Scenario 003 checks accessible cell labels in place of the removed
+Board details disclosure.
