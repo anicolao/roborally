@@ -39,7 +39,7 @@ async function chooseProgram(page: Page, labels: Program) {
   for (const label of labels) {
     await page.getByRole('button', { name: label, exact: true }).click();
   }
-  const submit = page.getByRole('button', { name: 'Submit immutable program' });
+  const submit = page.getByRole('button', { name: 'Lock program' });
   if (!(await submit.isEnabled())) {
     const registers = await page
       .getByRole('list', { name: 'Chosen registers' })
@@ -67,8 +67,8 @@ test('power down clears damage, remains vulnerable, repeats, and restores progra
   const guest = await guestContext.newPage();
 
   try {
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a`);
-    await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a&e2eSeed=REPAIR-4`);
+    await expect(host.getByRole('status')).toHaveText('Connected');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');
     await host.getByRole('button', { name: 'Axle' }).click();
@@ -86,7 +86,6 @@ test('power down clears damage, remains vulnerable, repeats, and restores progra
       'Two real clients play eight deterministic turns. Ada announces after taking damage and in original Dock order, clears damage, skips programming and robot fire, remains vulnerable to factory lasers, receives exact random locks while shut down, continues once, and powers up with the new lock retained.'
     );
 
-    await host.getByLabel('Setup seed').fill('REPAIR-4');
     await host.getByRole('button', { name: 'Configure Risky Exchange' }).click();
     await guest.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Ready for race' }).click();
@@ -106,7 +105,7 @@ test('power down clears damage, remains vulnerable, repeats, and restores progra
           { page: host, powerDownNextTurn: true }
         ]);
         await expect(host.getByLabel('Ordered power-down control')).toContainText(
-          'Power down committed for next turn'
+          'Powering down next turn'
         );
       }
       await chooseProgram(host, programs.host);
@@ -140,7 +139,7 @@ test('power down clears damage, remains vulnerable, repeats, and restores progra
       { page: host, powerDownNextTurn: true }
     ]);
     await expect(host.getByLabel('Ordered power-down control')).toContainText(
-      'Power down committed for next turn'
+      'Powering down next turn'
     );
     await expect(host.getByRole('heading', { name: 'Your hand · submitted' })).toBeVisible();
     await chooseProgram(guest, downTurns[0]);
@@ -156,12 +155,12 @@ test('power down clears damage, remains vulnerable, repeats, and restores progra
             await expect(ada).toContainText(
               'Ada active · 3 Lives · 5 Damage · Powered down · Locked R5'
             );
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
             const trace = host.getByRole('list', { name: 'Full resolution feed' });
             await expect(trace.getByText('A board laser hit Ada at (11,3).')).toHaveCount(5);
             await expect(trace).toContainText('Ada took one damage and now has 1');
             await expect(trace).toContainText('Ada took one damage and now has 5');
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
           }
         },
         {
@@ -193,11 +192,11 @@ test('power down clears damage, remains vulnerable, repeats, and restores progra
             await expect(robotState(host, 'Ada')).toContainText(
               'Ada active · 3 Lives · 5 Damage · Powered down · Locked R5'
             );
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
             const trace = host.getByRole('list', { name: 'Full resolution feed' });
             await expect(trace).toContainText('Ada took one damage and now has 1');
             await expect(trace).toContainText('Ada took one damage and now has 5');
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
           }
         },
         {

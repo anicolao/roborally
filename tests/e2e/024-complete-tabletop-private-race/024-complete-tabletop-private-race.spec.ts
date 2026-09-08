@@ -434,7 +434,7 @@ test('two private phone controllers complete a fully documented tabletop race', 
 
   try {
     await enableSyntheticPlaybackClock(table);
-    await table.goto(`/tt/?e2eRoomCode=${roomCode}&course=risky-exchange-a`);
+    await table.goto(`/tt/?e2eRoomCode=${roomCode}&course=risky-exchange-a&e2eSeed=OPTION-11`);
     await documentCurrentState(
       steps,
       table,
@@ -540,22 +540,22 @@ test('two private phone controllers complete a fully documented tabletop race', 
       'The selected full-race course is visible in the shared configuration',
       async () => await expect(course).toHaveValue('risky-exchange-a')
     );
-    const seed = table.getByLabel('Setup seed');
-    await seed.fill('OPTION-11');
+    const lives = table.getByLabel('Starting Lives');
+    await lives.selectOption('3');
     await documentCurrentState(
       steps,
       table,
-      'tabletop-enters-seed',
-      'The tabletop enters the deterministic full-race seed',
-      'The OPTION-11 seed is visible before configuration is committed',
-      async () => await expect(seed).toHaveValue('OPTION-11')
+      'tabletop-chooses-lives',
+      'The tabletop chooses three starting lives',
+      'Three starting lives are selected before the race',
+      async () => await expect(lives).toHaveValue('3')
     );
     await documentBeforeClick(
       steps,
       table,
       'tabletop-configures-race',
       'The tabletop configures the race',
-      'The course, seed, player count, and configuration action are simultaneously visible',
+      'The course, starting lives, player count, and configuration action are simultaneously visible',
       table.getByRole('button', { name: 'CONFIGURE RACE' })
     );
 

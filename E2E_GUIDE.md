@@ -91,9 +91,10 @@ Scenarios 011–013 complete the ordinary race path: public face-up Option
 ownership, all 26 executable card behaviors, and a twelve-turn Risky Exchange
 race through shutdown, destruction, Option loss, re-entry, victory, and
 rematch. Scenarios 014–015 inspect all ten board faces and all 34 course
-diagrams in product. Scenario 014 completes the compiled multi-board Around the
-World route; scenario 015 selects every expert/team entry and requires all
-fourteen exceptional-rule probes to pass.
+diagrams in product. Scenario 014 inspects the multi-board Around the World preview; scenario 015
+selects every expert/team entry and checks readable descriptions and rules.
+Representative geometry races and exceptional-rule probes remain pure tests,
+with no developer test controls exposed in the player catalog.
 
 Scenario 016 disconnects a real programming client, preserves its confirmed
 versioned cache prefix, catches up from the Firestore cursor, reloads, and
@@ -241,18 +242,18 @@ The helper waits on this explicit status. A fixed timeout is only a failure
 bound, never a synchronization mechanism.
 
 Reconnect scenarios must exercise the browser transport itself, not a mocked
-store. Before disconnecting, wait for the visible event count to confirm the
+store. Before disconnecting, wait for the connection status’s event-count attribute to confirm the
 server prefix. While offline, assert that the cached prefix remains usable and
-that scratch replay is disabled. After reconnect, assert the cursor delta,
+that reconnect is disabled while the browser is offline. After reconnect, assert the cursor delta,
 reload once to prove cache hydration, and compare the resulting semantic state
 and event count with a connected peer. Cache-version invalidation and
 cache-plus-cursor equivalence also require focused pure tests.
 
 Clear emulator data between scenarios that require isolation. Use unique room
 codes and deterministic identities when independent scenarios can coexist.
-The client accepts `e2eIdentity` and `e2eRoomCode` query parameters only while
+The client accepts `e2eIdentity`, `e2eRoomCode`, and `e2eSeed` query parameters only while
 the emulator build flag is enabled. They stabilize visible identity labels and
-generated room codes without bypassing anonymous Auth, room controls,
+generated room codes and shuffle seeds without bypassing anonymous Auth, room controls,
 Firestore writes, subscriptions, or replay.
 
 ## Multiplayer scenarios

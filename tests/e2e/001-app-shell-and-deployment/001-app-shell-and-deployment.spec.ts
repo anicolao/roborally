@@ -38,13 +38,13 @@ test('application shell reaches Firebase and renders deterministically', async (
       {
         spec: 'The client has authenticated and reached the Firebase emulators',
         check: async () =>
-          expect(page.getByRole('status')).toHaveText('Firebase emulator ready')
+          expect(page.getByRole('status')).toHaveText('Connected')
       },
       {
-        spec: 'The deterministic build marker and GPL license are visible',
+        spec: 'The footer stays minimal and the build remains identifiable for deployment checks',
         check: async () => {
-          await expect(page.getByTestId('build-marker')).toHaveText('Build e2e-test');
-          await expect(page.getByText('GPL-3.0-only')).toBeVisible();
+          await expect(page.getByTestId('build-marker')).toHaveAttribute('data-build', 'e2e-test');
+          await expect(page.locator('footer')).toHaveText('Robo Rally · 2005 rules');
         }
       }
     ]

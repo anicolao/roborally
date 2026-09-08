@@ -9,13 +9,13 @@ between the board, the hand and the controls needed for the current turn.
 | Finding | Change | Playability rationale |
 | --- | --- | --- |
 | Web play allocated roughly one third of desktop width to the board and two thirds to the console. | The console is capped at 380px; the board takes the remaining width. | More room to inspect walls, conveyors, flags and robot positions. |
-| Web board cells stretched to fill a tall viewport, with a separate 480px width cap. | Web and tabletop now share aspect-ratio fitting, preserving square cells. Zoom, pan and keyboard inspection remain available in web play. | The same course has the same proportions in both modes. |
-| Phone programming explicitly hid the board. | Portrait phones and tablets show the board above an independently scrolling console; landscape keeps them side by side. Course headings and view controls take less space. | Players can refer to the course without leaving programming. |
+| Web board cells stretched to fill a tall viewport, with a separate 480px width cap. | Web and tabletop now share aspect-ratio fitting, preserving square cells. The web board always fills its available rectangle at the largest scale that preserves the entire course. Zoom and pan controls are removed; keyboard cell inspection remains available. | The same course has the same proportions in both modes. |
+| Phone programming explicitly hid the board. | Portrait phones and tablets show the board above an independently scrolling console; landscape keeps them side by side. The course heading takes less space and view controls are removed. | Players can refer to the course without leaving programming. |
 | Hands used `ProgramCardFace`, but chosen, damage-locked and submitted registers were text boxes. | The shared `ProgramEditor` renders square graphical card faces in all occupied registers, including Dual Processor pairs. | Movement direction and priority stay recognizable from hand to program to tabletop playback. Empty slots and lock status remain explicit text. |
 | Recompile discard choices were text-only Option buttons. | The shared editor uses `OptionCardFace` with an explicit discard action. | These choices match the existing damage prevention and destruction discard cards. |
 | Owned web Options displayed full cards inside each robot row. | Web uses the tabletop's measured icon shelf with overflow handling. A native modal dialog opens the complete card description. During a required Option decision the shelf is disabled, and the decision panel shows the relevant full card. | Public ownership stays visible without pushing turn controls down a long sidebar. Keyboard users can open, close with Escape, and return focus to the originating icon. |
-| Setup order, seed/replay details and card conservation competed with programming. | These remain available under “Race details & connection.” | Useful reference information no longer leads the turn flow. |
-| A verbose speculative preview sat before submission; recent moves and permanent board rules filled the resolution console. | “Program preview” and “Recent moves & board rules” disclose these on demand. The existing full trace remains available. | Pending decisions, robot state, deadlines, re-entry and next-turn controls receive more attention. |
+| Setup order, seed/replay details and card conservation competed with programming. | Seed, replay and conservation diagnostics are removed. “Race details” retains starting Lives, robot/flag counts and original Dock order. | Useful reference information no longer leads the turn flow. |
+| A verbose speculative preview sat before submission; recent moves and permanent board rules filled the resolution console. | The redundant speculative preview is removed. “Recent moves & rules” and “Turn history” keep readable moves and useful rules available on demand, without microstep counts or fixture commentary. | Pending decisions, robot state, deadlines, re-entry and next-turn controls receive more attention. |
 | Tabletop decision rails could compete with the playback log in the same gutter, and the responding seat had no attention cue. Power choices had no tabletop waiting message. | Waiting rails replace the playback log while a decision is available. Both viewing directions name the responder and say “CHECK YOUR PHONE.” The responding seat has a steady gold glow and “YOUR DECISION” label, including between-turn power choices. | Everyone can see why play paused and which player needs to act. The cue clears or moves when the decision is answered; a steady glow avoids flashing. |
 
 No new raster artwork is required. The existing program chassis, movement arrows,
@@ -25,6 +25,26 @@ graphical registers, keeping cards and submission controls inside the screen.
 The public tabletop already used graphical playback cards and compact Option
 icons, so its overall layout is retained. Its private `/hand` view benefits from
 the shared register and Recompile changes.
+
+## Player-facing copy audit
+
+The audit covered `/`, `/tt`, `/hand`, `/cards`, `/options`, `/boards`, individual
+board pages, and shared card, course, programming and Option-inspection components.
+
+| Surface | Removed or rewritten | Why |
+| --- | --- | --- |
+| Web header/footer | Compact brand, room/connection state and one rules-edition line; no visible build hash or infrastructure branding. | More vertical room for the board; connection problems remain visible. |
+| Lobby and setup | No seed input, identity IDs, event totals, replay diagnostics, append-only explanation or readiness-barrier copy. | Players choose a course, Lives and readiness, not storage behavior. |
+| Programming/results | “Lock program,” “Your program is locked,” and “Play again”; no conservation, epoch, microstep or speculative-preview diagnostics. | Labels describe what players can do and what happens next. |
+| Tabletop and phone | Friendly connection/retry/save errors; no raw service errors or animation-recording details. Tabletop keeps named waiting rails and seat glow. | Players can identify a stalled connection or the person who must act. |
+| Course catalog | No executable probes, geometry-auditor race, provenance, instance IDs or placement coordinates. Special rules use sentences. | The catalog helps players choose and learn courses. |
+| Card/board galleries | No raster-proof, manifest, generated-layer, pixel-size or FITS/OVERFLOWS diagnostics. | The galleries serve as card and board references. |
+
+Actual rules, priorities, register numbers, board coordinates, damage, Lives,
+flag progress and readable move history remain: they help players make decisions.
+Fixed browser-test deals use an emulator-only URL fixture. Cache/build/count
+metadata remains in non-announced data attributes for verification; it is not
+visible copy or accessible narration.
 
 ## Visual review
 
@@ -79,8 +99,8 @@ board remains unobscured between the gutter rails.
 ## Tradeoffs
 
 The narrower console reduces hand-card size on desktop. Phone controls can require
-vertical scrolling, and small boards still benefit from zoom and keyboard cell
-inspection. Full Option rules require an explicit inspection action. These are
+vertical scrolling. Small boards retain keyboard cell inspection and Board details
+for reading individual cells, but no longer support zoom or pan. Full Option rules require an explicit inspection action. These are
 reviewable design choices; browser checks cannot establish that players prefer
 them. Multi-board courses use the available space while preserving their aspect
 ratio, so especially tall courses may still leave horizontal space unused.
@@ -95,34 +115,13 @@ tabletop playback without revealing private programs early.
 
 ## Validation
 
-The complete `nix develop --command bun run verify:change` passed: 165 unit tests,
-15 Firestore rules tests, 112 browser cases (two intentional skips), Svelte checks,
-scenario-step validation, workflow lint and the production build. Changed macOS
-captures were visually reviewed, including full-size responsive programming and
-Option inspection screens.
+The copy audit adds a regression check across screenshot steps and card/board
+reference pages. Scenario 026 checks that the web board reaches the maximum fitted
+width and height at phone, landscape, tablet and desktop sizes, with square cells
+and no zoom/pan controls. Existing races continue to cover keyboard inspection,
+card ordering, private hands, reconnect, Options, power decisions and tabletop
+attention cues.
 
-The [Linux snapshot run](https://github.com/anicolao/roborally/actions/runs/34181189894)
-also passed all 112 browser cases (two intentional skips), plus static checks,
-unit and rules tests, and the production build. Its 240 changed platform-specific
-captures were visually reviewed and committed separately. The normal PR workflow
-compares against these reviewed baselines.
-
-The first normal PR comparison subsequently found a 25-pixel difference at the
-bottom of an Option icon after a required decision. This blocked the automatic
-preview deployment. Disabled icons were changed to a muted border and background
-instead of group opacity while investigating. Complete local verification and the
-[follow-up Linux snapshot run](https://github.com/anicolao/roborally/actions/runs/34184099128)
-passed. Three affected decision screenshots per platform were refreshed and
-reviewed, but the 25-pixel difference persisted in normal sharded CI. Two independent
-sharded runs produced byte-identical actual images, including the same icon edge;
-the post-decision baseline therefore uses that visually reviewed CI artifact.
-The disabled-style change did not establish opacity as the cause. The normal PR
-comparison gates the preview deployment.
-
-After the tabletop waiting update, complete local Nix verification passed again:
-165 unit tests, 15 rules tests, 112 browser cases (two existing skips), static
-checks and build. The [tabletop Linux snapshot run](https://github.com/anicolao/roborally/actions/runs/34190064518)
-also passed. The new assertions check a single named, highlighted responder,
-mutually exclusive waiting/playback rails, cleared attention after a response,
-and power-choice handoffs throughout the twelve-turn tabletop race, including a
-powered-down robot without a Program hand.
+Validation of this latest audit is in progress. The prior tabletop revision
+passed the complete Nix verifier and all Linux comparisons; the new screenshots
+and final results will be added before this review update is complete.

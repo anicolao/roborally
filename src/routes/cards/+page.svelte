@@ -23,10 +23,10 @@
 </script>
 
 <svelte:head>
-  <title>Program card artwork — Robo Rally</title>
+  <title>Program cards — Robo Rally</title>
   <meta
     name="description"
-    content="Review the complete layered raster artwork set for all Robo Rally 2005 Program cards."
+    content="Explore all 84 Program cards and their priorities."
   />
   <link rel="preload" as="image" href={`${base}/assets/cards/program-card-background-v1.webp`} />
   <link
@@ -38,12 +38,10 @@
 
 <main>
   <header>
-    <p>AVALON HILL 2005 · LAYERED RASTER PROOF</p>
+    <p>ROBO RALLY</p>
     <h1>Program cards</h1>
     <span>
-      Complete 2005 Program deck. Two generated chassis styles and three reusable command symbols
-      produce every card below; mirrored and rotated layers keep matching commands exact. Priority,
-      title, distance, and accessible description come from the game manifest.
+      Compare movement cards and their priorities. Higher priorities move first.
     </span>
 
     <fieldset class="style-selector">
@@ -61,8 +59,8 @@
 
   <section class="showcase" aria-labelledby="showcase-heading">
     <div class="section-heading">
-      <p>ART DIRECTION CHECK</p>
-      <h2 id="showcase-heading">One asset system, seven commands</h2>
+
+      <h2 id="showcase-heading">Seven commands</h2>
     </div>
     <div class="showcase-cards">
       {#each showcaseCards as card}
@@ -74,7 +72,7 @@
   <section class="inventory" aria-labelledby="inventory-heading">
     <div class="section-heading inventory-heading">
       <div>
-        <p>LIVE MANIFEST INVENTORY</p>
+
         <h2 id="inventory-heading">All {PROGRAM_CARDS.length} Program cards</h2>
       </div>
       <span>Priorities 10–840</span>
@@ -125,9 +123,7 @@
     max-width: 52rem;
     margin-bottom: 4rem;
   }
-
-  header p,
-  .section-heading p {
+  header p {
     margin: 0 0 0.55rem;
     color: #7de5ef;
     font: 0.75rem/1.4 'Space Mono', monospace;

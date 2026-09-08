@@ -29,9 +29,6 @@
     rotatePortrait?: boolean;
   } = $props();
 
-  let zoom = $state(1);
-  let panX = $state(0);
-  let panY = $state(0);
   let activeX = $state(1);
   let activeY = $state(1);
   let playbackRotations = $state<
@@ -44,7 +41,7 @@
       ?.filter(({ status }) => status === 'active')
       .map((robot) => ({
         ...robot,
-        name: setup.players.find(({ uid }) => uid === robot.uid)?.name ?? robot.uid,
+        name: setup.players.find(({ uid }) => uid === robot.uid)?.name ?? 'Robot',
         position: { x: robot.x, y: robot.y }
       })) ?? setup.players
   );
@@ -115,11 +112,6 @@
     return `${element.express ? 'express ' : ''}conveyor ${element.direction}`;
   }
 
-  function fitCourse() {
-    zoom = 1;
-    panX = 0;
-    panY = 0;
-  }
 
   function describeCell(x: number, y: number): string {
     const contents = boardCells.get(`${x},${y}`)?.elements.map(elementLabel) ?? [];
@@ -164,21 +156,10 @@
   {#if !presentationOnly}
     <header>
       <div>
-        <p>
-          {setup.courseId === 'risky-exchange'
-            ? 'COURSE 01 / MEDIUM / 2–8'
-            : `${course.category} / ${course.length} / ${course.players[0]}–${course.players.at(-1)}`}
-        </p>
+
         <h2 class:long-title={course.name.length > 14} id="course-heading">{course.name}</h2>
       </div>
-      <div class="board-controls" aria-label="Board view controls">
-        <button type="button" onclick={() => (zoom = Math.max(0.75, zoom - 0.25))} aria-label="Zoom out">−</button>
-        <output aria-label="Board zoom">{Math.round(zoom * 100)}%</output>
-        <button type="button" onclick={() => (zoom = Math.min(1.75, zoom + 0.25))} aria-label="Zoom in">+</button>
-        <button type="button" onclick={() => (panX -= 1)} aria-label="Pan left">←</button>
-        <button type="button" onclick={() => (panX += 1)} aria-label="Pan right">→</button>
-        <button type="button" onclick={fitCourse}>Fit course</button>
-      </div>
+
     </header>
   {/if}
 
@@ -192,7 +173,7 @@
         class:animating-robots={animateRobots}
         class="course-board"
         data-tabletop-orientation={presentationOnly ? (boardIsRotated ? 'rotated' : 'natural') : undefined}
-        style={`--zoom:${zoom};--pan-x:${panX};--pan-y:${panY};--course-columns:${compiledCourse.width};--course-rows:${compiledCourse.height}`}
+        style={`--course-columns:${compiledCourse.width};--course-rows:${compiledCourse.height}`}
         role="grid"
         tabindex="0"
         aria-label={presentationOnly
@@ -270,7 +251,7 @@
     </p>
 
     <details class="text-equivalent">
-      <summary>Course text equivalent</summary>
+      <summary>Board details</summary>
       {#if setup.courseId === 'risky-exchange'}
         <p>
           Coordinates begin at the Exchange board’s upper-left. Docking Bay B occupies rows 13–16.
@@ -298,9 +279,9 @@
     min-width: 0;
     min-height: 0;
     grid-template-rows: auto minmax(0, 1fr) auto;
-    gap: 8px;
+    gap: 4px;
     overflow: hidden;
-    padding: 12px;
+    padding: 4px;
     border: 1px solid #435052;
     background: rgba(16, 23, 25, 0.96);
   }
@@ -358,24 +339,8 @@
   header > div:first-child { min-width: 0; }
   p { margin: 0; color: #7f8d8f; font: 12px 'Space Mono', monospace; letter-spacing: .08em; }
   h2 { margin: 2px 0 0; overflow-wrap: break-word; color: #eef4ee; font: 700 24px 'Space Mono', monospace; text-transform: uppercase; }
-  .board-controls {
-    display: grid;
-    width: 100%;
-    grid-template-columns: repeat(5, minmax(32px, 1fr)) auto;
-    gap: 4px;
-    align-items: center;
-  }
-  button {
-    min-width: 32px;
-    min-height: 32px;
-    padding: 0 8px;
-    border: 1px solid #566366;
-    color: #d2ff37;
-    background: #11191a;
-    font: 700 18px 'Space Mono', monospace;
-    text-transform: uppercase;
-  }
-  output { min-width: 38px; color: #a7b2b1; font: 18px 'Space Mono', monospace; text-align: center; }
+
+
   .board-viewport {
     min-height: 0;
     overflow: hidden;
@@ -410,9 +375,7 @@
     grid-template-columns: repeat(var(--course-columns), 1fr);
     grid-template-rows: repeat(var(--course-rows), 1fr);
     margin: 0 auto;
-    transform: translate(calc(var(--pan-x) * 16px), calc(var(--pan-y) * 16px)) scale(var(--zoom));
     transform-origin: center;
-    transition: transform 120ms ease;
   }
   .presentation-only .course-board {
     width: 100%;
@@ -521,11 +484,7 @@
   @media (max-width: 720px) {
     header { align-items: flex-start; }
     header { gap: 5px; }
-    header p { display: none; }
     h2 { font-size: 20px; }
-    button { padding: 0 4px; font-size: 12px; }
-    output { font-size: 12px; }
-    h2.long-title { font-size: 20px; }
   }
   @media (max-height: 560px) and (orientation: landscape) {
     .course-panel {
@@ -533,25 +492,7 @@
       padding: 4px;
     }
     header { flex-wrap: wrap; gap: 4px; }
-    header p { display: none; }
     h2 { margin: 0; font-size: 20px; }
-    .board-controls {
-      display: grid;
-      width: 100%;
-      grid-template-columns: repeat(5, minmax(23px, 1fr)) auto;
-    }
-    button {
-      min-width: 23px;
-      min-height: 23px;
-      padding: 0 4px;
-      font-size: 12px;
-    }
-    output {
-      min-width: 27px;
-      font-size: 12px;
-    }
-    .course-board { min-height: 0; }
-    .text-equivalent { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
     .course-board { transition: none; }

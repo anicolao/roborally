@@ -237,7 +237,7 @@
       // A room code is already random and stable, which makes it a useful
       // default seed: separate tabletops get separate deals without giving up
       // deterministic replay or an explicitly supplied setup seed.
-      setupSeed = params.get("seed")?.slice(0, 64) || roomCode;
+      setupSeed = (import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true" ? params.get("e2eSeed")?.slice(0, 64) : null) || params.get("seed")?.slice(0, 64) || roomCode;
 
       const joinBase = `${location.origin}${base}/hand/`;
       seatQrs = await Promise.all(
@@ -285,17 +285,16 @@
               : "Waiting for race configuration";
         },
         (error) => {
-          status = error.message;
+          console.error(error);
+          status = "Connection interrupted. Reconnecting…";
         },
         (sync) => {
           if (sync.source === "server" && !sync.hasPendingWrites) serverAtHead = true;
         },
       );
     } catch (nextError) {
-      error =
-        nextError instanceof Error
-          ? nextError.message
-          : "Could not connect to Firebase";
+      console.error(nextError);
+      error = "Unable to connect to the race. Please try again.";
       status = error;
     }
   });
@@ -509,7 +508,7 @@
           !presentationUsesEventStream(state),
         onRetry: (nextError, delay) => {
           console.error(nextError);
-          error = `The tabletop could not synchronize playback. Retrying in ${Math.ceil(delay / 1_000)} seconds…`;
+          error = `Connection interrupted. Retrying in ${Math.ceil(delay / 1_000)} seconds…`;
         },
         onSuccess: () => { error = ""; },
       });
@@ -588,7 +587,7 @@
             state.presentationTurn.frameCursor === frameIndex,
           onRetry: (nextError, delay) => {
             console.error(nextError);
-            error = `The tabletop could not record animation step ${frameIndex + 1}. Retrying in ${Math.ceil(delay / 1_000)} seconds…`;
+            error = `Connection interrupted. Retrying in ${Math.ceil(delay / 1_000)} seconds…`;
           },
           onSuccess: () => { error = ""; },
         }).finally(() => {
@@ -636,7 +635,7 @@
       });
     } catch (nextError) {
       console.error(nextError);
-      error = "The tabletop could not write the race configuration.";
+      error = "Unable to save the race settings. Please try again.";
     } finally {
       pending = false;
     }
@@ -1141,14 +1140,6 @@
               </select>
             </label>
             <label>
-              Setup seed
-              <input
-                bind:value={setupSeed}
-                maxlength="64"
-                aria-label="Setup seed"
-              />
-            </label>
-            <label>
               Starting lives
               <select bind:value={setupLives} aria-label="Starting Lives">
                 <option value={3}>3 Lives</option>
@@ -1173,7 +1164,7 @@
           {#if state.configuration}
             <p class="configured">
               {PUBLISHED_COURSES_BY_ID.get(state.configuration.courseId)?.name} ·
-              seed {state.configuration.seed} · {state.configuration.lives} lives
+              {state.configuration.lives} lives
             </p>
           {/if}
         </div>
@@ -2018,7 +2009,7 @@
       monospace;
     text-transform: uppercase;
   }
-  .course-control :is(select, input, button) {
+  .course-control :is(select, button) {
     width: 100%;
     min-width: 0;
     min-height: 52px;
@@ -2068,7 +2059,7 @@
       grid-template-columns: 1fr;
       gap: 4px;
     }
-    .course-control :is(select, input, button) {
+    .course-control :is(select, button) {
       min-height: 38px;
       padding: 4px;
       font-size: 12px;

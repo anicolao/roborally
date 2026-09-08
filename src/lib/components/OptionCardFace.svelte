@@ -25,6 +25,7 @@
   let titlePanel = $state<HTMLSpanElement>();
 
   const timingLabel = $derived(card.timing.map((timing) => timing.replaceAll('-', ' ')).join(' · '));
+  const kindLabel = $derived(({ armor: 'Armor', movement: 'Movement', programming: 'Programming', weapon: 'Weapon', 'laser-modifier': 'Laser', persistent: 'Upgrade', 'power-down': 'Power down', reentry: 'Re-entry' })[card.kind]);
   const behaviorLabel = $derived(card.optional ? 'Optional' : 'Automatic');
   const payloadLabel = $derived(card.payload === null ? null : `Capacity ${card.payload}`);
   const presentation = $derived(optionCardPresentation(size));
@@ -59,7 +60,7 @@
   role="img"
   class:compact-copy={compactCopy}
   class="option-card"
-  aria-label={`${card.name}. ${card.summary} ${card.kind}. ${timingLabel}. ${behaviorLabel}.`}
+  aria-label={`${card.name}. ${card.summary} ${kindLabel}. ${timingLabel}. ${behaviorLabel}.`}
   data-card-id={card.id}
   data-option-size={presentation.id}
   style={`--option-card-width:${presentation.width}px;--option-card-height:${presentation.height}px`}
@@ -88,7 +89,7 @@
       <dl>
         <div>
           <dt>System</dt>
-          <dd>{card.kind}</dd>
+          <dd>{kindLabel}</dd>
         </div>
         <div>
           <dt>Timing</dt>
@@ -109,7 +110,7 @@
       <dl>
         <div>
           <dt>System</dt>
-          <dd>{card.kind}</dd>
+          <dd>{kindLabel}</dd>
         </div>
         <div>
           <dt>Timing</dt>
@@ -135,7 +136,7 @@
     </div>
   {/if}
 
-  <span class="footer-kind">{card.kind}</span>
+  <span class="footer-kind">{kindLabel}</span>
   <span class="footer-timing">{timingLabel}</span>
 </span>
 

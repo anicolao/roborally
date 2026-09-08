@@ -12,21 +12,15 @@
     TEAM_COURSES,
     type CourseCategory
   } from '$lib/game/course-catalog';
-  import {
-    compilePublishedCourse,
-    completeRepresentativeRace,
-    type RepresentativeRaceAudit
-  } from '$lib/game/course-geometry';
-  import { publishedCourseRuleProbes } from '$lib/game/course-rules';
+  import { compilePublishedCourse } from '$lib/game/course-geometry';
+  import { courseRuleText } from '$lib/course-rule-text';
 
-  type CatalogView = 'boards' | CourseCategory | 'rules';
+  type CatalogView = 'boards' | CourseCategory;
 
   let view = $state<CatalogView>('boards');
   let selectedBoardId = $state('exchange');
   let selectedCourseId = $state('around-the-world');
-  let raceAudit = $state<RepresentativeRaceAudit | null>(null);
 
-  const ruleProbes = publishedCourseRuleProbes();
   const selectedBoard = $derived(BOARD_FACES_BY_ID.get(selectedBoardId) ?? ALL_BOARD_FACES[0]);
   const selectedCourse = $derived(
     PUBLISHED_COURSES_BY_ID.get(selectedCourseId) ?? BEGINNER_COURSES[0]
@@ -53,17 +47,15 @@
     return '';
   }
 
-  function runRepresentativeRace() {
-    raceAudit = completeRepresentativeRace('around-the-world');
-  }
+
 </script>
 
 <details class="catalog" aria-label="2005 board and course catalog">
-  <summary>10 board faces · 34 published courses · executable exceptions</summary>
+  <summary>10 boards · 34 courses</summary>
   <section class="catalog-body">
     <header>
       <div>
-        <p>AVALON HILL 2005 / REVIEWED TWO-PASS</p>
+        <p>BOARDS &amp; COURSES</p>
         <h2>Factory &amp; course catalog</h2>
       </div>
       <dl>
@@ -79,8 +71,7 @@
         ['boards', 'Board faces'],
         ['beginner', 'Beginner'],
         ['expert', 'Expert'],
-        ['team', 'Team'],
-        ['rules', 'Rule probes']
+        ['team', 'Team']
       ] as section}
         <button
           type="button"
@@ -93,7 +84,7 @@
     </nav>
 
     {#if view === 'boards'}
-      <div class="board-catalog" aria-label="All reviewed board faces">
+      <div class="board-catalog" aria-label="All board faces">
         <ol class="face-grid">
           {#each ALL_BOARD_FACES as face}
             {@const semantic = new Map(
@@ -139,28 +130,13 @@
             {#each Object.entries(boardElementCounts(selectedBoard)).sort() as [kind, count]}
               <li><strong>{count}</strong> {kind}</li>
             {/each}
-            <li><strong>{selectedBoard.walls.length}</strong> wall edges</li>
+            <li><strong>{selectedBoard.walls.length}</strong> walls</li>
           </ul>
-          <small>{selectedBoard.provenance.join(' · ')}</small>
+
         </article>
       </div>
-    {:else if view === 'rules'}
-      <section class="rule-probes" aria-label="Published course rule probes">
-        <div class="probe-summary">
-          <strong>{ruleProbes.filter(({ passed }) => passed).length}/{ruleProbes.length}</strong>
-          <span>exception families execute deterministically</span>
-        </div>
-        <ol>
-          {#each ruleProbes as probe}
-            <li data-rule-probe={probe.id} data-passed={probe.passed}>
-              <span aria-hidden="true">{probe.passed ? '✓' : '!'}</span>
-              <div><strong>{probe.label}</strong><small>{probe.evidence}</small></div>
-            </li>
-          {/each}
-        </ol>
-      </section>
     {:else}
-      <div class:race-focus={raceAudit !== null} class="course-catalog">
+      <div class="course-catalog">
         <ol class="course-list" aria-label={`${view} courses`}>
           {#each visibleCourses as course}
             <li data-course-id={course.id}>
@@ -169,7 +145,6 @@
                 class:selected={selectedCourseId === course.id}
                 onclick={() => {
                   selectedCourseId = course.id;
-                  raceAudit = null;
                 }}
               >
                 <span>P{course.manualPage} · {course.players.join('/')}</span>
@@ -204,41 +179,21 @@
                 class:void={!cell}
                 class:feature={kinds.length > 0}
                 class:pit={kinds.includes('pit')}
-                title={cell ? `${cell.boardInstanceId} · ${x},${y}` : 'outside course'}
+                title={cell ? `Column ${x}, row ${y}` : 'outside course'}
               >
                 {#if flag}<b>{flag.number}</b>{:else}{elementMark(kinds)}{/if}
               </i>
             {/each}
           </div>
           <p>{selectedCourse.description}</p>
-          <ul class="placements">
-            {#each selectedCourse.boardPlacements as placement}
-              <li>
-                {placement.instanceId} @ {placement.origin.join(',')} · {placement.rotation * 90}°
-              </li>
-            {/each}
-          </ul>
+
           <ul class="special-rules">
             {#if selectedCourse.specialRules.length === 0}
               <li>Standard 2005 race rules</li>
             {:else}
-              {#each selectedCourse.specialRules as rule}<li>{rule.kind}</li>{/each}
+              {#each selectedCourse.specialRules as rule}<li>{courseRuleText(rule)}</li>{/each}
             {/if}
           </ul>
-          {#if selectedCourse.id === 'around-the-world'}
-            <button type="button" class="race-audit" onclick={runRepresentativeRace}>
-              Run complete multi-board race
-            </button>
-            {#if raceAudit}
-              <output class="race-result" aria-live="polite">
-                <strong>Race complete · Flags {raceAudit.touchedFlags.join(' → ')}</strong>
-                <span>
-                  {raceAudit.route.length - 1} safe moves ·
-                  {raceAudit.crossedBoardInstances.join(' → ')} · winner geometry-auditor
-                </span>
-              </output>
-            {/if}
-          {/if}
         </article>
       </div>
     {/if}
@@ -306,7 +261,10 @@
   .board-catalog { min-height: 0; overflow: auto; }
   .face-grid { display: grid; grid-template-columns: repeat(5, minmax(112px, 1fr)); gap: 7px; }
   .face-grid button { display: grid; width: 100%; gap: 4px; padding: 7px; text-align: left; }
-  .face-grid small, .course-list small, .course-list span, .course-preview span, .face-facts small {
+  .face-grid small,
+  .course-list small,
+  .course-list span,
+  .course-preview span {
     color: #849294;
     font: 16px 'Space Mono', monospace;
   }
@@ -333,7 +291,7 @@
   .face-facts ul { display: flex; flex-wrap: wrap; gap: 6px 16px; }
   .face-facts li { color: #aeb9b7; font: 18px 'Space Mono', monospace; }
   .face-facts li strong { color: #d2ff37; }
-  .face-facts > small { grid-column: 1 / -1; }
+
   .course-catalog {
     display: grid;
     min-height: 0;
@@ -341,8 +299,8 @@
     gap: 10px;
     overflow: hidden;
   }
-  .course-catalog.race-focus { grid-template-columns: 1fr; }
-  .course-catalog.race-focus .course-list { display: none; }
+
+
   .course-list { display: grid; min-height: 0; align-content: start; gap: 4px; overflow: auto; }
   .course-list button { display: grid; width: 100%; gap: 2px; padding: 7px 9px; text-align: left; }
   .course-list strong { font-size: 20px; }
@@ -368,31 +326,25 @@
     border-radius: 50%; color: #111; background: #ffcf4b;
     font: 700 14px 'Space Mono', monospace;
   }
-  .placements, .special-rules { display: flex; flex-wrap: wrap; gap: 5px; }
-  .placements li, .special-rules li {
+  .special-rules { display: flex; flex-wrap: wrap; gap: 5px; }
+  .special-rules li {
     padding: 3px 5px; border: 1px solid #354346;
     color: #9faeac; font: 16px 'Space Mono', monospace;
   }
   .special-rules li { color: #ffcf4b; }
-  .race-audit { padding: 0 12px; border-color: #d2ff37; color: #d2ff37; }
-  .race-result { display: grid; gap: 3px; padding: 8px; border-left: 3px solid #d2ff37; background: #18221b; }
-  .race-result strong { color: #d2ff37; font: 700 20px 'Space Mono', monospace; }
-  .rule-probes {
-    display: grid; min-height: 0; grid-template-columns: 180px 1fr;
-    gap: 12px; overflow: hidden;
-  }
-  .probe-summary { display: grid; align-content: start; gap: 4px; padding: 12px; border: 1px solid #344144; }
-  .probe-summary strong { color: #d2ff37; font: 700 56px 'Space Mono', monospace; }
-  .probe-summary span { color: #93a19f; font: 18px 'Space Mono', monospace; text-transform: uppercase; }
-  .rule-probes ol {
-    display: grid; min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 5px; overflow: auto;
-  }
-  .rule-probes li { display: flex; gap: 8px; padding: 8px; border: 1px solid #354346; }
-  .rule-probes li > span { color: #d2ff37; font-weight: 700; }
-  .rule-probes li div { display: grid; gap: 2px; }
-  .rule-probes li strong { font: 700 18px 'Space Mono', monospace; }
-  .rule-probes li small { color: #8d9b9c; font: 16px 'Space Mono', monospace; }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   @media (max-width: 720px) {
     details[open] .catalog-body { inset: 58px 7px 7px; }
@@ -400,14 +352,14 @@
     .catalog-body > header { display: grid; }
     header dl { width: 100%; justify-content: space-between; }
     .face-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .face-facts, .rule-probes { grid-template-columns: 1fr; }
-    .rule-probes { grid-template-rows: auto minmax(0, 1fr); }
+  .face-facts { grid-template-columns: 1fr; }
+
     .course-catalog { grid-template-columns: 1fr; grid-template-rows: 180px minmax(0, 1fr); }
-    .course-catalog.race-focus { grid-template-rows: minmax(0, 1fr); }
-    .rule-probes ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .rule-probes li { gap: 4px; padding: 5px; }
-    .rule-probes li strong { font-size: 14px; }
-    .rule-probes li small { font-size: 12px; }
+
+
+
+
+
     .compiled-course { max-height: 300px; }
   }
 </style>

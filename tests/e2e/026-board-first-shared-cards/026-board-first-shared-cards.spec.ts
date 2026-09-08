@@ -8,8 +8,8 @@ test('the board stays visible beside graphical programming controls', async ({ b
   let guestContext: BrowserContext | undefined;
   try {
     await enableSyntheticPlaybackClock(host);
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}`);
-    await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eSeed=UI-REVIEW`);
+    await expect(host.getByRole('status')).toHaveText('Connected');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');
     await host.getByRole('button', { name: 'Axle' }).click();
@@ -30,7 +30,6 @@ test('the board stays visible beside graphical programming controls', async ({ b
     await guest.getByRole('button', { name: 'Bit' }).click();
     await guest.getByRole('button', { name: 'Claim seat' }).click();
 
-    await host.getByLabel('Setup seed').fill('UI-REVIEW');
     await host.getByRole('button', { name: 'Configure Risky Exchange' }).click();
     await guest.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Ready for race' }).click();
@@ -51,6 +50,11 @@ test('the board stays visible beside graphical programming controls', async ({ b
           const rows = Number(await board.getAttribute('aria-rowcount'));
           const columns = Number(await board.getAttribute('aria-colcount'));
           expect(Math.abs(rect.width / columns - rect.height / rows)).toBeLessThan(1);
+          const available = (await host.locator('.board-viewport').boundingBox())!;
+          expect(Math.abs(rect.width - Math.min(available.width, available.height * columns / rows))).toBeLessThan(1);
+          expect(Math.abs(rect.height - Math.min(available.height, available.width * rows / columns))).toBeLessThan(1);
+          await expect(host.getByRole('button', { name: /Zoom|Pan|Fit course/ })).toHaveCount(0);
+          await expect(host.locator('main')).not.toContainText(/immutable|microsteps|manifest|cards accounted|cursor|seed/i);
           if (testInfo.project.name === 'desktop') {
             const sidebar = (await host.locator('.setup-summary').boundingBox())!;
             expect((await host.locator('.course-panel').boundingBox())!.width).toBeGreaterThan(sidebar.width * 1.5);
@@ -74,12 +78,12 @@ test('the board stays visible beside graphical programming controls', async ({ b
             const id = await cards.nth(index).getByRole('img').getAttribute('data-card-id');
             await expect(registers.getByRole('img').nth(index)).toHaveAttribute('data-card-id', id!);
           }
-          await expect(host.getByRole('button', { name: 'Submit immutable program' })).toBeEnabled();
+          await expect(host.getByRole('button', { name: 'Lock program' })).toBeEnabled();
           await expect(board).toBeVisible();
         }
       }]
     });
-    await host.getByRole('button', { name: 'Submit immutable program' }).click();
+    await host.getByRole('button', { name: 'Lock program' }).click();
     await steps.step('committed-graphical-registers', {
       description: 'Committed cards remain inspectable while the opponent sees a masked program',
       resetScroll: true,
@@ -91,8 +95,8 @@ test('the board stays visible beside graphical programming controls', async ({ b
         }
       }]
     });
-    await host.getByText('Race details & connection', { exact: true }).click();
-    await expect(host.getByTestId('program-conservation')).toBeVisible();
+    await host.getByText('Race details', { exact: true }).click();
+    await expect(host.getByTestId('program-conservation')).toHaveCount(0);
     steps.generateDocs();
   } finally {
     await guestContext?.close();

@@ -13,14 +13,14 @@
   <title>{board.id.replaceAll('-', ' ')} board — Robo Rally</title>
   <meta
     name="description"
-    content={`Generated raster tile validation view for the ${board.id.replaceAll('-', ' ')} board face.`}
+    content={`Explore the ${board.id.replaceAll('-', ' ')} board face.`}
   />
 </svelte:head>
 
 <main data-e2e-layout>
   <a class="visually-hidden" href={`${base}/boards`}>Back to all board faces</a>
   <h1 class="visually-hidden">{board.id.replaceAll('-', ' ')} board face</h1>
-  <p class="visually-hidden" role="status" data-status="synced">Raster asset preview ready</p>
+  <p class="visually-hidden" role="status" data-status="synced">Board ready</p>
   <BoardFace {board} />
 </main>
 

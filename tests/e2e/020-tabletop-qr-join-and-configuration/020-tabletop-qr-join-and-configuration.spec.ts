@@ -320,7 +320,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await table.addInitScript(() => {
       window.__roborallyE2ePresentationRevealFailures = 1;
     });
-    await table.goto(`/tt/?e2eIdentity=TABLE&e2eRoomCode=${roomCode}`);
+    await table.goto(`/tt/?e2eIdentity=TABLE&e2eRoomCode=${roomCode}&e2eSeed=TABLETOP-E2E`);
     await expect(table.locator('[data-e2e-tabletop]')).toHaveAttribute('data-room-code', roomCode);
     await expect(table.locator('header, footer')).toHaveCount(0);
     await expectFixedViewport(table);
@@ -328,7 +328,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expectJoinQrsUseSeatSpace(table);
     await expect(table.getByLabel('Tabletop race configuration')).toBeVisible();
     await expect(table.getByRole('button', { name: 'CONFIGURE RACE' })).toBeDisabled();
-    await expect(table.getByLabel('Setup seed')).toHaveValue(roomCode);
+    await expect(table.getByLabel('Setup seed')).toHaveCount(0);
 
     const positionSevenUrl = await table
       .getByRole('link', { name: `Join tabletop ${roomCode} at position 7` })
@@ -382,9 +382,8 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expect(table.getByRole('img', { name: /QR code to join position/ })).toHaveCount(6);
 
     await table.getByLabel('Course', { exact: true }).selectOption('risky-exchange');
-    await table.getByLabel('Setup seed').fill('TABLETOP-E2E');
     await table.getByRole('button', { name: 'CONFIGURE RACE' }).click();
-    await expect(table.getByText('Risky Exchange · seed TABLETOP-E2E · 3 lives')).toBeVisible();
+    await expect(table.getByText('Risky Exchange · 3 lives')).toBeVisible();
 
     await firstPhone.getByRole('button', { name: 'READY FOR RACE' }).click();
     await secondPhone.getByRole('button', { name: 'READY FOR RACE' }).click();
@@ -430,7 +429,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expectFixedViewport(table);
     await expect(table.getByRole('heading', { name: 'Risky Exchange' })).toHaveCount(0);
     await expect(table.getByLabel('Board view controls')).toHaveCount(0);
-    await expect(table.getByText('Course text equivalent')).toHaveCount(0);
+    await expect(table.getByText('Board details')).toHaveCount(0);
     const adaSeat = table.locator('[data-seat="7"]');
     await expect(adaSeat.locator('[data-player-vitals]')).toHaveAttribute(
       'aria-label',
@@ -535,7 +534,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
             await expect(courseBoard).toHaveAttribute('data-tabletop-orientation', 'natural');
             expect(Math.abs(cellBounds!.width - cellBounds!.height)).toBeLessThanOrEqual(1);
             await expect(table.getByLabel('Board view controls')).toHaveCount(0);
-            await expect(table.getByText('Course text equivalent')).toHaveCount(0);
+            await expect(table.getByText('Board details')).toHaveCount(0);
             await expectFixedViewport(table);
           }
         },
@@ -835,7 +834,7 @@ test('a replacement tabletop releases controls after replay catches up', async (
 
   try {
     await enableSyntheticPlaybackClock(originalTable);
-    await originalTable.goto(`/tt/?e2eRoomCode=${roomCode}`);
+    await originalTable.goto(`/tt/?e2eRoomCode=${roomCode}&e2eSeed=REPLACEMENT-TABLE`);
     const firstJoin = await originalTable
       .getByRole('link', { name: `Join tabletop ${roomCode} at position 1` })
       .getAttribute('href');
@@ -855,7 +854,6 @@ test('a replacement tabletop releases controls after replay catches up', async (
     await secondPhone.getByRole('button', { name: 'CLAIM POSITION 2' }).click();
 
     await originalTable.getByLabel('Course', { exact: true }).selectOption('risky-exchange');
-    await originalTable.getByLabel('Setup seed').fill('REPLACEMENT-TABLE');
     await originalTable.getByRole('button', { name: 'CONFIGURE RACE' }).click();
     await firstPhone.getByRole('button', { name: 'READY FOR RACE' }).click();
     await secondPhone.getByRole('button', { name: 'READY FOR RACE' }).click();

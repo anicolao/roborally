@@ -6,8 +6,8 @@ async function chooseProgram(page: Page, labels: readonly string[]) {
   for (const label of labels) {
     await page.getByRole('button', { name: label, exact: true }).click();
   }
-  await page.getByRole('button', { name: 'Submit immutable program' }).click();
-  await expect(page.getByText(/Program committed/)).toBeVisible();
+  await page.getByRole('button', { name: 'Lock program' }).click();
+  await expect(page.getByText(/Your program is locked/)).toBeVisible();
   await expect(page.getByText('locked', { exact: true })).toBeVisible();
   await expect(
     page.getByRole('list', { name: 'Locked Program' }).getByRole('listitem')
@@ -31,8 +31,8 @@ test('cache, cursor, retry, and replay converge across a resolution disconnect',
   );
 
   try {
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a`);
-    await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a&e2eSeed=PUSH-416`);
+    await expect(host.getByRole('status')).toHaveText('Connected');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');
     await host.getByRole('button', { name: 'Axle' }).click();
@@ -46,7 +46,6 @@ test('cache, cursor, retry, and replay converge across a resolution disconnect',
     await guest.getByRole('button', { name: 'Bit' }).click();
     await guest.getByRole('button', { name: 'Claim seat' }).click();
 
-    await host.getByLabel('Setup seed').fill('PUSH-416');
     await host.getByRole('button', { name: 'Configure Risky Exchange' }).click();
     await guest.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Ready for race' }).click();
@@ -82,7 +81,7 @@ test('cache, cursor, retry, and replay converge across a resolution disconnect',
           spec: 'The offline client retains seven confirmed immutable events',
           check: async () => {
             await expect(roomStatus(host)).toHaveAttribute('data-event-count', '12');
-            await expect(roomStatus(host)).toContainText('cached');
+            await expect(roomStatus(host)).toContainText('Offline');
           }
         },
         {
@@ -94,7 +93,7 @@ test('cache, cursor, retry, and replay converge across a resolution disconnect',
         {
           spec: 'Scratch replay is unavailable until transport returns, preserving the cache',
           check: async () => {
-            await expect(host.getByRole('button', { name: 'Replay from server' })).toBeDisabled();
+            await expect(host.getByRole('button', { name: 'Reconnect' })).toBeDisabled();
           }
         }
       ]
@@ -125,10 +124,7 @@ test('cache, cursor, retry, and replay converge across a resolution disconnect',
         {
           spec: 'Reload visibly reports cache-plus-cursor hydration',
           check: async () => {
-            await expect(host.getByLabel(/Cache \+ cursor replay verified/)).toHaveAttribute(
-              'aria-label',
-              /immutable events/
-            );
+            await expect(roomStatus(host)).toHaveAttribute('data-status', 'synced');
             await expect(roomStatus(host)).toHaveAttribute('data-cache-hydrated', 'true');
           }
         },
@@ -154,21 +150,21 @@ test('cache, cursor, retry, and replay converge across a resolution disconnect',
         }
       ]
     });
-    await steps.step('scratch-server-replay-matches-cursor-projection', {
-      description: 'An explicit scratch replay preserves the converged race',
+    await steps.step('reload-preserves-race', {
+      description: 'Reopening the race preserves the completed turn',
       verifications: [
         {
-          spec: 'The player can discard the compatible cache and read the complete server stream',
+          spec: 'The player can reload and continue from the same completed turn',
           check: async () => {
-            await host.getByText('Race details & connection', { exact: true }).click();
-            await host.getByRole('button', { name: 'Replay from server' }).click();
+            await host.reload();
+            await host.getByRole('button', { name: 'Open programming console' }).click();
             await expect(roomStatus(host)).toHaveAttribute('data-status', 'synced');
-            await expect(roomStatus(host)).toHaveAttribute('data-cache-hydrated', 'false');
+            await expect(roomStatus(host)).toHaveAttribute('data-cache-hydrated', 'true');
             await expect(roomStatus(host)).toHaveAttribute('data-event-count', '22');
           }
         },
         {
-          spec: 'Scratch replay produces the same completed turn and robot coordinates',
+          spec: 'Reload preserves the completed turn and robot coordinates',
           check: async () => {
             const openConsole = host.getByRole('button', { name: 'Open programming console' });
             if (await openConsole.isVisible()) await openConsole.click();

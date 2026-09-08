@@ -277,7 +277,7 @@ async function chooseProgram(
     }
     expect(selected, `an unselected ${action} card is available`).toBe(true);
   }
-  const submit = page.getByRole("button", { name: "Submit immutable program" });
+  const submit = page.getByRole("button", { name: "Lock program" });
   for (
     let index = 0;
     index < (await hand.count()) && !(await submit.isEnabled());
@@ -338,10 +338,19 @@ async function createOptionRace(
   const roomCode = `O${testInfo.project.name === "phone" ? "P" : "D"}${String(cardOrdinal).padStart(2, "0")}${roomSuffix}`;
   const guestContext: BrowserContext = await browser.newContext();
   const guest = await guestContext.newPage();
+  const shuffleSeed = optionSeed(
+        cardId,
+        requiredAction,
+        guestRequiredAction,
+        hostMustBeDockOne,
+        guestOptionId,
+        layout,
+        requireStationaryTurns,
+      );
   await host.goto(
-    `/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=option-lab`,
+    `/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=option-lab&e2eSeed=${encodeURIComponent(shuffleSeed)}`,
   );
-  await expect(host.getByRole("status")).toHaveText("Firebase emulator ready");
+  await expect(host.getByRole("status")).toHaveText("Connected");
   await host.getByRole("button", { name: "Create race" }).click();
   await host.getByLabel("Racer name").fill("Ada");
   await host.getByRole("button", { name: "Axle" }).click();
@@ -356,19 +365,6 @@ async function createOptionRace(
   await guest.getByRole("button", { name: "Bit" }).click();
   await guest.getByRole("button", { name: "Claim seat" }).click();
 
-  await host
-    .getByLabel("Setup seed")
-    .fill(
-      optionSeed(
-        cardId,
-        requiredAction,
-        guestRequiredAction,
-        hostMustBeDockOne,
-        guestOptionId,
-        layout,
-        requireStationaryTurns,
-      ),
-    );
   await host.getByRole("button", { name: "Configure Risky Exchange" }).click();
   await guest.getByRole("button", { name: "Ready for race" }).click();
   await host.getByRole("button", { name: "Ready for race" }).click();

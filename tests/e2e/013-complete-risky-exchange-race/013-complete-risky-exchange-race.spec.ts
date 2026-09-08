@@ -23,7 +23,7 @@ async function chooseProgram(page: Page, labels: CompleteRaceProgram) {
       })
       .toBe('true');
   }
-  const submit = page.getByRole('button', { name: 'Submit immutable program' });
+  const submit = page.getByRole('button', { name: 'Lock program' });
   await expect(submit).toBeEnabled();
   await submit.click();
 }
@@ -117,8 +117,8 @@ test('a production Risky Exchange race uses the complete rules loop', async (
   try {
     await enableSyntheticPlaybackClock(host);
     await enableSyntheticPlaybackClock(guest);
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a`);
-    await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a&e2eSeed=OPTION-11`);
+    await expect(host.getByRole('status')).toHaveText('Connected');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');
     await host.getByRole('button', { name: 'Axle' }).click();
@@ -136,7 +136,6 @@ test('a production Risky Exchange race uses the complete rules loop', async (
       'Two ordinary browser clients play twelve hand-constrained turns through crossed-site Options, collisions, laser damage, an announced shutdown, destruction and re-entry, all three flags, immutable victory, and rematch.'
     );
 
-    await host.getByLabel('Setup seed').fill('OPTION-11');
     await host.getByRole('button', { name: 'Configure Risky Exchange' }).click();
     await guest.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Ready for race' }).click();
@@ -241,10 +240,10 @@ test('a production Risky Exchange race uses the complete rules loop', async (
         {
           spec: 'Both clients share the immutable summary',
           check: async () => {
-            await expect(host.getByLabel('Immutable race summary')).toContainText(
+            await expect(host.getByLabel('Race results')).toContainText(
               'Ada wins Risky Exchange'
             );
-            await expect(guest.getByLabel('Immutable race summary')).toContainText(
+            await expect(guest.getByLabel('Race results')).toContainText(
               'Ada wins Risky Exchange'
             );
           }
@@ -252,7 +251,7 @@ test('a production Risky Exchange race uses the complete rules loop', async (
       ]
     });
 
-    await host.getByRole('button', { name: 'Start rematch epoch 2' }).click();
+    await host.getByRole('button', { name: 'Play again' }).click();
     await expect(host.getByLabel('Race configuration')).toBeVisible();
     await expect(host.getByRole('button', { name: 'Configure Risky Exchange' })).toBeEnabled();
     await expect(host.getByRole('list', { name: 'Race room players' })).toContainText('Ada');
