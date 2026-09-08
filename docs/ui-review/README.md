@@ -1,7 +1,7 @@
 # Web and tabletop playability review
 
 This change makes the course the primary web play surface and reuses the existing
-tabletop card artwork and Option shelf. The intended improvement is less searching
+tabletop card artwork, player status cards and Option inspector. The intended improvement is less searching
 between the board, the hand and the controls needed for the current turn.
 
 ## Findings and changes
@@ -14,6 +14,8 @@ between the board, the hand and the controls needed for the current turn.
 | Hands used `ProgramCardFace`, but chosen, damage-locked and submitted registers were text boxes. | The shared `ProgramEditor` renders square graphical card faces in all occupied registers, including Dual Processor pairs. | Movement direction and priority stay recognizable from hand to program to tabletop playback. Empty slots and lock status remain explicit text. |
 | Recompile discard choices were text-only Option buttons. | The shared editor uses `OptionCardFace` with an explicit discard action. | These choices match the existing damage prevention and destruction discard cards. |
 | Owned web Options displayed full cards inside each robot row. | Web uses the tabletop's measured icon shelf with overflow handling. A native modal dialog opens the complete card description. During a required Option decision the shelf is disabled, and the decision panel shows the relevant full card. | Public ownership stays visible without pushing turn controls down a long sidebar. Keyboard users can open, close with Escape, and return focus to the originating icon. |
+| Web robot status was a sentence of Life, damage, flag and power values. | `PlayerStatusCard` is extracted from tabletop and used by both views, including Life diamonds, ten damage boxes, flag circles, power indicators, Option icons, graphical registers and lock badges. Web keeps Archive coordinates and a screen-reader summary. | Players recognize the same state at a glance in either mode; unrevealed cards stay masked. The web board keeps its space while cards scroll in the console. |
+| Web Option inspection had a separate small-card dialog with a large text close button. | Both views now use `OptionInventory` for the tabletop-style inspector: gold frame, full card, circular close button and illustrated selectors. Native modal focus handling, Escape and focus return work in both modes; compact card typography fits narrow phones. | The same Option has the same inspection interaction and appearance on web and tabletop. |
 | Setup order, seed/replay details and card conservation competed with programming. | Seed, replay and conservation diagnostics are removed. “Race details” retains starting Lives, robot/flag counts and original Dock order. | Useful reference information no longer leads the turn flow. |
 | A verbose speculative preview sat before submission; recent moves and permanent board rules filled the resolution console. | The redundant speculative preview is removed. “Recent moves & rules” and “Turn history” keep readable moves and useful rules available on demand, without microstep counts or fixture commentary. | Pending decisions, robot state, deadlines, re-entry and next-turn controls receive more attention. |
 | Tabletop decision rails could compete with the playback log in the same gutter, and the responding seat had no attention cue. Power choices had no tabletop waiting message. | Waiting rails replace the playback log while a decision is available. Both viewing directions name the responder and say “CHECK YOUR PHONE.” The responding seat has a steady gold glow and “YOUR DECISION” label, including between-turn power choices. | Everyone can see why play paused and which player needs to act. The cue clears or moves when the decision is answered; a steady glow avoids flashing. |
@@ -23,7 +25,8 @@ rotation icons, Option chassis and all Option illustrations supply the visuals.
 The private controller also sizes its hand rows to the height remaining after
 graphical registers, keeping cards and submission controls inside the screen.
 The public tabletop already used graphical playback cards and compact Option
-icons, so its overall layout is retained. Its private `/hand` view benefits from
+icons, so its overall layout is retained. The tabletop seat layout and waiting glow remain in the table page; its status
+contents and inspector are shared with web play. Its private `/hand` view benefits from
 the shared register and Recompile changes.
 
 ## Player-facing copy audit
@@ -149,3 +152,10 @@ were visually reviewed. Scenario 026 checks the footer course title and that the
 board viewport fills its panel, apart from the border and padding, at all four
 viewports. Scenario 003 checks accessible cell labels in place of the removed
 Board details disclosure.
+
+The shared player-card follow-up checks Life/damage/flag tracks and five graphical
+registers in scenario 011. Existing damage-lock and tabletop scenarios cover
+public lock badges and hidden future registers. Option inspection checks cover
+readable rules at desktop, phone and 320px widths, Escape/focus return, and the
+large card on a 4K tabletop. The tabletop inspector and web inspector now use the
+same component rather than separate markup and styles.

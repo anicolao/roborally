@@ -4,12 +4,11 @@
   import "@fontsource/space-mono/400.css";
   import "@fontsource/space-mono/700.css";
   import { base } from "$app/paths";
-  import { onDestroy, onMount, tick } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import QRCode from "qrcode";
   import CourseBoard from "$lib/components/CourseBoard.svelte";
-  import OptionCardFace from "$lib/components/OptionCardFace.svelte";
+  import PlayerStatusCard from "$lib/components/PlayerStatusCard.svelte";
   import ProgramCardFace from "$lib/components/ProgramCardFace.svelte";
-  import TabletopOptionShelf from "$lib/components/TabletopOptionShelf.svelte";
   import { initializeFirebase, type FirebaseServices } from "$lib/firebase";
   import {
     MAX_ROOM_PLAYERS,
@@ -34,7 +33,6 @@
   import { PROGRAM_CARDS, type ProgramCard } from "$lib/game/program-manifest";
   import type { TurnId } from "$lib/game/programming";
   import {
-    OPTION_CARDS_BY_ID,
     type OptionCardId,
   } from "$lib/game/option-manifest";
   import type { ProgramPlayback, RaceRobotPosition } from "$lib/game/movement";
@@ -47,17 +45,12 @@
   } from "$lib/playback-clock";
   import { persistPresentationEventWithRetry } from "$lib/presentation-reveal";
   import {
-    programCardIdForPlayback,
     robotsForPlaybackPresentation,
   } from "$lib/playback-presentation";
 
   type SeatQr = { seat: number; url: string; image: string };
   type PlaybackPhase = "idle" | "countdown" | "register" | "waiting" | "complete";
-  type OptionInspection = {
-    playerName: string;
-    cardIds: OptionCardId[];
-    selectedCardId: OptionCardId;
-  };
+
 
   let services: FirebaseServices | undefined;
   let state: RoomState = emptyRoomState();
@@ -91,8 +84,6 @@
   let attemptedPresentationStart = "";
   let awaitingCompletedStep = "";
   let tabletopMounted = false;
-  let optionInspection: OptionInspection | undefined;
-  let optionInspector: HTMLDivElement | undefined;
   let playbackTimers: PlaybackTimer[] = [];
   let manualReplayActive = false;
   const PRODUCTION_PROGRAM_CARD_MS = 2_000;
@@ -192,9 +183,6 @@
         : waitingPowerDownUid
           ? "Choose your power state for next turn"
           : "");
-  $: inspectedOptionCard = optionInspection
-    ? OPTION_CARDS_BY_ID.get(optionInspection.selectedCardId)
-    : undefined;
   $: latestPlaybackEntry = playbackTrace.at(-1);
   $: finishWinners = (state.resolution?.summary?.winnerUids ?? [])
     .map((uid) => state.players.find((player) => player.uid === uid))
@@ -316,23 +304,6 @@
     if (raceRobot) return raceRobot.options.map(({ cardId }) => cardId);
     const programming = state.programming ?? state.nextProgramming;
     return programming ? programmingOptionCardIds(state, programming, uid) : [];
-  }
-
-  function inspectOptions(
-    playerName: string,
-    cardIds: OptionCardId[],
-    selectedCardId: OptionCardId,
-  ) {
-    optionInspection = { playerName, cardIds, selectedCardId };
-    void tick().then(() => optionInspector?.focus());
-  }
-
-  function closeOptionInspection() {
-    optionInspection = undefined;
-  }
-
-  function handleTabletopKeydown(event: KeyboardEvent) {
-    if (event.key === "Escape" && optionInspection) closeOptionInspection();
   }
 
   function resetProgramPlayback() {
@@ -685,7 +656,6 @@
 </script>
 
 <svelte:head><title>Robo Rally · Tabletop</title></svelte:head>
-<svelte:window onkeydown={handleTabletopKeydown} />
 
 <main
   class="tabletop"
@@ -761,63 +731,6 @@
     </div>
   {/if}
 
-  {#if optionInspection && inspectedOptionCard}
-    <div
-      class="option-inspector"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`${optionInspection.playerName} Options`}
-      tabindex="-1"
-      bind:this={optionInspector}
-    >
-      <section>
-        <header>
-          <div>
-            <small>PUBLIC OPTION INSPECTION</small>
-            <h2>{optionInspection.playerName}</h2>
-          </div>
-          <button
-            type="button"
-            aria-label="Close Option inspection"
-            onclick={closeOptionInspection}>×</button
-          >
-        </header>
-        {#if optionInspection.cardIds.length > 1}
-          <div
-            class="option-inspector-tabs"
-            aria-label={`${optionInspection.playerName} additional Options`}
-          >
-            {#each optionInspection.cardIds as cardId}
-              {@const card = OPTION_CARDS_BY_ID.get(cardId)}
-              {#if card}
-                <button
-                  type="button"
-                  class:selected={cardId === optionInspection.selectedCardId}
-                  aria-pressed={cardId === optionInspection.selectedCardId}
-                  aria-label={`Inspect ${card.name}`}
-                  onclick={() => {
-                    if (optionInspection)
-                      optionInspection = {
-                        ...optionInspection,
-                        selectedCardId: cardId,
-                      };
-                  }}
-                >
-                  <img
-                    src={`${base}/assets/options/${card.id}-poc.webp`}
-                    alt=""
-                  />
-                  <span>{card.name}</span>
-                </button>
-              {/if}
-            {/each}
-          </div>
-        {/if}
-        <OptionCardFace card={inspectedOptionCard} size="large" />
-      </section>
-    </div>
-  {/if}
-
   <section
     class:side-seats={tabletopLayout === "side-seats"}
     class:top-bottom-seats={tabletopLayout === "top-bottom-seats"}
@@ -869,116 +782,14 @@
               : "active"}
           {@const touchedFlags = raceRobot?.touchedFlags ?? []}
           {@const optionCardIds = optionCardIdsForPlayer(player.uid, raceRobot)}
-          <strong>{player.name}</strong>
-          <small>{robot?.name}</small>
-          <div
-            class="robot-vitals"
-            data-player-vitals={player.uid}
-            aria-label={`${player.name}: ${lives} of ${startingLives} lives remaining, ${damage} damage taken and ${10 - damage} damage not yet taken, ${powerMode === "down" ? "powered down" : powerMode === "announced" ? "power down announced" : "active power"}`}
-          >
-            <div class="life-track" aria-hidden="true">
-              <b>LIFE</b>
-              {#each Array(startingLives) as _, lifeIndex}
-                <i class:remaining={lifeIndex < lives}>◆</i>
-              {/each}
-            </div>
-            <div class="damage-track" aria-hidden="true">
-              <b>DMG</b>
-              {#each Array(10) as _, damageIndex}
-                <i
-                  class:taken={damageIndex < damage}
-                  class:available={damageIndex >= damage}
-                ></i>
-              {/each}
-            </div>
-            <div
-              class="flag-track"
-              aria-label={`${player.name} touched flags: ${touchedFlags.length ? touchedFlags.join(", ") : "none"}`}
-            >
-              <b>FLAGS</b>
-              {#each layoutCourse.course.flags as flag}
-                <i class:touched={touchedFlags.includes(flag.number)}
-                  >{flag.number}</i
-                >
-              {/each}
-            </div>
-            <div
-              class:down={powerMode === "down"}
-              class:announced={powerMode === "announced"}
-              class="power-state"
-            >
-              <i></i>
-              <span
-                >{powerMode === "down"
-                  ? "POWERED DOWN"
-                  : powerMode === "announced"
-                    ? "SHUTDOWN NEXT"
-                    : "ACTIVE"}</span
-              >
-            </div>
-          </div>
-          {#if optionCardIds.length > 0}
-            <TabletopOptionShelf
-              playerName={player.name}
-              cardIds={optionCardIds}
-              oninspect={(cardIds, selectedCardId) =>
-                inspectOptions(player.name, cardIds, selectedCardId)}
-            />
-          {/if}
-          <div
-            class="program-cards"
-            aria-label={`${player.name} program cards`}
-          >
-            {#each Array(5) as _, cardIndex}
-              {@const programPlayer = state.programming?.players.find(
-                (entry) => entry.uid === player.uid,
-              )}
-              {@const resolutionIsCurrent =
-                state.resolution?.turnNumber === state.programming?.turnNumber}
-              {@const revealed =
-                resolutionIsCurrent &&
-                (playbackPhase === "complete" ||
-                  (["register", "waiting"].includes(playbackPhase) &&
-                    cardIndex + 1 <= (playbackRegister ?? 0)))}
-              {@const register = programPlayer?.registers[cardIndex]}
-              {@const locked = register?.locked ?? false}
-              {@const cardId = programCardIdForPlayback(
-                resolutionIsCurrent
-                  ? (state.resolution?.playback.frames ?? [])
-                  : [],
-                player.uid,
-                cardIndex + 1,
-                register?.cardId ?? null,
-              )}
-              {@const card = PROGRAM_CARDS.find((entry) => entry.id === cardId)}
-              <span
-                class:revealed={revealed || locked}
-                class:locked
-                class="program-card"
-                data-register={cardIndex + 1}
-                data-locked={locked ? "true" : undefined}
-              >
-                {#if (revealed || locked) && card}
-                  <ProgramCardFace {card} compact variant="square" />
-                {:else}
-                  <span class="program-card-back" aria-hidden="true">●</span>
-                {/if}
-                {#if locked}
-                  <span
-                    class="register-lock"
-                    role="img"
-                    aria-label={`Register ${cardIndex + 1} locked`}
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path
-                        d="M7.5 10V7.5a4.5 4.5 0 0 1 9 0V10h1.25A2.25 2.25 0 0 1 20 12.25v6.5A2.25 2.25 0 0 1 17.75 21H6.25A2.25 2.25 0 0 1 4 18.75v-6.5A2.25 2.25 0 0 1 6.25 10zm2 0h5V7.5a2.5 2.5 0 0 0-5 0z"
-                      />
-                    </svg>
-                  </span>
-                {/if}
-              </span>
-            {/each}
-          </div>
+          <PlayerStatusCard uid={player.uid} playerName={player.name} robotName={robot?.name}
+            {startingLives} {lives} {damage} {powerMode} {touchedFlags}
+            flags={layoutCourse.course.flags} {optionCardIds}
+            registers={state.programming?.players.find(({ uid }) => uid === player.uid)?.registers ?? []}
+            playbackFrames={state.resolution?.turnNumber === state.programming?.turnNumber ? state.resolution?.playback.frames ?? [] : []}
+            revealThrough={state.resolution?.turnNumber === state.programming?.turnNumber
+              ? playbackPhase === 'complete' ? 5 : ['register', 'waiting'].includes(playbackPhase) ? playbackRegister ?? 0 : 0
+              : 0} />
         {:else if qr}
           <a
             class="seat-join"
@@ -1329,108 +1140,6 @@
   .finish-actions button:disabled {
     opacity: 0.55;
   }
-  .option-inspector {
-    position: fixed;
-    z-index: 58;
-    inset: 0;
-    display: grid;
-    padding: clamp(16px, 4vw, 100px);
-    place-items: center;
-    background: #050909e8;
-  }
-  .option-inspector > section {
-    display: grid;
-    width: min(92vw, 1200px);
-    max-height: 94vh;
-    gap: clamp(10px, 1.4vh, 24px);
-    justify-items: center;
-    overflow: auto;
-    padding: clamp(14px, 2vw, 36px);
-    border: 3px solid #ffcf4b;
-    border-radius: 18px;
-    background: radial-gradient(circle at top, #26383a, #0c1213 72%);
-    box-shadow: 0 0 80px #ffcf4b33;
-  }
-  .option-inspector header {
-    display: flex;
-    width: 100%;
-    align-items: center;
-    justify-content: space-between;
-    gap: 20px;
-  }
-  .option-inspector header div {
-    display: grid;
-    gap: 3px;
-  }
-  .option-inspector header small {
-    color: #ffcf4b;
-    font:
-      700 clamp(11px, 0.8vw, 18px) "Space Mono",
-      monospace;
-    letter-spacing: 0.12em;
-  }
-  .option-inspector h2 {
-    margin: 0;
-    font:
-      700 clamp(28px, 3vw, 58px) / 1 "Space Mono",
-      monospace;
-    text-transform: uppercase;
-  }
-  .option-inspector header > button {
-    width: clamp(44px, 3vw, 70px);
-    height: clamp(44px, 3vw, 70px);
-    flex: 0 0 auto;
-    border: 2px solid #ffcf4b;
-    border-radius: 50%;
-    color: #ffcf4b;
-    background: #11191a;
-    font:
-      700 clamp(28px, 2vw, 48px) / 1 "Atkinson Hyperlegible",
-      sans-serif;
-  }
-  .option-inspector :global(.option-card) {
-    width: min(76vw, 1080px);
-    height: auto;
-    aspect-ratio: 3 / 2;
-  }
-  .option-inspector-tabs {
-    display: flex;
-    width: 100%;
-    gap: clamp(6px, 0.7vw, 14px);
-    overflow-x: auto;
-    padding: 4px;
-  }
-  .option-inspector-tabs button {
-    display: grid;
-    width: clamp(88px, 8vw, 150px);
-    flex: 0 0 auto;
-    grid-template-columns: clamp(30px, 3vw, 54px) minmax(0, 1fr);
-    align-items: center;
-    gap: 7px;
-    padding: 5px;
-    border: 2px solid #59686a;
-    border-radius: 8px;
-    color: #eef4ee;
-    background: #11191a;
-    font:
-      700 clamp(11px, 0.8vw, 16px) / 1.05 "Atkinson Hyperlegible",
-      sans-serif;
-    text-align: left;
-  }
-  .option-inspector-tabs button.selected {
-    border-color: #d2ff37;
-    color: #d2ff37;
-    box-shadow: 0 0 12px #d2ff3744;
-  }
-  .option-inspector-tabs img {
-    display: block;
-    width: 100%;
-    aspect-ratio: 1;
-    object-fit: contain;
-  }
-  .option-inspector-tabs span {
-    overflow-wrap: anywhere;
-  }
   .table {
     position: relative;
     display: grid;
@@ -1728,127 +1437,6 @@
   .seat-head span {
     color: #ffcf4b;
   }
-  .seat > strong {
-    overflow: hidden;
-    font-size: clamp(14px, 7cqh, 42px);
-    line-height: 1;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .seat > small {
-    color: #9caaac;
-    font-size: clamp(10px, 3.5cqh, 22px);
-  }
-  .robot-vitals {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: clamp(3px, 1cqh, 8px) clamp(4px, 1cqw, 12px);
-    margin-top: clamp(1px, 0.7cqh, 6px);
-    font-family: "Space Mono", monospace;
-  }
-  .life-track,
-  .damage-track {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    gap: 3px;
-  }
-  .life-track {
-    grid-column: 1;
-  }
-  .damage-track {
-    grid-column: 1 / -1;
-  }
-  .flag-track {
-    grid-column: 1 / -1;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
-  .robot-vitals b {
-    width: clamp(26px, 5cqw, 54px);
-    flex: 0 0 clamp(26px, 5cqw, 54px);
-    color: #849294;
-    font-size: clamp(8px, 2.4cqh, 15px);
-    letter-spacing: 0.08em;
-  }
-  .life-track i {
-    color: #394648;
-    font-size: clamp(11px, 3.5cqh, 24px);
-    font-style: normal;
-    line-height: 1;
-  }
-  .life-track i.remaining {
-    color: #d2ff37;
-    filter: drop-shadow(0 0 3px #d2ff3788);
-  }
-  .damage-track i {
-    height: clamp(7px, 2.5cqh, 15px);
-    min-width: 4px;
-    flex: 1;
-    border: 1px solid #4c5a5d;
-    border-radius: 2px;
-    background: #202b2d;
-  }
-  .damage-track i.taken {
-    border-color: #ff684f;
-    background: #ff684f;
-    box-shadow: 0 0 3px #ff684f99;
-  }
-  .flag-track i {
-    display: grid;
-    width: clamp(16px, 4cqh, 30px);
-    height: clamp(16px, 4cqh, 30px);
-    place-items: center;
-    border: 1px solid #526164;
-    border-radius: 50%;
-    color: #718083;
-    background: #202b2d;
-    font:
-      700 clamp(8px, 2.2cqh, 14px) "Space Mono",
-      monospace;
-    font-style: normal;
-  }
-  .flag-track i.touched {
-    border-color: #ffcf4b;
-    color: #111718;
-    background: #ffcf4b;
-    box-shadow: 0 0 6px #ffcf4b99;
-  }
-  .power-state {
-    grid-column: 2;
-    grid-row: 1;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    color: #9ff07f;
-    font-size: clamp(8px, 2.2cqh, 14px);
-    white-space: nowrap;
-  }
-  .power-state i {
-    width: clamp(8px, 2.5cqh, 16px);
-    height: clamp(8px, 2.5cqh, 16px);
-    border: 2px solid #263126;
-    border-radius: 50%;
-    background: #8dff69;
-    box-shadow: 0 0 6px #8dff69;
-  }
-  .power-state.announced {
-    color: #ffcf4b;
-  }
-  .power-state.announced i {
-    border-color: #3a3218;
-    background: #ffcf4b;
-    box-shadow: 0 0 6px #ffcf4b;
-  }
-  .power-state.down {
-    color: #ff887d;
-  }
-  .power-state.down i {
-    border-color: #482522;
-    background: #ff684f;
-    box-shadow: 0 0 6px #ff684f;
-  }
   .seat-join {
     display: grid;
     min-width: 0;
@@ -1901,67 +1489,6 @@
     .seat-join span {
       display: none;
     }
-  }
-  .program-cards {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: clamp(2px, 0.35vw, 7px);
-    margin-top: clamp(2px, 0.6cqh, 6px);
-  }
-  .program-card {
-    position: relative;
-    display: grid;
-    min-width: 0;
-    aspect-ratio: 1;
-    place-items: center;
-    overflow: hidden;
-    border: 1px solid #435052;
-    border-radius: clamp(2px, 0.25vw, 6px);
-    color: #8b999a;
-    background: linear-gradient(135deg, #202b2d, #344245);
-    font:
-      700 clamp(7px, 1cqw, 13px) "Space Mono",
-      monospace;
-    text-align: center;
-    text-transform: uppercase;
-  }
-  .program-card.revealed {
-    overflow: visible;
-    border-color: transparent;
-    background: transparent;
-  }
-  .register-lock {
-    position: absolute;
-    z-index: 4;
-    top: -8%;
-    right: -8%;
-    display: grid;
-    width: clamp(16px, 1.55cqw, 25px);
-    aspect-ratio: 1;
-    place-items: center;
-    border: 1px solid rgb(255 255 255 / 62%);
-    border-radius: 50%;
-    color: #152022;
-    background: #d2ff37;
-    box-shadow: 0 2px 7px rgb(0 0 0 / 65%);
-  }
-  .register-lock svg {
-    display: block;
-    width: 68%;
-    height: 68%;
-    fill: currentcolor;
-  }
-  .program-card-back {
-    display: grid;
-    width: 100%;
-    height: 100%;
-    place-items: center;
-    border: 2px solid #4a595c;
-    background: repeating-linear-gradient(
-      135deg,
-      #1a2325 0 5px,
-      #263235 5px 10px
-    );
   }
   .course-control {
     display: grid;
@@ -2073,24 +1600,6 @@
     }
     .seat-join span {
       display: none;
-    }
-    .seat > strong {
-      font-size: 14px;
-    }
-    .seat > small,
-    .power-state span,
-    .robot-vitals b {
-      display: none;
-    }
-    .robot-vitals {
-      display: block;
-    }
-    .life-track,
-    .damage-track {
-      margin-top: 3px;
-    }
-    .program-card {
-      font-size: 7px;
     }
   }
 </style>
