@@ -95,10 +95,12 @@ compares against these reviewed baselines.
 
 The first normal PR comparison subsequently found a 25-pixel difference at the
 bottom of an Option icon after a required decision. This blocked the automatic
-preview deployment. Disabled icons now use a muted border and background instead
-of group opacity, avoiding that opacity-compositing transition while keeping the
-control disabled. Complete local verification and the
+preview deployment. Disabled icons were changed to a muted border and background
+instead of group opacity while investigating. Complete local verification and the
 [follow-up Linux snapshot run](https://github.com/anicolao/roborally/actions/runs/34184099128)
 passed. Three affected decision screenshots per platform were refreshed and
-reviewed; the original post-decision baseline remains unchanged. The normal PR
+reviewed, but the 25-pixel difference persisted in normal sharded CI. Two independent
+sharded runs produced byte-identical actual images, including the same icon edge;
+the post-decision baseline therefore uses that visually reviewed CI artifact.
+The disabled-style change did not establish opacity as the cause. The normal PR
 comparison gates the preview deployment.
