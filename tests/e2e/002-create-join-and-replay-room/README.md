@@ -9,7 +9,7 @@ Eight isolated anonymous clients claim unique robots through the real Firestore 
 **Verifications:**
 
 - [x] The creator and seven joiners occupy the eight original Dock-order seats
-- [x] The room projects nine accepted immutable events with no replay diagnostics
+- [x] The room shows connected racers without replay diagnostics
 - [x] Reloading a joined client reconstructs both observed players from Firestore
 - [x] Claimed robots are unavailable and a ninth client sees a full room
-- [x] The creator has a shareable join link and a deterministic emulator identity
+- [x] The creator has a shareable join link without internal identity labels

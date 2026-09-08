@@ -83,7 +83,6 @@
   let joinCode = '';
   let playerName = '';
   let selectedRobot: RobotId = 'axle';
-  let identityLabel = 'CONNECTING';
   let formError = '';
   let pending = false;
   let copied = false;
@@ -415,14 +414,6 @@
     }
   }
 
-  function deterministicIdentity(userId: string) {
-    const requested = new URLSearchParams(window.location.search).get('e2eIdentity');
-    if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' && requested) {
-      return requested.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 12);
-    }
-    return userId.slice(0, 8).toUpperCase();
-  }
-
   function inviteUrl(code = roomCode) {
     const url = new URL(window.location.href);
     url.search = '';
@@ -592,7 +583,6 @@
       services = await initializeFirebase();
       browserOnline = navigator.onLine;
       roomService = await import('$lib/room-service');
-      identityLabel = deterministicIdentity(services.user.uid);
       connectionState = 'synced';
       connectionMessage = 'Connected';
       const requestedRoom = normalizeRoomCode(
@@ -767,7 +757,7 @@
       );
     } catch (error) {
       console.error(error);
-      formError = 'The Program draft could not be saved. Please try again.';
+      formError = 'Your selected cards could not be saved. Please try again.';
     }
   }
 
@@ -849,7 +839,7 @@
       programDraftDirty = false;
     } catch (error) {
       console.error(error);
-      formError = 'The timeout claim could not be saved. Please try again.';
+      formError = 'Unable to fill the timed-out program. Please try again.';
     } finally {
       pending = false;
     }
@@ -930,7 +920,7 @@
       );
     } catch (error) {
       console.error(error);
-      formError = 'The re-entry draft could not be saved. Please try again.';
+      formError = 'Your re-entry selection could not be saved. Please try again.';
     }
   }
 
@@ -1661,7 +1651,7 @@
               </label>
               <button type="submit">Find room</button>
             {:else if mode === 'join' && !roomState.gameId}
-              <p class="stream-note">Replaying room {roomCode}…</p>
+              <p class="stream-note">Loading room {roomCode}…</p>
             {:else}
               <label>
                 Racer name
@@ -2271,7 +2261,6 @@
     text-transform: uppercase;
   }
 
-
   .seat-console {
     position: relative;
     padding: 15px;
@@ -2415,8 +2404,6 @@
   .setup-summary.next-turn-programming .board-phase {
     display: none;
   }
-
-
 
   .setup-facts {
     display: grid;

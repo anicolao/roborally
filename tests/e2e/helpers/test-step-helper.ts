@@ -198,12 +198,31 @@ export class TestStepHelper {
     });
     await this.page.waitForTimeout(350);
     await this.page.evaluate(() => {
+      const changes: { node: Text; original: string; snapshot: string }[] = [];
       for (const timerText of document.querySelectorAll<HTMLElement>('[role="timer"] span')) {
         const text = timerText.textContent ?? '';
         if (!/ has \d+ seconds$/.test(text)) continue;
-        timerText.dataset.e2eSnapshotText = text;
-        timerText.textContent = text.replace(/\d+ seconds$/, '30 seconds');
+        const walker = document.createTreeWalker(timerText, NodeFilter.SHOW_TEXT);
+        let next = walker.nextNode();
+        let first = true;
+        while (next) {
+          const node = next as Text;
+          const snapshot = first ? text.replace(/\d+ seconds$/, '30 seconds') : '';
+          changes.push({ node, original: node.data, snapshot });
+          // Keep the actual Text nodes: Svelte retains references to update them.
+          node.data = snapshot;
+          first = false;
+          next = walker.nextNode();
+        }
       }
+      const scope = window as typeof window & { restoreE2eTimerText?: () => void };
+      scope.restoreE2eTimerText = () => {
+        for (const { node, original, snapshot } of changes) {
+          // Do not overwrite an application update that arrived during capture.
+          if (node.isConnected && node.data === snapshot) node.data = original;
+        }
+        delete scope.restoreE2eTimerText;
+      };
     });
     if (options.resetScroll) {
       await this.page.evaluate(() => {
@@ -225,13 +244,11 @@ export class TestStepHelper {
       await expect(this.page).toHaveScreenshot(filename);
     } finally {
       await this.page.evaluate(() => {
-        for (const timerText of document.querySelectorAll<HTMLElement>(
-          '[data-e2e-snapshot-text]'
-        )) {
-          timerText.textContent = timerText.dataset.e2eSnapshotText ?? '';
-          delete timerText.dataset.e2eSnapshotText;
-        }
-        const scope = window as typeof window & { restoreE2eSnapshotClock?: () => void };
+        const scope = window as typeof window & {
+          restoreE2eSnapshotClock?: () => void;
+          restoreE2eTimerText?: () => void;
+        };
+        scope.restoreE2eTimerText?.();
         scope.restoreE2eSnapshotClock?.();
       });
     }

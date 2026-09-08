@@ -251,9 +251,9 @@ cache-plus-cursor equivalence also require focused pure tests.
 
 Clear emulator data between scenarios that require isolation. Use unique room
 codes and deterministic identities when independent scenarios can coexist.
-The client accepts `e2eIdentity`, `e2eRoomCode`, and `e2eSeed` query parameters only while
-the emulator build flag is enabled. They stabilize visible identity labels and
-generated room codes and shuffle seeds without bypassing anonymous Auth, room controls,
+The client accepts `e2eRoomCode` and `e2eSeed` fixture values only while
+the emulator build flag is enabled. They stabilize generated room codes and
+shuffle seeds without bypassing anonymous Auth, room controls,
 Firestore writes, subscriptions, or replay.
 
 ## Multiplayer scenarios

@@ -112,7 +112,6 @@
     return `${element.express ? 'express ' : ''}conveyor ${element.direction}`;
   }
 
-
   function describeCell(x: number, y: number): string {
     const contents = boardCells.get(`${x},${y}`)?.elements.map(elementLabel) ?? [];
     const flag = flags.get(`${x},${y}`);
@@ -156,7 +155,6 @@
   {#if !presentationOnly}
     <header>
       <div>
-
         <h2 class:long-title={course.name.length > 14} id="course-heading">{course.name}</h2>
       </div>
 
@@ -339,7 +337,6 @@
   header > div:first-child { min-width: 0; }
   p { margin: 0; color: #7f8d8f; font: 12px 'Space Mono', monospace; letter-spacing: .08em; }
   h2 { margin: 2px 0 0; overflow-wrap: break-word; color: #eef4ee; font: 700 24px 'Space Mono', monospace; text-transform: uppercase; }
-
 
   .board-viewport {
     min-height: 0;

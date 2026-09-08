@@ -22,11 +22,11 @@ A player commits an ordinary Program, loses the network while the barrier closes
 - [x] Both owner-authored re-entry choices survive the reconnect boundary
 - [x] Both clients project the same completed turn and event count
 
-## An explicit scratch replay preserves the converged race
+## Reopening the race preserves the completed turn
 
-![An explicit scratch replay preserves the converged race](./screenshots/002-scratch-server-replay-matches-cursor-projection-desktop.png)
+![Reopening the race preserves the completed turn](./screenshots/002-reload-preserves-race-desktop.png)
 
 **Verifications:**
 
-- [x] The player can discard the compatible cache and read the complete server stream
-- [x] Scratch replay produces the same completed turn and robot coordinates
+- [x] The player can reload and continue from the same completed turn
+- [x] Reload preserves the completed turn and robot coordinates

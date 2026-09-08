@@ -357,7 +357,7 @@
       );
     } catch (nextError) {
       console.error(nextError);
-      error = 'Your re-entry draft could not be saved. Please try again.';
+      error = 'Your re-entry selection could not be saved. Please try again.';
     }
   }
 
@@ -524,7 +524,7 @@
       } catch (nextError) {
         console.error(nextError);
         draftDirty = false;
-        error = 'Your Program draft could not be saved. Please try again.';
+        error = 'Your selected cards could not be saved. Please try again.';
       }
     });
   }

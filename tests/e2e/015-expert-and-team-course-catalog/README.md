@@ -1,13 +1,13 @@
-# Inspect every expert/team course and execute every exception family
+# Explore every expert and team course
 
-All 34 printed course diagrams share one reviewed manifest. Fourteen named probes execute timed programming, moving flags, laser and Option variants, SuperBot, dual robots, rotating boards, team progress, capture, toggle control, and elimination rules.
+Players can browse all 34 courses, see their layouts, and read course descriptions and special rules. Developer rule probes and raw rule identifiers are absent.
 
-## The published catalog and every exceptional rule family pass in product
+## The catalog explains team courses in player language
 
-![The published catalog and every exceptional rule family pass in product](./screenshots/000-complete-expert-team-catalog-desktop.png)
+![The catalog explains team courses in player language](./screenshots/000-complete-expert-team-catalog-desktop.png)
 
 **Verifications:**
 
 - [x] The inventory contains 10 beginner, 19 expert, and 5 team courses
-- [x] Every exceptional rule probe is executable and passing
-- [x] Alternative victories and multi-robot/team setup remain edition-specific
+- [x] Rule-test controls are absent
+- [x] War Zone explains its team objective and starting Options

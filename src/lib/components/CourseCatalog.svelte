@@ -47,7 +47,6 @@
     return '';
   }
 
-
 </script>
 
 <details class="catalog" aria-label="2005 board and course catalog">
@@ -300,7 +299,6 @@
     overflow: hidden;
   }
 
-
   .course-list { display: grid; min-height: 0; align-content: start; gap: 4px; overflow: auto; }
   .course-list button { display: grid; width: 100%; gap: 2px; padding: 7px 9px; text-align: left; }
   .course-list strong { font-size: 20px; }
@@ -333,19 +331,6 @@
   }
   .special-rules li { color: #ffcf4b; }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
   @media (max-width: 720px) {
     details[open] .catalog-body { inset: 58px 7px 7px; }
     .catalog-body { padding: 10px; }
@@ -355,10 +340,6 @@
   .face-facts { grid-template-columns: 1fr; }
 
     .course-catalog { grid-template-columns: 1fr; grid-template-rows: 180px minmax(0, 1fr); }
-
-
-
-
 
     .compiled-course { max-height: 300px; }
   }
