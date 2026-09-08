@@ -81,6 +81,14 @@ tabletop playback without revealing private programs early.
 
 ## Validation
 
-Validation results will be recorded here after the browser and production checks
-finish. Linux screenshot baselines are platform-specific and must be generated
-and reviewed separately from the macOS captures.
+The complete `nix develop --command bun run verify:change` passed: 165 unit tests,
+15 Firestore rules tests, 112 browser cases (two intentional skips), Svelte checks,
+scenario-step validation, workflow lint and the production build. Changed macOS
+captures were visually reviewed, including full-size responsive programming and
+Option inspection screens.
+
+The [Linux snapshot run](https://github.com/anicolao/roborally/actions/runs/34181189894)
+also passed all 112 browser cases (two intentional skips), plus static checks,
+unit and rules tests, and the production build. Its 240 changed platform-specific
+captures were visually reviewed and committed separately. The normal PR workflow
+compares against these reviewed baselines.
