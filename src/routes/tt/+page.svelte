@@ -171,19 +171,27 @@
   $: pendingOptionRobot = state.resolution?.robots.find(
     ({ uid }) => uid === pendingOptionDecision?.uid,
   );
+  $: waitingPowerDownUid = serverAtHead && !manualReplayActive &&
+    (!state.resolution || presentationSettled) &&
+    !state.programming?.players.some(({ uid, submitted }) =>
+      uid === state.pendingPowerDownUid && !submitted)
+      ? state.pendingPowerDownUid
+      : null;
   $: waitingPlayerUid = presentationDecisionVisible
     ? (pendingOptionDecision?.uid ??
       state.resolution?.nextOptionChoiceUid ??
       state.resolution?.nextReentryUid ??
       null)
-    : null;
+    : waitingPowerDownUid;
   $: waitingPlayer = state.players.find(({ uid }) => uid === waitingPlayerUid);
   $: waitingPrompt = pendingOptionDecision?.tabletopPrompt ??
     (state.resolution?.nextOptionChoiceUid
       ? "Choose an Option to discard"
       : state.resolution?.nextReentryUid
         ? "Choose a re-entry position and facing"
-        : "");
+        : waitingPowerDownUid
+          ? "Choose your power state for next turn"
+          : "");
   $: inspectedOptionCard = optionInspection
     ? OPTION_CARDS_BY_ID.get(optionInspection.selectedCardId)
     : undefined;
@@ -829,13 +837,15 @@
       {@const qr = seatQrs.find((candidate) => candidate.seat === seat)}
       <article
         class:open={!player}
+        class:awaiting-decision={!!player && player.uid === waitingPlayerUid}
         class={`seat seat-${seat}`}
         data-seat={seat}
         data-player-uid={player?.uid ?? ""}
+        data-awaiting-decision={player?.uid === waitingPlayerUid ? "true" : undefined}
       >
         <div class="seat-head">
           <b>D{String(seat).padStart(2, "0")}</b><span
-            >{robot?.mark ?? "OPEN"}</span
+            >{player?.uid === waitingPlayerUid ? "YOUR DECISION" : robot?.mark ?? "OPEN"}</span
           >
         </div>
         {#if player}
@@ -1032,15 +1042,18 @@
                       ? "OPTION DECISION"
                       : state.resolution?.nextReentryUid
                         ? "RE-ENTRY DECISION"
-                        : "OPTION LOSS"} · WAITING FOR</small
+                        : waitingPowerDownUid
+                          ? "POWER DECISION"
+                          : "OPTION LOSS"} · WAITING FOR</small
                 >
                 <strong>{waitingPlayer.name}</strong>
                 <span>{waitingPrompt}</span>
+                <em>CHECK YOUR PHONE</em>
               </div>
             {/each}
           </div>
         {/if}
-        {#if playbackPhase === "register" && playbackRegister}
+        {#if playbackPhase === "register" && playbackRegister && !waitingPlayer}
           <div
             class:side-facing={tabletopLayout === "side-seats"}
             class="course-playback"
@@ -1547,7 +1560,7 @@
     );
   }
   .decision-copy {
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
     border-color: #ff4545;
     box-shadow:
       0 0 24px #ff202033,
@@ -1573,6 +1586,12 @@
     font-size: clamp(11px, 0.9vw, 16px);
     line-height: 1.18;
     overflow-wrap: anywhere;
+  }
+  .decision-copy em {
+    color: #ffcf4b;
+    font-size: clamp(9px, 0.8vw, 14px);
+    font-style: normal;
+    font-weight: 700;
   }
   .course-playback.side-facing .playback-copy,
   .course-decision.side-facing .decision-copy {
@@ -1606,7 +1625,7 @@
     grid-column: 1 / -1;
   }
   .course-decision.side-facing .decision-copy {
-    grid-template-columns: auto minmax(0, auto) minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, auto) minmax(0, 1fr) auto;
     grid-template-rows: minmax(0, 1fr);
   }
   .course-decision.side-facing .decision-copy span {
@@ -1631,6 +1650,17 @@
   .seat.open {
     border-color: #7e9130;
     grid-template-rows: auto minmax(0, 1fr);
+  }
+  .seat.awaiting-decision {
+    border-color: #ffcf4b;
+    box-shadow: inset 0 0 20px #ffcf4b55, 0 0 18px #ffcf4b99;
+  }
+  .seat.awaiting-decision .seat-head span {
+    padding: 2px 4px;
+    color: #11191a;
+    background: #ffcf4b;
+    font-size: clamp(7px, 4cqw, 13px);
+    font-weight: 700;
   }
   .top-bottom-seats .seat-1 {
     grid-column: 1;
