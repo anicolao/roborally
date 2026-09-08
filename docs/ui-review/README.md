@@ -35,6 +35,7 @@ after links point to the same scenario and seeded state after the layout changes
 | --- | --- | --- |
 | Desktop programming | [Before](web-before-desktop.png) | [After](../../tests/e2e/004-shared-deck-deal-and-program/screenshots/000-opponent-program-masked-desktop.png) |
 | Phone programming | [Before](web-before-phone.png) | [After](../../tests/e2e/004-shared-deck-deal-and-program/screenshots/000-opponent-program-masked-phone.png) |
+| Tabletop waiting for a damage decision | [Before](https://github.com/anicolao/roborally/blob/bfde35d/tests/e2e/011-option-card-framework/screenshots/002-tabletop-identifies-damage-decision-desktop.png) | [After](../../tests/e2e/011-option-card-framework/screenshots/002-tabletop-identifies-damage-decision-desktop.png) |
 
 [Scenario 026](../../tests/e2e/026-board-first-shared-cards/README.md) shows the
 board, graphical selection and committed registers at phone, desktop, tablet and
@@ -117,3 +118,11 @@ sharded runs produced byte-identical actual images, including the same icon edge
 the post-decision baseline therefore uses that visually reviewed CI artifact.
 The disabled-style change did not establish opacity as the cause. The normal PR
 comparison gates the preview deployment.
+
+After the tabletop waiting update, complete local Nix verification passed again:
+165 unit tests, 15 rules tests, 112 browser cases (two existing skips), static
+checks and build. The [tabletop Linux snapshot run](https://github.com/anicolao/roborally/actions/runs/34190064518)
+also passed. The new assertions check a single named, highlighted responder,
+mutually exclusive waiting/playback rails, cleared attention after a response,
+and power-choice handoffs throughout the twelve-turn tabletop race, including a
+powered-down robot without a Program hand.
