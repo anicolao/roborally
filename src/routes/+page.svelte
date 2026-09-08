@@ -9,6 +9,7 @@
   import type { FirebaseServices } from '$lib/firebase';
   import CourseBoard from '$lib/components/CourseBoard.svelte';
   import CourseCatalog from '$lib/components/CourseCatalog.svelte';
+  import OptionInventory from '$lib/components/OptionInventory.svelte';
   import OptionCardFace from '$lib/components/OptionCardFace.svelte';
   import ProgramEditor from '$lib/components/ProgramEditor.svelte';
   import ReentryPicker from '$lib/components/ReentryPicker.svelte';
@@ -1131,45 +1132,6 @@
           <strong>{currentRobot?.name ?? 'Unknown'}</strong>
           <small>{currentPlayer.name} · {currentRobot?.mark ?? '—'} · BRIGHT YELLOW ON BOARD</small>
         </div>
-        <p class="lede">
-          {#if showProgramming}
-            Seed <strong>{roomState.configuration.seed}</strong> deals one shared 84-card deck in
-            original Dock order. Opponent programs stay masked until the barrier closes.
-          {:else}
-            The readiness barrier is closed. This exact setup is derived from seed
-            <strong>{roomState.configuration.seed}</strong> and immutable manifest versions.
-          {/if}
-        </p>
-        <dl class="setup-facts">
-          <div><dt>{roomState.configuration.lives}</dt><dd>Lives each</dd></div>
-          <div><dt>{roomState.setup.players.length}</dt><dd>robots</dd></div>
-          <div><dt>{configuredCourse?.flags.length ?? 0}</dt><dd>flags</dd></div>
-        </dl>
-        <p class="epoch-state">
-          Race epoch {roomState.raceEpoch} · {roomState.raceSummaries.length} retained
-          {roomState.raceSummaries.length === 1 ? 'summary' : 'summaries'}
-        </p>
-        {#if cacheHydrated}
-          <p class="reconnect-state">
-            <span aria-label={`Cache + cursor replay verified · ${synchronizedEventCount} immutable events`}>
-              Cache + cursor · {synchronizedEventCount} events
-            </span>
-            <button type="button" aria-label="Replay from server" onclick={retryRoomFromServer}>
-              Replay
-            </button>
-          </p>
-        {/if}
-        <ol class="setup-order compact" aria-label="Original Dock order">
-          {#each roomState.setup.players as player}
-            {@const robot = ROBOTS.find((entry) => entry.id === player.robotId)}
-            <li>
-              <span>D{player.dock}</span>
-              <strong>{player.name}</strong>
-              <small>{robot?.name} · row {player.position.y}, column {player.position.x} · facing north</small>
-              {#if player.uid === roomState.setup.firstPlayerUid}<em>first player</em>{/if}
-            </li>
-          {/each}
-        </ol>
         {#if showProgramming && programmingPlayer && activeProgramming}
           <section class="program-console" aria-labelledby="hand-heading">
             <div class="program-head">
@@ -1182,11 +1144,6 @@
                   : `${selectedProgramCardIds.length}/${openRegisterCount} open`}
               </span>
             </div>
-            <p class="conservation" data-testid="program-conservation">
-              {programCardZones(activeProgramming).size}/84 cards accounted ·
-              {activeProgramming.drawPile.length} undealt ·
-              {activeProgramming.currentTurnDiscard.length} turn discard
-            </p>
             <details class="option-catalog" aria-label="2005 Option catalog">
               <summary>26-card Option catalog · executable rules</summary>
               <ol>
@@ -1330,31 +1287,12 @@
                       {#if robot.options.length > 0}
                         <div class="robot-options-owned">
                           <span>Options</span>
-                          <div class="owned-option-card-strip" aria-label={`${robot.name} Options`}>
-                            {#each robot.options as option}
-                              {@const card = OPTION_CARDS_BY_ID.get(option.cardId)}
-                              {#if card}
-                                <OptionCardFace {card} size="small" />
-                              {/if}
-                            {/each}
-                          </div>
+                          <OptionInventory disabled={!!pendingOptionDecision} playerName={robot.name} cardIds={robot.options.map(({ cardId }) => cardId)} />
                         </div>
                       {/if}
                     </li>
                   {/each}
                 </ul>
-                <p class="reentry-policy">
-                  Re-entry position: return to the current archive marker when it is clear. If it
-                  is occupied, choose the nearest legal surrounding square and then a facing.
-                </p>
-                <p class="board-phase">
-                  Board phase: express conveyors → all conveyors → register pushers → gears →
-                  one laser snapshot.
-                  {roomState.configuration?.courseId === 'risky-exchange'
-                    ? 'Exchange prints no pushers; fixtures cover that stage.'
-                    : 'The configured board manifest supplies every active element.'}
-                  Damage 9 repeats all five locked registers.
-                </p>
                 {#if !playbackIsActive && pendingOptionDecision && pendingOptionRobot}
                   <section
                     class="damage-choice"
@@ -1517,6 +1455,20 @@
                     {/if}
                   </section>
                 {/if}
+                <details class="race-details">
+                  <summary>Recent moves &amp; board rules</summary>
+                <p class="reentry-policy">
+                  Re-entry position: return to the current archive marker when it is clear. If it
+                  is occupied, choose the nearest legal surrounding square and then a facing.
+                </p>
+                <p class="board-phase">
+                  Board phase: express conveyors → all conveyors → register pushers → gears →
+                  one laser snapshot.
+                  {roomState.configuration?.courseId === 'risky-exchange'
+                    ? 'Exchange prints no pushers; fixtures cover that stage.'
+                    : 'The configured board manifest supplies every active element.'}
+                  Damage 9 repeats all five locked registers.
+                </p>
                 <ol aria-label="Resolution feed" aria-live="polite">
                   {#each visibleResolutionTrace.slice(-5) as entry, index}
                     <li style={`--trace-index:${index}`}>
@@ -1525,6 +1477,7 @@
                     </li>
                   {/each}
                 </ol>
+                </details>
                 <details class="full-resolution">
                   <summary>Full resolution text</summary>
                   <ol aria-label="Full resolution feed">
@@ -1537,6 +1490,56 @@
             {/if}
           </section>
         {/if}
+        <details class="race-details">
+          <summary>Race details &amp; connection</summary>
+          {#if activeProgramming}
+            <p class="conservation" data-testid="program-conservation">
+              {programCardZones(activeProgramming).size}/84 cards accounted ·
+              {activeProgramming.drawPile.length} undealt ·
+              {activeProgramming.currentTurnDiscard.length} turn discard
+            </p>
+          {/if}
+
+        <p class="lede">
+          {#if showProgramming}
+            Seed <strong>{roomState.configuration.seed}</strong> deals one shared 84-card deck in
+            original Dock order. Opponent programs stay masked until the barrier closes.
+          {:else}
+            The readiness barrier is closed. This exact setup is derived from seed
+            <strong>{roomState.configuration.seed}</strong> and immutable manifest versions.
+          {/if}
+        </p>
+        <dl class="setup-facts">
+          <div><dt>{roomState.configuration.lives}</dt><dd>Lives each</dd></div>
+          <div><dt>{roomState.setup.players.length}</dt><dd>robots</dd></div>
+          <div><dt>{configuredCourse?.flags.length ?? 0}</dt><dd>flags</dd></div>
+        </dl>
+        <p class="epoch-state">
+          Race epoch {roomState.raceEpoch} · {roomState.raceSummaries.length} retained
+          {roomState.raceSummaries.length === 1 ? 'summary' : 'summaries'}
+        </p>
+        {#if cacheHydrated}
+          <p class="reconnect-state">
+            <span aria-label={`Cache + cursor replay verified · ${synchronizedEventCount} immutable events`}>
+              Cache + cursor · {synchronizedEventCount} events
+            </span>
+            <button type="button" aria-label="Replay from server" onclick={retryRoomFromServer}>
+              Replay
+            </button>
+          </p>
+        {/if}
+        <ol class="setup-order compact" aria-label="Original Dock order">
+          {#each roomState.setup.players as player}
+            {@const robot = ROBOTS.find((entry) => entry.id === player.robotId)}
+            <li>
+              <span>D{player.dock}</span>
+              <strong>{player.name}</strong>
+              <small>{robot?.name} · row {player.position.y}, column {player.position.x} · facing north</small>
+              {#if player.uid === roomState.setup.firstPlayerUid}<em>first player</em>{/if}
+            </li>
+          {/each}
+        </ol>
+        </details>
         {#if showProgramming}
           <p class="archive-note">Archives remain on the original Dock cells. Trusted-client secrecy masks, but cannot cryptographically hide, readable events.</p>
         {:else}
@@ -1545,7 +1548,7 @@
             {#if roomState.setup.startingDamage > 0}
               Factory Rejects begins each robot at {roomState.setup.startingDamage} damage.
             {:else}
-              Option cards remain disabled until their complete 2005 manifest is reviewed.
+              Collect Options at repair sites during the race.
             {/if}
             {#if !roomState.setup.powerDownAllowed} Power down is unavailable for this race.{/if}
           </p>
@@ -2763,13 +2766,6 @@
     color: #d2ff37;
     text-transform: uppercase;
   }
-  .owned-option-card-strip {
-    display: flex;
-    gap: 4px;
-    min-width: 0;
-    overflow-x: auto;
-    padding: 2px;
-  }
   .reentry-choice {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -2953,9 +2949,6 @@
     .setup-summary.resolution-active > .archive-note { display: none; }
     .setup-summary.resolution-active .setup-order.compact { display: none; }
     .setup-summary.resolution-active .resolution-console ol { max-height: 70px; }
-    .setup-summary.resolution-active:has(.robot-options-owned) .resolution-console > ol {
-      display: none;
-    }
     .robot-state { grid-template-columns: minmax(0, 1fr); }
     .robot-state li { align-content: flex-start; flex-wrap: wrap; overflow: hidden; }
     .robot-progress { min-width: 0; overflow-wrap: anywhere; }
@@ -2965,10 +2958,6 @@
     .setup-summary.resolution-active.many-robots .setup-facts,
     .setup-summary.resolution-active.many-robots .robot-progress,
     .setup-summary.resolution-active.many-robots .reentry-policy {
-      display: none;
-    }
-    .setup-summary.resolution-active.many-robots
-      .resolution-console > ol[aria-label='Resolution feed'] li:nth-child(-n + 2) {
       display: none;
     }
     .seats { grid-template-rows: repeat(4, 1fr); gap: 4px; }
@@ -3203,10 +3192,6 @@
     }
     .setup-summary > .eyebrow,
     .setup-summary > h1,
-    .setup-summary > .lede,
-    .setup-summary > .setup-facts,
-    .setup-summary > .epoch-state,
-    .setup-summary > .setup-order,
     .setup-summary > .archive-note {
       display: none;
     }
@@ -3284,9 +3269,6 @@
     }
     .board-phase,
     .full-resolution {
-      display: none;
-    }
-    .setup-summary.resolution-active .resolution-console:has(.race-summary) > ol {
       display: none;
     }
     .reentry-choice {
@@ -3379,6 +3361,51 @@
     .configured-race:has(.program-console) :global(.course-panel) {
       display: none;
     }
+  }
+
+  /* Keep the board visible while the controls scroll independently. */
+  .configured-race {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 16px;
+    padding: 12px 0;
+  }
+  .setup-summary { overflow: auto; }
+  .your-robot { margin-top: 0; padding: 6px 8px; box-shadow: none; }
+  .your-robot strong { font-size: 20px; }
+  .your-robot small { grid-column: 1 / -1; font-size: 11px; }
+  .race-details { margin-top: 10px; color: #aebbb9; font-size: 14px; }
+  .race-details summary { cursor: pointer; padding: 8px 0; color: #aebbb9; }
+  .race-details .lede { display: block; font-size: 14px; }
+  .race-details .conservation, .race-details .reentry-policy, .race-details .board-phase { display: block; }
+  .race-details .setup-facts { display: grid; }
+  .race-details .setup-order.compact { display: grid; max-height: none; }
+  .program-console, .resolution-console { max-height: none; overflow: visible; }
+  .robot-state { grid-template-columns: minmax(0, 1fr); }
+  .program-head h2 { font-size: 16px; }
+  .program-head span { font-size: 13px; }
+  .option-catalog summary { font-size: 12px; }
+  @media (min-width: 701px) and (max-width: 1000px) and (orientation: portrait) {
+    .configured-race {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(320px, 58%) minmax(0, 1fr);
+      gap: 8px;
+    }
+  }
+  @media (max-width: 700px) and (orientation: portrait) {
+    .configured-race, .configured-race:has(.program-console) {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(240px, 46%) minmax(0, 1fr);
+      gap: 8px;
+    }
+    .configured-race:has(.program-console) :global(.course-panel) { display: grid; }
+  }
+  @media (max-height: 560px) and (orientation: landscape) {
+    .configured-race { grid-template-columns: minmax(0, 1fr) minmax(300px, 40%); gap: 8px; padding: 4px 0; }
+    .setup-summary { overflow: auto; }
+    .program-console { display: grid; grid-template-columns: minmax(0, 1fr); overflow: visible; }
+    .resolution-console { height: auto; overflow: visible; }
+    .full-resolution { display: block; }
   }
 
   @media (prefers-reduced-motion: reduce) {

@@ -1,0 +1,86 @@
+# Web and tabletop playability review
+
+This change makes the course the primary web play surface and reuses the existing
+tabletop card artwork and Option shelf. The intended improvement is less searching
+between the board, the hand and the controls needed for the current turn.
+
+## Findings and changes
+
+| Finding | Change | Playability rationale |
+| --- | --- | --- |
+| Web play allocated roughly one third of desktop width to the board and two thirds to the console. | The console is capped at 380px; the board takes the remaining width. | More room to inspect walls, conveyors, flags and robot positions. |
+| Web board cells stretched to fill a tall viewport, with a separate 480px width cap. | Web and tabletop now share aspect-ratio fitting, preserving square cells. Zoom, pan and keyboard inspection remain available in web play. | The same course has the same proportions in both modes. |
+| Phone programming explicitly hid the board. | Portrait phones and tablets show the board above an independently scrolling console; landscape keeps them side by side. Course headings and view controls take less space. | Players can refer to the course without leaving programming. |
+| Hands used `ProgramCardFace`, but chosen, damage-locked and submitted registers were text boxes. | The shared `ProgramEditor` renders square graphical card faces in all occupied registers, including Dual Processor pairs. | Movement direction and priority stay recognizable from hand to program to tabletop playback. Empty slots and lock status remain explicit text. |
+| Recompile discard choices were text-only Option buttons. | The shared editor uses `OptionCardFace` with an explicit discard action. | These choices match the existing damage prevention and destruction discard cards. |
+| Owned web Options displayed full cards inside each robot row. | Web uses the tabletop's measured icon shelf with overflow handling. A native modal dialog opens the complete card description. During a required Option decision the shelf is disabled, and the decision panel shows the relevant full card. | Public ownership stays visible without pushing turn controls down a long sidebar. Keyboard users can open, close with Escape, and return focus to the originating icon. |
+| Setup order, seed/replay details and card conservation competed with programming. | These remain available under “Race details & connection.” | Useful reference information no longer leads the turn flow. |
+| A verbose speculative preview sat before submission; recent moves and permanent board rules filled the resolution console. | “Program preview” and “Recent moves & board rules” disclose these on demand. The existing full trace remains available. | Pending decisions, robot state, deadlines, re-entry and next-turn controls receive more attention. |
+
+No new raster artwork is required. The existing program chassis, movement arrows,
+rotation icons, Option chassis and all Option illustrations supply the visuals.
+The private controller also sizes its hand rows to the height remaining after
+graphical registers, keeping cards and submission controls inside the screen.
+The public tabletop already used graphical playback cards and compact Option
+icons, so its overall layout is retained. Its private `/hand` view benefits from
+the shared register and Recompile changes.
+
+## Visual review
+
+The before images are preserved from the original scenario 004 baselines. The
+after links point to the same scenario and seeded state after the layout changes.
+
+| Screen | Before | After |
+| --- | --- | --- |
+| Desktop programming | [Before](web-before-desktop.png) | [After](../../tests/e2e/004-shared-deck-deal-and-program/screenshots/000-opponent-program-masked-desktop.png) |
+| Phone programming | [Before](web-before-phone.png) | [After](../../tests/e2e/004-shared-deck-deal-and-program/screenshots/000-opponent-program-masked-phone.png) |
+
+[Scenario 026](../../tests/e2e/026-board-first-shared-cards/README.md) shows the
+board, graphical selection and committed registers at phone, desktop, tablet and
+phone landscape sizes. Its assertions check square cells, desktop board emphasis,
+phone board visibility, exact selected card identities and opponent masking.
+Direct views: [phone](../../tests/e2e/026-board-first-shared-cards/screenshots/001-graphical-registers-phone.png),
+[phone landscape](../../tests/e2e/026-board-first-shared-cards/screenshots/001-graphical-registers-mobile-landscape.png),
+[tablet](../../tests/e2e/026-board-first-shared-cards/screenshots/001-graphical-registers-tablet.png),
+and [desktop](../../tests/e2e/026-board-first-shared-cards/screenshots/001-graphical-registers-desktop.png).
+
+[Scenario 011](../../tests/e2e/011-option-card-framework/README.md) also captures
+the Option inspector at ordinary and 320px phone widths and verifies Escape/focus
+return and complete, unclipped card text.
+
+## Review during a real race
+
+1. Program a turn while checking a nearby wall or conveyor. Can you read the board
+   and distinguish Move 1/2/3, Back Up and rotation cards without opening reference
+   material?
+2. Replace a selected register and inspect a locked program. Does the repeated
+   artwork help confirm the intended movement and priority?
+3. Open an owned Option, read its effect, close it with Escape and make a decision.
+   Are the compact icons recognizable enough, or would short names help?
+4. Try phone portrait and landscape. Does keeping the board visible justify the
+   additional scrolling in the programming panel?
+5. Follow a destruction/re-entry and start the next turn. Confirm that the next
+   required action is easier to find with the replay material collapsed.
+
+## Tradeoffs
+
+The narrower console reduces hand-card size on desktop. Phone controls can require
+vertical scrolling, and small boards still benefit from zoom and keyboard cell
+inspection. Full Option rules require an explicit inspection action. These are
+reviewable design choices; browser checks cannot establish that players prefer
+them. Multi-board courses use the available space while preserving their aspect
+ratio, so especially tall courses may still leave horizontal space unused.
+
+## Remaining opportunities
+
+The public tabletop remains organized around seats, while web play concentrates on
+the local player. Common Life/damage/status rows and a shared Option decision panel
+are useful next candidates for consolidation. The compact numeric opponent status
+remains a summary; graphical registers are shown in the owner's editor and public
+tabletop playback without revealing private programs early.
+
+## Validation
+
+Validation results will be recorded here after the browser and production checks
+finish. Linux screenshot baselines are platform-specific and must be generated
+and reviewed separately from the macOS captures.

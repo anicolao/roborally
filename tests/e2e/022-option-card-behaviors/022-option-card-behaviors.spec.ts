@@ -490,7 +490,7 @@ test("Brakes asks at Move 1 execution and may move zero spaces", async ({
                 .getByRole("listitem")
                 .filter({ hasText: "Ada" })
                 .locator(
-                  `[data-card-id="${OPTION_CARDS_BY_ID.get("brakes")?.id}"]`,
+                  `[data-option-icon="${OPTION_CARDS_BY_ID.get("brakes")?.id}"]`,
                 ),
             ).toHaveCount(1);
           },
@@ -1317,9 +1317,7 @@ test("Fire Control locks a named register instead of dealing damage", async ({
 
     const decision = host.getByLabel("Option decision");
     await expect(decision).toContainText("Use Fire Control?");
-    await expect(
-      host.locator('.owned-option-card-strip [data-card-id="fire-control"]'),
-    ).toContainText(OPTION_CARDS_BY_ID.get("fire-control")!.summary);
+    await expect(host.getByRole("button", { name: /View Fire Control Option/ })).toBeDisabled();
     await expect(decision.locator('[data-card-id="fire-control"]').first()).toContainText(
       OPTION_CARDS_BY_ID.get("fire-control")!.summary,
     );

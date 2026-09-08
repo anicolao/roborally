@@ -141,6 +141,7 @@ test('board phases resolve conveyors, dependency conflicts, and gears atomically
           spec: 'The selected course truthfully reports zero printed pushers',
           check: async () => {
             await expect(host.locator('.board-cell[aria-label*="pusher"]')).toHaveCount(0);
+            await host.getByText('Recent moves & board rules', { exact: true }).click();
             await expect(host.getByText(/Exchange prints no pushers/)).toBeVisible();
           }
         }

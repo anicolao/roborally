@@ -233,9 +233,9 @@ test('a keyboard and touch-operable race completes at every target viewport', as
     const chosenRegisters = host
       .getByRole('list', { name: 'Chosen registers' })
       .getByRole('listitem');
-    await expect(chosenRegisters.nth(0)).toContainText('R1 move-1 500');
-    await expect(chosenRegisters.nth(1)).toContainText('R2 rotate-right 110');
-    await expect(chosenRegisters.nth(2)).toContainText('R3 move-1 490');
+    await expect(chosenRegisters.nth(0).getByRole('button')).toHaveAccessibleName(/Register 1, move-1 priority 500/);
+    await expect(chosenRegisters.nth(1).getByRole('button')).toHaveAccessibleName(/Register 2, rotate-right priority 110/);
+    await expect(chosenRegisters.nth(2).getByRole('button')).toHaveAccessibleName(/Register 3, move-1 priority 490/);
 
     await steps.step('keyboard-touch-board-and-timer-controls', {
       description: 'The complete race begins with equivalent non-pointer and pointer controls',
@@ -285,6 +285,7 @@ test('a keyboard and touch-operable race completes at every target viewport', as
     await chooseProgram(guest, turns[0].guest);
     await closeResolutionInterrupts(host, guest, 1);
     await expect(host.getByTestId('resolution-live')).toContainText('Turn 1');
+    await host.getByText('Recent moves & board rules', { exact: true }).click();
     await expect(
       host.getByRole('list', { name: 'Resolution feed' }).getByRole('listitem').last()
     ).toHaveCSS('animation-name', 'none');

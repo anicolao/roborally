@@ -114,10 +114,10 @@ test('face-up Options remain available for execution-time decisions', async (
           check: async () => {
             const robots = host.getByRole('list', { name: 'Robot Life and damage state' });
             await expect(
-              robots.getByRole('listitem').filter({ hasText: 'Ada' }).locator('[data-card-id]')
+              robots.getByRole('listitem').filter({ hasText: 'Ada' }).locator('[data-option-icon]')
             ).toHaveCount(1);
             await expect(
-              robots.getByRole('listitem').filter({ hasText: 'Grace' }).locator('[data-card-id]')
+              robots.getByRole('listitem').filter({ hasText: 'Grace' }).locator('[data-option-icon]')
             ).toHaveCount(1);
           }
         },
@@ -233,7 +233,7 @@ test('face-up Options remain available for execution-time decisions', async (
           spec: 'Graphical Options remain face up until their actual timing window',
           check: async () => {
             const robots = host.getByRole('list', { name: 'Robot Life and damage state' });
-            await expect(robots.locator('[data-card-id]')).toHaveCount(1);
+            await expect(robots.locator('[data-option-icon]')).toHaveCount(1);
             await expect(host.locator('.full-resolution')).toContainText(
               'to prevent one damage'
             );
@@ -241,6 +241,47 @@ test('face-up Options remain available for execution-time decisions', async (
         }
       ]
     });
+    const optionIcon = host.locator('[data-option-icon]').first();
+    const optionId = await optionIcon.getAttribute('data-option-icon');
+    await optionIcon.click();
+    const inspection = host.getByRole('dialog', { name: /Option details/ });
+    await steps.step('inspect-owned-option', {
+      description: 'The shared tabletop icon opens readable Option rules without filling the sidebar',
+      verifications: [{
+        spec: 'The full graphical card matches the owned icon and its text fits the inspection panel',
+        check: async () => {
+          await expect(inspection).toBeVisible();
+          await expect(inspection.getByRole('img')).toHaveAttribute('data-card-id', optionId!);
+          const clips = await inspection.locator('.title, .copy, .continuation').evaluateAll(
+            (panels) => panels.some((panel) => panel.scrollHeight > panel.clientHeight + 1 || panel.scrollWidth > panel.clientWidth + 1)
+          );
+          expect(clips).toBe(false);
+        }
+      }]
+    });
+    await host.keyboard.press('Escape');
+    await expect(inspection).toBeHidden();
+    await expect(optionIcon).toBeFocused();
+    const previousViewport = host.viewportSize()!;
+    await host.setViewportSize({ width: 320, height: 700 });
+    await optionIcon.click();
+    await steps.step('inspect-owned-option-small-phone', {
+      description: 'A narrow phone still shows the complete card and a reachable close control',
+      verifications: [{
+        spec: 'The inspector fits 320 pixels without clipping its rules or close button',
+        check: async () => {
+          await expect(inspection.getByRole('button', { name: 'Close Option details' })).toBeVisible();
+          const fits = await inspection.evaluate((dialog) => dialog.scrollWidth <= dialog.clientWidth);
+          expect(fits).toBe(true);
+          const clips = await inspection.locator('.title, .copy, .continuation').evaluateAll(
+            (panels) => panels.some((panel) => panel.scrollHeight > panel.clientHeight + 1 || panel.scrollWidth > panel.clientWidth + 1)
+          );
+          expect(clips).toBe(false);
+        }
+      }]
+    });
+    await host.keyboard.press('Escape');
+    await host.setViewportSize(previousViewport);
     steps.generateDocs();
     await table.close();
   } finally {

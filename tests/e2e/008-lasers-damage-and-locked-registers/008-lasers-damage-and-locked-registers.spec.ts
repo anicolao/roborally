@@ -192,7 +192,13 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
               .boundingBox();
             expect(margaretVitals).not.toBeNull();
             expect(adaVitals).not.toBeNull();
-            expect(Math.abs((margaretVitals?.y ?? 0) - (adaVitals?.y ?? 0))).toBeLessThan(1);
+            // Vitals may stack in the narrow console or share a row on phones,
+            // but both players' state must remain readable without overlap.
+            const horizontalOverlap = Math.min(margaretVitals!.x + margaretVitals!.width, adaVitals!.x + adaVitals!.width)
+              - Math.max(margaretVitals!.x, adaVitals!.x);
+            const verticalOverlap = Math.min(margaretVitals!.y + margaretVitals!.height, adaVitals!.y + adaVitals!.height)
+              - Math.max(margaretVitals!.y, adaVitals!.y);
+            expect(horizontalOverlap <= 1 || verticalOverlap <= 1).toBe(true);
           }
         },
         {
@@ -209,6 +215,7 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
         {
           spec: 'The UI exposes the fully locked repeat invariant',
           check: async () => {
+            await host.getByText('Recent moves & board rules', { exact: true }).click();
             await expect(host.getByText(/Damage 9 repeats all five locked registers/)).toBeVisible();
           }
         }
