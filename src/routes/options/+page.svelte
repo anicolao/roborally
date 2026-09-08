@@ -52,13 +52,10 @@
   <section class="inventory" aria-labelledby="inventory-heading">
     <div class="section-heading">
       <div>
-
         <h2 id="inventory-heading">All {OPTION_CARDS.length} Option cards</h2>
       </div>
 
     </div>
-
-
 
     <ol
       class:large={cardSize === 'large'}
@@ -82,7 +79,6 @@
       {/each}
     </ol>
   </section>
-
 
 </main>
 
@@ -199,7 +195,6 @@
     letter-spacing: 0.06em;
   }
 
-
   .size-selector input:checked + span {
     background: #dbe84e;
     color: #101718;
@@ -227,8 +222,6 @@
     justify-content: space-between;
     gap: 1.5rem;
   }
-
-
 
   ol {
     display: grid;
@@ -262,14 +255,9 @@
     white-space: nowrap;
   }
 
-
-
-
   .card-stage {
     width: 100%;
   }
-
-
 
   @media (max-width: 700px) {
     main {
@@ -295,7 +283,6 @@
     .section-heading {
       display: block;
     }
-
 
   }
 </style>

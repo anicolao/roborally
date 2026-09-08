@@ -82,13 +82,13 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 - [x] The selected full-race course is visible in the shared configuration
 
-## The tabletop enters the deterministic full-race seed
+## The tabletop chooses three starting lives
 
-![The tabletop enters the deterministic full-race seed](./screenshots/010-tabletop-enters-seed-desktop.png)
+![The tabletop chooses three starting lives](./screenshots/010-tabletop-chooses-lives-desktop.png)
 
 **Verifications:**
 
-- [x] The OPTION-11 seed is visible before configuration is committed
+- [x] Three starting lives are selected before the race
 
 ## The tabletop configures the race
 
@@ -96,7 +96,7 @@ A shared tabletop and two isolated 393×852 touch controllers play every round o
 
 **Verifications:**
 
-- [x] The course, seed, player count, and configuration action are simultaneously visible
+- [x] The course, starting lives, player count, and configuration action are simultaneously visible
 
 ## Ada confirms readiness
 

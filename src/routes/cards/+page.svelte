@@ -72,7 +72,6 @@
   <section class="inventory" aria-labelledby="inventory-heading">
     <div class="section-heading inventory-heading">
       <div>
-
         <h2 id="inventory-heading">All {PROGRAM_CARDS.length} Program cards</h2>
       </div>
       <span>Priorities 10–840</span>

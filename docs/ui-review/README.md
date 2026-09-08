@@ -122,6 +122,19 @@ and no zoom/pan controls. Existing races continue to cover keyboard inspection,
 card ordering, private hands, reconnect, Options, power decisions and tabletop
 attention cues.
 
-Validation of this latest audit is in progress. The prior tabletop revision
-passed the complete Nix verifier and all Linux comparisons; the new screenshots
-and final results will be added before this review update is complete.
+Verification also uncovered a screenshot-helper bug: replacing timer text nodes
+could disconnect Svelte’s live countdown updates. Captures now preserve those
+nodes, and both phone and desktop timeout scenarios pass without changing their
+screenshots.
+
+The complete `nix develop --command bun run verify:change` passed after this audit:
+165 unit tests, 15 Firestore rules tests, 112 browser cases (two intentional skips),
+Svelte/scenario/workflow checks and the production build. All 117 changed local
+screenshots were visually reviewed. The timeout scenarios also passed separately
+against their existing baselines after the screenshot-helper correction.
+
+The [Linux snapshot run](https://github.com/anicolao/roborally/actions/runs/34194744549)
+also passed all 112 browser cases (two intentional skips), static checks, unit and
+rules tests, and the production build. All 117 changed Linux captures were
+visually reviewed. The normal PR workflow compares these reviewed baselines
+before publishing the preview.
