@@ -102,7 +102,7 @@
   .option-icon:hover,
   .option-icon:focus-visible { border-color: #d2ff37; outline: 2px solid #d2ff37; outline-offset: 1px; }
   .option-icon img { display: block; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 2px 3px #000c); }
-  .option-icon:disabled { opacity: .55; cursor: default; }
+  .option-icon:disabled { border-color: #414c4e; background: #11191a; cursor: default; }
   .option-more { border-color: #ffcf4b; color: #ffcf4b; }
   .option-measure { position: absolute; visibility: hidden; pointer-events: none; }
   @media (max-width: 700px) {
