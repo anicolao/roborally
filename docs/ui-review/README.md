@@ -92,3 +92,13 @@ also passed all 112 browser cases (two intentional skips), plus static checks,
 unit and rules tests, and the production build. Its 240 changed platform-specific
 captures were visually reviewed and committed separately. The normal PR workflow
 compares against these reviewed baselines.
+
+The first normal PR comparison subsequently found a 25-pixel difference at the
+bottom of an Option icon after a required decision. This blocked the automatic
+preview deployment. Disabled icons now use a muted border and background instead
+of group opacity, avoiding that opacity-compositing transition while keeping the
+control disabled. Complete local verification and the
+[follow-up Linux snapshot run](https://github.com/anicolao/roborally/actions/runs/34184099128)
+passed. Three affected decision screenshots per platform were refreshed and
+reviewed; the original post-decision baseline remains unchanged. The normal PR
+comparison gates the preview deployment.
