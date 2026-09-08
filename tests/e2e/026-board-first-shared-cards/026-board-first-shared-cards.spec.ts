@@ -46,6 +46,12 @@ test('the board stays visible beside graphical programming controls', async ({ b
         spec: 'The board has square cells, remains visible on phones, and receives most desktop width',
         check: async () => {
           await expect(board).toBeVisible();
+          await expect(host.locator('footer').getByRole('heading', { name: 'Risky Exchange', exact: true })).toBeVisible();
+          await expect(host.getByText('Board details', { exact: true })).toHaveCount(0);
+          const panel = (await host.locator('.course-panel').boundingBox())!;
+          const viewport = (await host.locator('.board-viewport').boundingBox())!;
+          expect(panel.height - viewport.height).toBeLessThanOrEqual(10);
+          expect(panel.width - viewport.width).toBeLessThanOrEqual(10);
           const rect = (await board.boundingBox())!;
           const rows = Number(await board.getAttribute('aria-rowcount'));
           const columns = Number(await board.getAttribute('aria-colcount'));

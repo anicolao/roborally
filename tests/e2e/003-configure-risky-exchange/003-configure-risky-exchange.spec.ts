@@ -41,7 +41,6 @@ test('host configures the exact seeded Risky Exchange setup', async (
 
     await expect(page.getByRole('button', { name: /Zoom|Pan|Fit course/ })).toHaveCount(0);
 
-    await page.getByText('Board details').click();
 
     await steps.step('seeded-risky-exchange', {
       description: 'The readiness barrier reveals one exact semantic setup',
@@ -86,11 +85,10 @@ test('host configures the exact seeded Risky Exchange setup', async (
           }
         },
         {
-          spec: 'A coordinate-based text equivalent identifies flags, Docks, and robots',
+          spec: 'Accessible board cells identify flags, Docks, and robots',
           check: async () => {
-            await expect(page.getByText('Column 8, row 2: Flag 1')).toBeVisible();
-            await expect(page.getByText(/Column 6, row 16: Dock 1, Grace's bit, facing north/)).toBeVisible();
-            await page.getByText('Board details').click();
+            await expect(page.getByRole('gridcell', { name: 'Column 8, row 2: Flag 1', exact: true })).toBeVisible();
+            await expect(page.getByRole('gridcell', { name: /Column 6, row 16: Dock 1, Grace's bit, facing north/ })).toBeVisible();
           }
         },
         {

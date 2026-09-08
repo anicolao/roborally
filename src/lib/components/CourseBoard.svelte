@@ -74,12 +74,6 @@
   const flags = $derived(
     new Map(course.flags.map((flag) => [`${flag.x},${flag.y}`, flag.number]))
   );
-  const factoryPlacement = $derived(
-    course.boardPlacements.find(({ boardId }) => !boardId.startsWith('docking-bay'))
-  );
-  const dockingPlacement = $derived(
-    course.boardPlacements.find(({ boardId }) => boardId.startsWith('docking-bay'))
-  );
 
   $effect(() => {
     const visibleRobots = displayedRobots;
@@ -149,18 +143,8 @@
 <section
   class:presentation-only={presentationOnly}
   class="course-panel"
-  aria-label={presentationOnly ? `${course.name} course` : undefined}
-  aria-labelledby={presentationOnly ? undefined : 'course-heading'}
+  aria-label={`${course.name} course`}
 >
-  {#if !presentationOnly}
-    <header>
-      <div>
-        <h2 class:long-title={course.name.length > 14} id="course-heading">{course.name}</h2>
-      </div>
-
-    </header>
-  {/if}
-
   <div class="board-viewport">
     <div
       class:rotated={boardIsRotated}
@@ -248,26 +232,6 @@
       {describeCell(activeX, activeY)}
     </p>
 
-    <details class="text-equivalent">
-      <summary>Board details</summary>
-      {#if setup.courseId === 'risky-exchange'}
-        <p>
-          Coordinates begin at the Exchange board’s upper-left. Docking Bay B occupies rows 13–16.
-          Robots face north, toward the factory. A cell omitted from the list is ordinary floor.
-        </p>
-      {:else}
-        <p>
-          Coordinates begin at the {factoryPlacement?.boardId.replaceAll('-', ' ')} board’s upper-left.
-          {dockingPlacement?.boardId.replaceAll('-', ' ')} supplies the starting docks.
-          Robots face north, toward the factory. A cell omitted from the list is ordinary floor.
-        </p>
-      {/if}
-      <ul>
-        {#each cells.filter(({ x, y }) => describeCell(x, y) !== `Column ${x}, row ${y}: floor`) as position}
-          <li>{describeCell(position.x, position.y)}</li>
-        {/each}
-      </ul>
-    </details>
   {/if}
 </section>
 
@@ -276,8 +240,7 @@
     display: grid;
     min-width: 0;
     min-height: 0;
-    grid-template-rows: auto minmax(0, 1fr) auto;
-    gap: 4px;
+    grid-template-rows: minmax(0, 1fr);
     overflow: hidden;
     padding: 4px;
     border: 1px solid #435052;
@@ -333,11 +296,6 @@
     border: 0;
     background: #090d0e;
   }
-  header { display: flex; min-width: 0; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
-  header > div:first-child { min-width: 0; }
-  p { margin: 0; color: #7f8d8f; font: 12px 'Space Mono', monospace; letter-spacing: .08em; }
-  h2 { margin: 2px 0 0; overflow-wrap: break-word; color: #eef4ee; font: 700 24px 'Space Mono', monospace; text-transform: uppercase; }
-
   .board-viewport {
     min-height: 0;
     overflow: hidden;
@@ -459,12 +417,6 @@
   .facing-east { transform: translate(-50%, -50%) rotate(90deg); }
   .facing-south { transform: translate(-50%, -50%) rotate(180deg); }
   .facing-west { transform: translate(-50%, -50%) rotate(270deg); }
-  .text-equivalent {
-    max-height: 90px;
-    overflow: auto;
-    color: #9da9a8;
-    font-size: 20px;
-  }
   .board-position {
     position: absolute;
     width: 1px;
@@ -473,23 +425,6 @@
     overflow: hidden;
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
-  }
-  summary { color: #d2ff37; cursor: pointer; font: 18px 'Space Mono', monospace; text-transform: uppercase; }
-  details:not([open]) > p, details:not([open]) > ul { display: none; }
-  .text-equivalent p { margin: 8px 0; font: 20px/1.4 'Atkinson Hyperlegible', sans-serif; }
-  ul { margin: 0; padding-left: 18px; }
-  @media (max-width: 720px) {
-    header { align-items: flex-start; }
-    header { gap: 5px; }
-    h2 { font-size: 20px; }
-  }
-  @media (max-height: 560px) and (orientation: landscape) {
-    .course-panel {
-      gap: 3px;
-      padding: 4px;
-    }
-    header { flex-wrap: wrap; gap: 4px; }
-    h2 { margin: 0; font-size: 20px; }
   }
   @media (prefers-reduced-motion: reduce) {
     .course-board { transition: none; }

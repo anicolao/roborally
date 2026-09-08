@@ -1733,7 +1733,13 @@
     </section>
   {/if}
 
-  <footer><span>Robo Rally · 2005 rules</span></footer>
+  <footer>
+    {#if mode === 'room' && roomState.setup && configuredCourse}
+      <h2 class="course-title">{configuredCourse.name}</h2>
+    {:else}
+      <span>Robo Rally · 2005 rules</span>
+    {/if}
+  </footer>
 </main>
 
 <style>
@@ -3313,4 +3319,13 @@
   .brand-mark, .brand small { display: none; }
   footer { justify-content: center; padding-block: 0; font-size: 11px; }
   footer span:first-child { display: inline; }
+  footer .course-title {
+    margin: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: inherit;
+    color: #bac5c1;
+  }
 </style>

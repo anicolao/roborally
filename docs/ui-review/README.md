@@ -10,7 +10,7 @@ between the board, the hand and the controls needed for the current turn.
 | --- | --- | --- |
 | Web play allocated roughly one third of desktop width to the board and two thirds to the console. | The console is capped at 380px; the board takes the remaining width. | More room to inspect walls, conveyors, flags and robot positions. |
 | Web board cells stretched to fill a tall viewport, with a separate 480px width cap. | Web and tabletop now share aspect-ratio fitting, preserving square cells. The web board always fills its available rectangle at the largest scale that preserves the entire course. Zoom and pan controls are removed; keyboard cell inspection remains available. | The same course has the same proportions in both modes. |
-| Phone programming explicitly hid the board. | Portrait phones and tablets show the board above an independently scrolling console; landscape keeps them side by side. The course heading takes less space and view controls are removed. | Players can refer to the course without leaving programming. |
+| Phone programming explicitly hid the board. | Portrait phones and tablets show the board above an independently scrolling console; landscape keeps them side by side. The course name moves to the existing footer; the board has no heading, Board details disclosure, or view controls. | Players can refer to the course without leaving programming. |
 | Hands used `ProgramCardFace`, but chosen, damage-locked and submitted registers were text boxes. | The shared `ProgramEditor` renders square graphical card faces in all occupied registers, including Dual Processor pairs. | Movement direction and priority stay recognizable from hand to program to tabletop playback. Empty slots and lock status remain explicit text. |
 | Recompile discard choices were text-only Option buttons. | The shared editor uses `OptionCardFace` with an explicit discard action. | These choices match the existing damage prevention and destruction discard cards. |
 | Owned web Options displayed full cards inside each robot row. | Web uses the tabletop's measured icon shelf with overflow handling. A native modal dialog opens the complete card description. During a required Option decision the shelf is disabled, and the decision panel shows the relevant full card. | Public ownership stays visible without pushing turn controls down a long sidebar. Keyboard users can open, close with Escape, and return focus to the originating icon. |
@@ -33,7 +33,7 @@ board pages, and shared card, course, programming and Option-inspection componen
 
 | Surface | Removed or rewritten | Why |
 | --- | --- | --- |
-| Web header/footer | Compact brand, room/connection state and one rules-edition line; no visible build hash or infrastructure branding. | More vertical room for the board; connection problems remain visible. |
+| Web header/footer | Compact brand, room/connection state and the course name during play (rules edition before a race); no visible build hash or infrastructure branding. | More vertical room for the board; connection problems remain visible. |
 | Lobby and setup | No seed input, identity IDs, event totals, replay diagnostics, append-only explanation or readiness-barrier copy. | Players choose a course, Lives and readiness, not storage behavior. |
 | Programming/results | “Lock program,” “Your program is locked,” and “Play again”; no conservation, epoch, microstep or speculative-preview diagnostics. | Labels describe what players can do and what happens next. |
 | Tabletop and phone | Friendly connection/retry/save errors; no raw service errors or animation-recording details. Tabletop keeps named waiting rails and seat glow. | Players can identify a stalled connection or the person who must act. |
@@ -99,8 +99,10 @@ board remains unobscured between the gutter rails.
 ## Tradeoffs
 
 The narrower console reduces hand-card size on desktop. Phone controls can require
-vertical scrolling. Small boards retain keyboard cell inspection and Board details
-for reading individual cells, but no longer support zoom or pan. Full Option rules require an explicit inspection action. These are
+vertical scrolling. Small boards retain accessible cell labels and keyboard cell inspection
+for reading individual cells, but no longer support zoom or pan. The redundant Board details
+disclosure is removed, and the course name occupies the existing footer so the board
+uses the entire panel apart from its thin border and padding. Full Option rules require an explicit inspection action. These are
 reviewable design choices; browser checks cannot establish that players prefer
 them. Multi-board courses use the available space while preserving their aspect
 ratio, so especially tall courses may still leave horizontal space unused.
