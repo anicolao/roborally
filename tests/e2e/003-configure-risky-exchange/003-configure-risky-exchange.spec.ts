@@ -54,6 +54,7 @@ test('host configures the exact seeded Risky Exchange setup', async (
         {
           spec: 'Seed RISKY-6 selects Grace as first player at Dock 1 and Ada at Dock 2',
           check: async () => {
+            await page.getByText('Race details & connection', { exact: true }).click();
             const order = page.getByRole('list', { name: 'Original Dock order' });
             await expect(order.getByRole('listitem').nth(0)).toContainText('D1');
             await expect(order.getByRole('listitem').nth(0)).toContainText('Grace');
@@ -100,6 +101,7 @@ test('host configures the exact seeded Risky Exchange setup', async (
         {
           spec: 'The observer converges on the same first player and immutable setup',
           check: async () => {
+            await guest.getByText('Race details & connection', { exact: true }).click();
             await expect(
               guest.getByRole('list', { name: 'Original Dock order' }).getByRole('listitem').first()
             ).toContainText('Grace');

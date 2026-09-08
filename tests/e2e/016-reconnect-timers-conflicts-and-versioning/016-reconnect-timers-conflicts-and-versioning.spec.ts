@@ -160,6 +160,7 @@ test('cache, cursor, retry, and replay converge across a resolution disconnect',
         {
           spec: 'The player can discard the compatible cache and read the complete server stream',
           check: async () => {
+            await host.getByText('Race details & connection', { exact: true }).click();
             await host.getByRole('button', { name: 'Replay from server' }).click();
             await expect(roomStatus(host)).toHaveAttribute('data-status', 'synced');
             await expect(roomStatus(host)).toHaveAttribute('data-cache-hydrated', 'false');

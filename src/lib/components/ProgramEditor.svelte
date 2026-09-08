@@ -1,4 +1,5 @@
 <script lang="ts">
+  import OptionCardFace from '$lib/components/OptionCardFace.svelte';
   import ProgramCardFace from '$lib/components/ProgramCardFace.svelte';
   import { OPTION_CARDS_BY_ID, type OptionCardId } from '$lib/game/option-manifest';
   import { PROGRAM_CARDS, type ProgramCard } from '$lib/game/program-manifest';
@@ -257,8 +258,10 @@
             aria-label={`Register ${index + 1}, ${card ? `${card.action} priority ${card.priority}` : 'empty'}${pairedCard ? ` paired with ${pairedCard.action} priority ${pairedCard.priority}` : ''}, ${register.locked ? 'damage locked' : 'committed'}`}
           >
             <span>R{index + 1}</span>
-            <strong>{card ? `${card.action} ${card.priority}` : 'empty'}</strong>
-            {#if pairedCard}<strong class="paired-card">+ {pairedCard.action} {pairedCard.priority}</strong>{/if}
+            <span class="register-cards">
+              {#if card}<ProgramCardFace {card} compact variant="square" />{:else}<strong>empty</strong>{/if}
+              {#if pairedCard}<ProgramCardFace card={pairedCard} compact variant="square" />{/if}
+            </span>
             <small>{register.locked ? 'damage locked' : 'committed'}</small>
           </div>
         </li>
@@ -321,14 +324,18 @@
             onclick={() => tapSlot(index)}
           >
             <span>R{index + 1}</span>
-            <strong>{card ? `${card.action} ${card.priority}` : 'empty'}</strong>
-            {#if pairedCard}<strong class="paired-card">+ {pairedCard.action} {pairedCard.priority}</strong>{/if}
+            <span class="register-cards">
+              {#if card}<ProgramCardFace {card} compact variant="square" />{:else}<strong>empty</strong>{/if}
+              {#if pairedCard}<ProgramCardFace card={pairedCard} compact variant="square" />{/if}
+            </span>
             {#if register.locked}<small>· locked</small>{/if}
           </button>
         </li>
       {/each}
     </ol>
-    {#if previewText}<p class="preview-note">{previewText}</p>{/if}
+    {#if previewText}
+      <details class="preview-note"><summary>Program preview</summary><p>{previewText}</p></details>
+    {/if}
     <div class="editor-actions">
       {#if canRecompile}
         <button
@@ -353,11 +360,17 @@
         <strong>Resolve Recompile damage</strong>
         <p>Redeal this hand, then choose whether to take one damage or discard an Option.</p>
         {#each recompileOptionCardIds as optionCardId}
+          {@const option = OPTION_CARDS_BY_ID.get(optionCardId)}
           <button
+            class="recompile-option"
+            aria-label={`Discard ${option?.name ?? optionCardId} to prevent this damage`}
             type="button"
             disabled={pending}
             onclick={() => onrecompile(`discard:${optionCardId}`)}
-          >Discard {OPTION_CARDS_BY_ID.get(optionCardId)?.name ?? optionCardId} to prevent this damage</button>
+          >
+            {#if option}<OptionCardFace card={option} size="small" />{/if}
+            <span>Discard to prevent this damage</span>
+          </button>
         {/each}
         <button type="button" disabled={pending} onclick={() => onrecompile('take-damage')}>
           Take this damage
@@ -416,13 +429,16 @@
   .viewport-fit .program-hand {
     min-height: 0;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    grid-template-rows: none;
-    grid-auto-rows: max-content;
-    align-content: center;
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: auto;
+    align-content: stretch;
     overflow: hidden;
   }
   .viewport-fit .program-hand button {
-    width: 100%;
+    width: auto;
+    height: 100%;
+    max-width: 100%;
+    justify-self: center;
     aspect-ratio: 1014 / 1424;
   }
   .program-hand button.selected {
@@ -462,7 +478,8 @@
     height: 100%;
     min-height: 44px;
     gap: 2px;
-    place-content: center;
+    align-content: center;
+    justify-items: center;
     padding: 3px;
     overflow: hidden;
     border: 1px solid #354245;
@@ -512,7 +529,14 @@
     font: inherit;
     text-overflow: ellipsis;
   }
-  .chosen-registers strong.paired-card { color: #d2ff37; }
+  .register-cards { display: flex; width: 100%; min-width: 0; justify-content: center; }
+  .register-cards :global(.program-card) { flex: 1 1 0; min-width: 0; max-width: 88px; filter: none; }
+  .recompile-option { display: grid; justify-items: center; gap: 6px; padding: 6px; color: #eef4ee; background: #111819; border: 1px solid #708083; }
+  .recompile-option :global(.option-card) { max-width: 100%; }
+  @media (max-height: 720px) and (orientation: landscape) {
+    .viewport-fit:not(.submitted) .chosen-registers button { grid-template-columns: 24px minmax(0, 1fr) auto; }
+    .viewport-fit:not(.submitted) .register-cards :global(.program-card) { max-width: 34px; }
+  }
   .chosen-registers small { color: #ffcf4b; font-size: 9px; }
   .chosen-registers .locked-register:not(.damage-locked) small { color: #d2ff37; }
   .preview-note, .submission-state { margin: 0; color: #778487; font-size: 16px; line-height: 1.35; }
@@ -522,6 +546,8 @@
     color: #d2ff37;
     background: #151d13;
   }
+  .preview-note summary { cursor: pointer; }
+  .preview-note p { margin: 6px 0; }
   .editor-actions { display: grid; gap: 8px; }
   .editor-actions button {
     min-height: 44px;
@@ -547,9 +573,9 @@
     .editor-actions button { width: 100%; min-height: 48px; }
     .viewport-fit .program-hand {
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      grid-template-rows: none;
-      grid-auto-rows: max-content;
-      align-content: center;
+      grid-template-rows: repeat(3, minmax(0, 1fr));
+      grid-auto-rows: auto;
+      align-content: stretch;
       gap: 4px;
     }
     .viewport-fit .program-hand button:last-child:nth-child(4n + 1) { grid-column: 2; }
@@ -661,4 +687,6 @@
       grid-template-columns: repeat(5, minmax(0, 1fr));
     }
   }
+  .program-editor:not(.viewport-fit) .program-hand { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .program-editor:not(.viewport-fit) .register-badge { width: 24px; height: 24px; font-size: 11px; }
 </style>

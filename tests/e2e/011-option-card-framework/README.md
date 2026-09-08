@@ -37,3 +37,19 @@ Two ordinary clients reach the crossed repair site on successive turns, draw fro
 
 - [x] Both clients converge without precommitting future Option use
 - [x] Graphical Options remain face up until their actual timing window
+
+## The shared tabletop icon opens readable Option rules without filling the sidebar
+
+![The shared tabletop icon opens readable Option rules without filling the sidebar](./screenshots/004-inspect-owned-option-desktop.png)
+
+**Verifications:**
+
+- [x] The full graphical card matches the owned icon and its text fits the inspection panel
+
+## A narrow phone still shows the complete card and a reachable close control
+
+![A narrow phone still shows the complete card and a reachable close control](./screenshots/005-inspect-owned-option-small-phone-desktop.png)
+
+**Verifications:**
+
+- [x] The inspector fits 320 pixels without clipping its rules or close button

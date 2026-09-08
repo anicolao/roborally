@@ -5,6 +5,7 @@
   import { tabletopOptionLayout } from '$lib/tabletop-options';
 
   export let playerName: string;
+  export let disabled = false;
   export let cardIds: OptionCardId[] = [];
   export let oninspect: (cardIds: OptionCardId[], selectedCardId: OptionCardId) => void;
 
@@ -50,6 +51,7 @@
       <button
         type="button"
         class="option-icon"
+        {disabled}
         aria-label={`View ${card.name} Option for ${playerName}`}
         title={card.name}
         data-option-icon={card.id}
@@ -64,6 +66,7 @@
     <button
       type="button"
       class="option-icon option-more"
+      {disabled}
       aria-label={`View ${additionalCardIds.length} more Options for ${playerName}`}
       data-option-overflow={additionalCardIds.length}
       onclick={() => oninspect(additionalCardIds, additionalCardIds[0])}
@@ -99,6 +102,7 @@
   .option-icon:hover,
   .option-icon:focus-visible { border-color: #d2ff37; outline: 2px solid #d2ff37; outline-offset: 1px; }
   .option-icon img { display: block; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 2px 3px #000c); }
+  .option-icon:disabled { opacity: .55; cursor: default; }
   .option-more { border-color: #ffcf4b; color: #ffcf4b; }
   .option-measure { position: absolute; visibility: hidden; pointer-events: none; }
   @media (max-width: 700px) {

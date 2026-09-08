@@ -227,8 +227,8 @@ test('power down clears damage, remains vulnerable, repeats, and restores progra
           spec: 'Register 5 retains the exact Turn 7 random card',
           check: async () => {
             await expect(
-              host.getByRole('list', { name: 'Chosen registers' }).getByRole('listitem').nth(4)
-            ).toContainText('R5 back-up 480 · locked');
+              host.getByRole('list', { name: 'Chosen registers' }).getByRole('button').nth(4)
+            ).toHaveAccessibleName('Register 5, back-up priority 480, locked');
           }
         },
         {

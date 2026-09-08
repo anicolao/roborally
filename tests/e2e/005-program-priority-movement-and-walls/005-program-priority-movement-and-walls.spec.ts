@@ -170,6 +170,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
         {
           spec: 'Register cards resolve from highest unique priority to lowest',
           check: async () => {
+            await host.getByText('Recent moves & board rules', { exact: true }).click();
             const feed = host.getByRole('list', { name: 'Resolution feed' });
             await expect(feed.getByRole('listitem')).toHaveCount(5);
             await expect(host.getByRole('heading', { name: /Turn 1 complete/ })).toContainText(

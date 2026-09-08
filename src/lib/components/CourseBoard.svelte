@@ -356,12 +356,12 @@
   }
   header { display: flex; min-width: 0; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
   header > div:first-child { min-width: 0; }
-  p { margin: 0; color: #7f8d8f; font: 16px 'Space Mono', monospace; letter-spacing: .08em; }
-  h2 { margin: 2px 0 0; overflow-wrap: break-word; color: #eef4ee; font: 700 36px 'Space Mono', monospace; text-transform: uppercase; }
+  p { margin: 0; color: #7f8d8f; font: 12px 'Space Mono', monospace; letter-spacing: .08em; }
+  h2 { margin: 2px 0 0; overflow-wrap: break-word; color: #eef4ee; font: 700 24px 'Space Mono', monospace; text-transform: uppercase; }
   .board-controls {
     display: grid;
     width: 100%;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(32px, 1fr)) auto;
     gap: 4px;
     align-items: center;
   }
@@ -382,7 +382,7 @@
     border: 1px solid #344144;
     background: #090d0e;
   }
-  .presentation-only .board-viewport {
+  .board-viewport {
     display: grid;
     width: 100%;
     height: 100%;
@@ -390,8 +390,7 @@
     container-type: size;
     border: 0;
   }
-  .board-fit { display: contents; }
-  .presentation-only .board-fit {
+  .board-fit {
     position: relative;
     display: block;
     width: min(100cqw, calc(100cqh * var(--course-aspect)));
@@ -405,7 +404,7 @@
   .course-board {
     position: relative;
     display: grid;
-    width: min(100%, 480px);
+    width: 100%;
     height: 100%;
     min-height: 0;
     grid-template-columns: repeat(var(--course-columns), 1fr);
@@ -521,7 +520,11 @@
   ul { margin: 0; padding-left: 18px; }
   @media (max-width: 720px) {
     header { align-items: flex-start; }
-    h2 { font-size: 28px; }
+    header { gap: 5px; }
+    header p { display: none; }
+    h2 { font-size: 20px; }
+    button { padding: 0 4px; font-size: 12px; }
+    output { font-size: 12px; }
     h2.long-title { font-size: 20px; }
   }
   @media (max-height: 560px) and (orientation: landscape) {

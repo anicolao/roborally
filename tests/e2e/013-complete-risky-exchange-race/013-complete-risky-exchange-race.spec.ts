@@ -173,10 +173,10 @@ test('a production Risky Exchange race uses the complete rules loop', async (
               check: async () => {
                 const robots = host.getByRole('list', { name: 'Robot Life and damage state' });
                 await expect(
-                  robots.getByRole('listitem').filter({ hasText: 'Ada' }).locator('[data-card-id]')
+                  robots.getByRole('listitem').filter({ hasText: 'Ada' }).locator('[data-option-icon]')
                 ).toHaveCount(1);
                 await expect(
-                  robots.getByRole('listitem').filter({ hasText: 'Grace' }).locator('[data-card-id]')
+                  robots.getByRole('listitem').filter({ hasText: 'Grace' }).locator('[data-option-icon]')
                 ).toHaveCount(1);
               }
             }

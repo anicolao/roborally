@@ -135,6 +135,9 @@ export class TestStepHelper {
         }
       }
 
+      // A native modal makes the rest of the document inert. Check overlap
+      // among its controls, not against controls in the obscured page beneath it.
+      const modal = document.querySelector('dialog:modal');
       const controls = Array.from(
         document.querySelectorAll<HTMLElement>(
           '[data-e2e-layout] button:not([disabled]), [data-e2e-layout] input:not([disabled])'
@@ -143,6 +146,7 @@ export class TestStepHelper {
         const style = getComputedStyle(element);
         const rect = visibleRect(element);
         return (
+          (!modal || modal.contains(element)) &&
           style.visibility !== 'hidden' &&
           style.display !== 'none' &&
           rect.right - rect.left > 1 &&

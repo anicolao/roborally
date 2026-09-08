@@ -153,6 +153,7 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
 
     await expect(guest.getByRole('list', { name: 'Chosen registers' }).getByRole('listitem'))
       .not.toContainText(['empty', 'empty', 'empty', 'empty', 'empty']);
+    await guest.getByText('Program preview', { exact: true }).click();
     await expect(guest.getByText(/Preview excludes robots and unrevealed board outcomes/)).toBeVisible();
     await guest.getByRole('button', { name: 'Submit immutable program' }).click();
 

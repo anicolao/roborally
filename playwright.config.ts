@@ -38,12 +38,12 @@ export default defineConfig({
     },
     {
       name: 'mobile-landscape',
-      testMatch: '**/017-responsive-accessible-complete-race/*.spec.ts',
+      testMatch: ['**/017-responsive-accessible-complete-race/*.spec.ts', '**/026-board-first-shared-cards/*.spec.ts'],
       use: { browserName: 'chromium', viewport: { width: 852, height: 393 } }
     },
     {
       name: 'tablet',
-      testMatch: '**/017-responsive-accessible-complete-race/*.spec.ts',
+      testMatch: ['**/017-responsive-accessible-complete-race/*.spec.ts', '**/026-board-first-shared-cards/*.spec.ts'],
       use: { browserName: 'chromium', viewport: { width: 820, height: 1180 } }
     }
   ],
