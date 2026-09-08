@@ -186,6 +186,13 @@ test('face-up Options remain available for execution-time decisions', async (
             await expect(tableDamagePrompt).toContainText('Ada');
             await expect(tableDamagePrompt).toContainText('WAITING FOR');
             await expect(decisionCopies).toHaveCount(2);
+            await expect(table.getByTestId('tabletop-register-playback')).toBeHidden();
+            const attention = table.locator('[data-awaiting-decision="true"]');
+            await expect(attention).toHaveCount(1);
+            await expect(attention).toContainText('Ada');
+            await expect(attention).toContainText('YOUR DECISION');
+            await expect(attention).not.toHaveCSS('box-shadow', 'none');
+            await expect(tableDamagePrompt).toContainText('CHECK YOUR PHONE');
           }
         },
         {
@@ -226,6 +233,7 @@ test('face-up Options remain available for execution-time decisions', async (
             await expect(guest.getByRole('heading', { name: 'Turn 5 complete' })).toBeVisible();
             await expect(host.getByLabel('Ordered Option decision window')).toHaveCount(0);
             await expect(tableDamagePrompt).toBeHidden();
+            await expect(table.locator('[data-awaiting-decision="true"]')).toHaveCount(0);
             await expect(table.locator('[data-laser-source]')).toHaveCount(0);
           }
         },

@@ -16,6 +16,7 @@ between the board, the hand and the controls needed for the current turn.
 | Owned web Options displayed full cards inside each robot row. | Web uses the tabletop's measured icon shelf with overflow handling. A native modal dialog opens the complete card description. During a required Option decision the shelf is disabled, and the decision panel shows the relevant full card. | Public ownership stays visible without pushing turn controls down a long sidebar. Keyboard users can open, close with Escape, and return focus to the originating icon. |
 | Setup order, seed/replay details and card conservation competed with programming. | These remain available under “Race details & connection.” | Useful reference information no longer leads the turn flow. |
 | A verbose speculative preview sat before submission; recent moves and permanent board rules filled the resolution console. | “Program preview” and “Recent moves & board rules” disclose these on demand. The existing full trace remains available. | Pending decisions, robot state, deadlines, re-entry and next-turn controls receive more attention. |
+| Tabletop decision rails could compete with the playback log in the same gutter, and the responding seat had no attention cue. Power choices had no tabletop waiting message. | Waiting rails replace the playback log while a decision is available. Both viewing directions name the responder and say “CHECK YOUR PHONE.” The responding seat has a steady gold glow and “YOUR DECISION” label, including between-turn power choices. | Everyone can see why play paused and which player needs to act. The cue clears or moves when the decision is answered; a steady glow avoids flashing. |
 
 No new raster artwork is required. The existing program chassis, movement arrows,
 rotation icons, Option chassis and all Option illustrations supply the visuals.
@@ -61,6 +62,18 @@ return and complete, unclipped card text.
    additional scrolling in the programming panel?
 5. Follow a destruction/re-entry and start the next turn. Confirm that the next
    required action is easier to find with the replay material collapsed.
+6. On the tabletop, pause for an Option, damage, re-entry or power choice. From
+   either side, confirm that the gutters name the responsible player, their seat
+   is highlighted, and the message disappears or transfers after they respond.
+
+The tabletop waiting message was not removed by the original web layout change:
+`src/routes/tt/+page.svelte` was unchanged at that point. The follow-up makes the
+decision and playback panels mutually exclusive, preventing the later-rendered
+playback log from covering a decision at the same stacking level. Presentation
+gating still prevents future decisions being announced before playback reaches
+them. Power choices appear once the relevant program is submitted (or the robot
+has no hand because it is powered down) and playback has settled. The shared
+board remains unobscured between the gutter rails.
 
 ## Tradeoffs
 

@@ -185,6 +185,13 @@ async function documentPowerChoices(
         name: racer === powerDownRacer ? /POWER DOWN/ : /(STAY ACTIVE|POWER UP)/
       });
       if (!(await button.isEnabled())) continue;
+      const waiting = table.getByTestId('tabletop-damage-prompt');
+      await expect(waiting).toContainText('POWER DECISION');
+      await expect(waiting).toContainText(racer.name);
+      const attention = table.locator('[data-awaiting-decision="true"]');
+      await expect(attention).toHaveCount(1);
+      await expect(attention).toContainText(racer.name);
+      await expect(table.getByTestId('tabletop-register-playback')).toBeHidden();
       await documentBeforeClick(
         steps,
         racer.page,
