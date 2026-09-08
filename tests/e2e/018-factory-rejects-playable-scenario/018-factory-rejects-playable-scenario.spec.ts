@@ -15,8 +15,8 @@ test('five players configure and enter the Factory Rejects scenario', async ({
   );
 
   try {
-    await page.goto(`/?e2eIdentity=REJECT-HOST&e2eRoomCode=${roomCode}`);
-    await expect(page.getByRole('status')).toHaveText('Firebase emulator ready');
+    await page.goto(`/?e2eIdentity=REJECT-HOST&e2eRoomCode=${roomCode}&e2eSeed=REJECTS-5`);
+    await expect(page.getByRole('status')).toHaveText('Connected');
     await page.getByRole('button', { name: 'Create race' }).click();
     await page.getByLabel('Racer name').fill('Ada');
     await page.getByRole('button', { name: 'Axle' }).click();
@@ -44,9 +44,8 @@ test('five players configure and enter the Factory Rejects scenario', async ({
       page.getByRole('list', { name: 'Race room players' }).locator('li.claimed')
     ).toHaveCount(5);
     await page.getByLabel('Course', { exact: true }).selectOption('factory-rejects');
-    await page.getByLabel('Setup seed').fill('REJECTS-5');
     await page.getByRole('button', { name: 'Configure Factory Rejects' }).click();
-    await expect(guests[0].getByText(/Factory Rejects · seed REJECTS-5/)).toBeVisible();
+    await expect(guests[0].getByText(/Factory Rejects/)).toBeVisible();
 
     for (const guest of guests) {
       await guest.getByRole('button', { name: 'Ready for race' }).click();

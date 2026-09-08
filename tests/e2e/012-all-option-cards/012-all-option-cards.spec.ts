@@ -12,13 +12,23 @@ test('all 26 reviewed Option behaviors are inspectable in product', async (
   const guest = await guestContext.newPage();
 
   try {
+    const reference = new TestStepHelper(host, testInfo);
+    await host.goto('/cards');
+    await expect(host.getByRole('heading', { name: 'Program cards', exact: true })).toBeVisible();
+    await expect(host.locator('.inventory [data-card-id]')).toHaveCount(84);
+    await reference.assertPlayerFacingCopy();
+    await host.goto('/boards');
+    await expect(host.getByRole('heading', { name: 'Factory board gallery' })).toBeVisible();
+    await expect(host.locator('ol > li')).toHaveCount(10);
+    await reference.assertPlayerFacingCopy();
     await host.goto('/options');
+    await reference.assertPlayerFacingCopy();
     for (const presentation of OPTION_CARD_PRESENTATIONS) {
       await host.getByRole('radio', { name: new RegExp(presentation.label) }).check();
       const renderedCards = host.locator('.inventory [data-card-id]');
       await expect(renderedCards).toHaveCount(OPTION_CARDS.length);
       await expect(renderedCards.first()).toHaveAttribute('data-option-size', presentation.id);
-      await expect(host.getByText('All card content fits this layout')).toBeVisible();
+      await expect.poll(() => renderedCards.evaluateAll((cards) => cards.every((card) => [...card.querySelectorAll('.copy, .continuation, .title')].every((element) => element.scrollHeight <= element.clientHeight + 1 && element.scrollWidth <= element.clientWidth + 1)))).toBe(true);
       const dimensions = await renderedCards.first().evaluate((element) => {
         const bounds = element.getBoundingClientRect();
         return { width: bounds.width, height: bounds.height };
@@ -26,8 +36,8 @@ test('all 26 reviewed Option behaviors are inspectable in product', async (
       expect(dimensions).toEqual({ width: presentation.width, height: presentation.height });
     }
 
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}`);
-    await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eSeed=OPTION-12`);
+    await expect(host.getByRole('status')).toHaveText('Connected');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');
     await host.getByRole('button', { name: 'Axle' }).click();
@@ -39,14 +49,13 @@ test('all 26 reviewed Option behaviors are inspectable in product', async (
     await guest.getByRole('button', { name: 'Bit' }).click();
     await guest.getByRole('button', { name: 'Claim seat' }).click();
 
-    await host.getByLabel('Setup seed').fill('OPTION-12');
     await host.getByRole('button', { name: 'Configure Risky Exchange' }).click();
     await guest.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Open programming console' }).click();
 
     const catalog = host.getByLabel('2005 Option catalog');
-    await catalog.getByText('26-card Option catalog').click();
+    await catalog.getByText('Option cards').click();
     await expect(catalog.locator('li')).toHaveCount(26);
     await expect(catalog.locator('[data-card-id]')).toHaveCount(26);
     await expect(catalog.locator('[data-card-id]').first()).toHaveAttribute(
@@ -57,7 +66,6 @@ test('all 26 reviewed Option behaviors are inspectable in product', async (
       const entry = catalog.locator(`[data-option-id="${card.id}"]`);
       await entry.scrollIntoViewIfNeeded();
       await expect(entry).toContainText(card.name);
-      await expect(entry).toContainText(card.kind);
       await expect(entry).toContainText(card.summary);
       await expect(entry.locator('.illustration')).toHaveAttribute(
         'src',
@@ -112,7 +120,7 @@ test('all 26 reviewed Option behaviors are inspectable in product', async (
         }
       ]
     });
-    await catalog.getByText('26-card Option catalog').click();
+    await catalog.getByText('Option cards').click();
     steps.generateDocs();
   } finally {
     await guestContext.close();

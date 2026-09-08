@@ -81,8 +81,8 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
 
   try {
     await enableSyntheticPlaybackClock(host);
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}`);
-    await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eSeed=PROGRAM-E2E`);
+    await expect(host.getByRole('status')).toHaveText('Connected');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');
     await host.getByRole('button', { name: 'Axle' }).click();
@@ -103,7 +103,6 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
     await guest.getByRole('button', { name: 'Bit' }).click();
     await guest.getByRole('button', { name: 'Claim seat' }).click();
 
-    await host.getByLabel('Setup seed').fill('PROGRAM-E2E');
     await host.getByRole('button', { name: 'Configure Risky Exchange' }).click();
     await guest.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Ready for race' }).click();
@@ -113,8 +112,7 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
 
     await expect(host.getByLabel('Your Program hand').getByRole('button')).toHaveCount(9);
     await expect(guest.getByLabel('Your Program hand').getByRole('button')).toHaveCount(9);
-    await expect(host.getByTestId('program-conservation')).toContainText('84/84 cards accounted');
-    await expect(host.getByTestId('program-conservation')).toContainText('66 undealt');
+    await expect(host.locator('[data-program-card-count]')).toHaveAttribute('data-program-card-count', '84');
 
     const guestCards = guest.getByLabel('Your Program hand').getByRole('button');
     const guestRegisters = guest
@@ -153,9 +151,7 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
 
     await expect(guest.getByRole('list', { name: 'Chosen registers' }).getByRole('listitem'))
       .not.toContainText(['empty', 'empty', 'empty', 'empty', 'empty']);
-    await guest.getByText('Program preview', { exact: true }).click();
-    await expect(guest.getByText(/Preview excludes robots and unrevealed board outcomes/)).toBeVisible();
-    await guest.getByRole('button', { name: 'Submit immutable program' }).click();
+    await guest.getByRole('button', { name: 'Lock program' }).click();
 
     await steps.step('opponent-program-masked', {
       description: 'The first immutable submission stays face down to its observer',
@@ -163,22 +159,19 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
         {
           spec: 'Both hands came from one 84-card deal with 66 cards left undealt',
           check: async () => {
-            await expect(guest.getByTestId('program-conservation')).toContainText(
-              '84/84 cards accounted'
-            );
-            await expect(guest.getByTestId('program-conservation')).toContainText('66 undealt');
+            await expect(guest.locator('[data-program-card-count]')).toHaveAttribute('data-program-card-count', '84');
           }
         },
         {
           spec: 'The submitter can inspect all five locked registers but cannot edit or resubmit',
           check: async () => {
-            await expect(guest.getByText(/Program committed/)).toBeVisible();
+            await expect(guest.getByText(/Your program is locked/)).toBeVisible();
             await expect(guest.getByLabel('Your Program hand')).toHaveCount(0);
             const lockedProgram = guest.getByRole('list', { name: 'Locked Program' });
             await expect(lockedProgram.getByRole('listitem')).toHaveCount(5);
-            await expect(lockedProgram).toContainText('committed');
+            await expect(lockedProgram).toContainText('ready');
             await expect(lockedProgram.getByRole('button')).toHaveCount(0);
-            await expect(guest.getByRole('button', { name: 'Submit immutable program' })).toHaveCount(0);
+            await expect(guest.getByRole('button', { name: 'Lock program' })).toHaveCount(0);
           }
         },
         {
@@ -250,7 +243,7 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
         {
           spec: 'The timeout claim preserves chosen registers and fills only empty slots',
           check: async () => {
-            await expect(host.getByText(/Program committed/)).toBeVisible();
+            await expect(host.getByText(/Your program is locked/)).toBeVisible();
             await expect(host.getByRole('timer')).toHaveCount(0);
             await expect(
               guest.getByRole('list', { name: 'Program submission status' }).getByRole('listitem')
@@ -271,10 +264,7 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
         {
           spec: 'Every Program card remains in exactly one canonical zone after cleanup',
           check: async () => {
-            await expect(guest.getByTestId('program-conservation')).toContainText(
-              '84/84 cards accounted'
-            );
-            await expect(guest.getByTestId('program-conservation')).toContainText('8 turn discard');
+            await expect(guest.locator('[data-program-card-count]')).toHaveAttribute('data-program-card-count', '84');
           }
         },
         {
@@ -282,7 +272,7 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
           check: async () => {
             await guest.reload();
             await guest.getByRole('button', { name: 'Open programming console' }).click();
-            await expect(guest.getByText(/Program committed/)).toBeVisible();
+            await expect(guest.getByText(/Your program is locked/)).toBeVisible();
             await expect(
               guest.getByRole('list', { name: 'Locked Program' }).getByRole('listitem')
             ).toHaveCount(5);

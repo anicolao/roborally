@@ -11,7 +11,7 @@ async function chooseProgram(page: Page, labels: readonly string[]) {
   for (const label of labels) {
     await page.getByRole('button', { name: label, exact: true }).click();
   }
-  await page.getByRole('button', { name: 'Submit immutable program' }).click();
+  await page.getByRole('button', { name: 'Lock program' }).click();
 }
 
 test('Programs resolve by priority through rotations, stepwise movement, seams, and walls', async (
@@ -23,8 +23,8 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
 
   try {
     await enableSyntheticPlaybackClock(host);
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2ePlayback=slow`);
-    await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2ePlayback=slow&e2eSeed=MOVE-57`);
+    await expect(host.getByRole('status')).toHaveText('Connected');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');
     await host.getByRole('button', { name: 'Axle' }).click();
@@ -45,7 +45,6 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     await guest.getByRole('button', { name: 'Bit' }).click();
     await guest.getByRole('button', { name: 'Claim seat' }).click();
 
-    await host.getByLabel('Setup seed').fill('MOVE-57');
     await host.getByRole('button', { name: 'Configure Risky Exchange' }).click();
     await guest.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Ready for race' }).click();
@@ -136,12 +135,12 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     await expect(host.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();
     await expect(guest.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();
 
-    await host.getByText('Full resolution text').click();
+    await host.getByText('Turn history').click();
     const fullTrace = host.getByRole('list', { name: 'Full resolution feed' });
     await expect(fullTrace).toContainText('Ada stopped at (6,16); a wall blocks east.');
     await expect(fullTrace).toContainText('Ada completed step 3 at (6,13) facing north.');
     await expect(fullTrace).toContainText('Grace was destroyed off course as destruction 1.');
-    await host.getByText('Full resolution text').click();
+    await host.getByText('Turn history').click();
 
     await guest.emulateMedia({ reducedMotion: 'reduce' });
     await expect
@@ -170,22 +169,22 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
         {
           spec: 'Register cards resolve from highest unique priority to lowest',
           check: async () => {
-            await host.getByText('Recent moves & board rules', { exact: true }).click();
+            await host.getByText('Recent moves & rules', { exact: true }).click();
             const feed = host.getByRole('list', { name: 'Resolution feed' });
             await expect(feed.getByRole('listitem')).toHaveCount(5);
             await expect(host.getByRole('heading', { name: /Turn 1 complete/ })).toContainText(
-              'microsteps'
+              'Turn 1 complete'
             );
           }
         },
         {
           spec: 'The wall between Dock 1 and Dock 2 stops eastward movement at (6,16)',
           check: async () => {
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
             await expect(host.getByRole('list', { name: 'Full resolution feed' })).toContainText(
               'wall blocks east'
             );
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
           }
         },
         {
@@ -204,7 +203,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
         {
           spec: 'Move 1, Move 2, Move 3, Back Up, both rotations, and U-Turn all execute',
           check: async () => {
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
             const trace = host.getByRole('list', { name: 'Full resolution feed' });
             for (const action of [
               'move-1',
@@ -216,7 +215,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
             ]) {
               await expect(trace).toContainText(`revealed ${action}`);
             }
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
           }
         },
         {

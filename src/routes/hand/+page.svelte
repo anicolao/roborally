@@ -291,7 +291,7 @@
               : nextPlayer
                 ? 'The tabletop is choosing the course and settings.'
                 : `Claim position ${requestedSeat} from this phone.`;
-      }, (nextError) => { error = nextError.message; }, (sync) => {
+      }, (nextError) => { console.error(nextError); error = 'Connection interrupted. Please reconnect.'; }, (sync) => {
         if (sync.source === 'server' && !sync.hasPendingWrites) serverAtHead = true;
         if (!serverAtHead) return;
         const decision = state.resolution?.pendingOptionDecision;
@@ -314,7 +314,7 @@
             : `Waiting for ${robot?.name ?? 'the next robot'} to re-enter.`;
         }
       });
-    } catch (nextError) { error = nextError instanceof Error ? nextError.message : 'Could not connect'; }
+    } catch (nextError) { console.error(nextError); error = 'Unable to connect to the race. Please try again.'; }
   });
   onDestroy(() => unsubscribe?.());
 
@@ -357,7 +357,7 @@
       );
     } catch (nextError) {
       console.error(nextError);
-      error = 'Your re-entry draft could not be written.';
+      error = 'Your re-entry draft could not be saved. Please try again.';
     }
   }
 
@@ -393,7 +393,7 @@
       effectDraftDirty = false;
     } catch (nextError) {
       console.error(nextError);
-      error = 'Your re-entry choice could not be written.';
+      error = 'Your re-entry choice could not be saved. Please try again.';
     } finally {
       pending = false;
     }
@@ -419,7 +419,7 @@
       );
     } catch (nextError) {
       console.error(nextError);
-      error = 'Your Option loss choice could not be written.';
+      error = 'Your Option loss choice could not be saved. Please try again.';
     } finally {
       pending = false;
     }
@@ -444,7 +444,7 @@
       );
     } catch (nextError) {
       console.error(nextError);
-      error = 'Your Option decision could not be written.';
+      error = 'Your Option decision could not be saved. Please try again.';
     } finally {
       pending = false;
     }
@@ -476,7 +476,7 @@
       await RoomService.markReady(services.db, services.user, roomCode, state.configurationEventId);
     } catch (nextError) {
       console.error(nextError);
-      error = 'Your ready signal could not be written.';
+      error = 'Your ready signal could not be saved. Please try again.';
     } finally {
       pending = false;
     }
@@ -493,7 +493,7 @@
       });
     } catch (nextError) {
       console.error(nextError);
-      error = 'Your power-down choice could not be written.';
+      error = 'Your power-down choice could not be saved. Please try again.';
     } finally {
       pending = false;
     }
@@ -524,7 +524,7 @@
       } catch (nextError) {
         console.error(nextError);
         draftDirty = false;
-        error = 'Your Program draft could not be written.';
+        error = 'Your Program draft could not be saved. Please try again.';
       }
     });
   }
@@ -568,7 +568,7 @@
       draftWriteQueue = Promise.resolve();
     } catch (nextError) {
       console.error(nextError);
-      error = 'Your Recompile choice could not be written.';
+      error = 'Your Recompile choice could not be saved. Please try again.';
     } finally {
       pending = false;
     }
@@ -764,7 +764,7 @@
             viewportFit
             instructionsVisible={false}
             submitLabel="Lock program"
-            submittedMessage="Program committed. It is locked and cannot be changed. Watch the tabletop for execution."
+            submittedMessage="Your program is locked. Watch the tabletop for movement."
             {recompileOptionCardIds}
             {recompileUsed}
             ondraftchange={persistDraft}

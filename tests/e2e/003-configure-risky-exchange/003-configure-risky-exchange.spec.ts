@@ -14,8 +14,8 @@ test('host configures the exact seeded Risky Exchange setup', async (
   );
 
   try {
-    await page.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}`);
-    await expect(page.getByRole('status')).toHaveText('Firebase emulator ready');
+    await page.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eSeed=RISKY-6`);
+    await expect(page.getByRole('status')).toHaveText('Connected');
     await page.getByRole('button', { name: 'Create race' }).click();
     await page.getByLabel('Racer name').fill('Ada');
     await page.getByRole('button', { name: 'Axle' }).click();
@@ -29,9 +29,8 @@ test('host configures the exact seeded Risky Exchange setup', async (
     await guest.getByRole('button', { name: 'Bit' }).click();
     await guest.getByRole('button', { name: 'Claim seat' }).click();
 
-    await page.getByLabel('Setup seed').fill('RISKY-6');
     await page.getByRole('button', { name: 'Configure Risky Exchange' }).click();
-    await expect(guest.getByText(/Risky Exchange · seed RISKY-6/)).toBeVisible();
+    await expect(guest.getByText(/Risky Exchange/)).toBeVisible();
 
     await guest.getByRole('button', { name: 'Ready for race' }).click();
     await expect(page.getByText('1/2 racers ready')).toBeVisible();
@@ -40,13 +39,9 @@ test('host configures the exact seeded Risky Exchange setup', async (
     await expect(page.getByRole('heading', { name: 'Risky Exchange' })).toBeVisible();
     await expect(guest.getByRole('heading', { name: 'Risky Exchange' })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Zoom in' }).click();
-    await expect(page.getByLabel('Board zoom')).toHaveText('125%');
-    await page.getByRole('button', { name: 'Pan right' }).click();
-    await page.getByRole('button', { name: 'Fit course' }).click();
-    await expect(page.getByLabel('Board zoom')).toHaveText('100%');
+    await expect(page.getByRole('button', { name: /Zoom|Pan|Fit course/ })).toHaveCount(0);
 
-    await page.getByText('Course text equivalent').click();
+    await page.getByText('Board details').click();
 
     await steps.step('seeded-risky-exchange', {
       description: 'The readiness barrier reveals one exact semantic setup',
@@ -54,7 +49,7 @@ test('host configures the exact seeded Risky Exchange setup', async (
         {
           spec: 'Seed RISKY-6 selects Grace as first player at Dock 1 and Ada at Dock 2',
           check: async () => {
-            await page.getByText('Race details & connection', { exact: true }).click();
+            await page.getByText('Race details', { exact: true }).click();
             const order = page.getByRole('list', { name: 'Original Dock order' });
             await expect(order.getByRole('listitem').nth(0)).toContainText('D1');
             await expect(order.getByRole('listitem').nth(0)).toContainText('Grace');
@@ -85,9 +80,9 @@ test('host configures the exact seeded Risky Exchange setup', async (
           }
         },
         {
-          spec: 'Pan, zoom, and fit controls return the board to a deterministic 100% view',
+          spec: 'The board automatically fits without zoom or pan controls',
           check: async () => {
-            await expect(page.getByLabel('Board zoom')).toHaveText('100%');
+            await expect(page.getByRole('button', { name: /Zoom|Pan|Fit course/ })).toHaveCount(0);
           }
         },
         {
@@ -95,13 +90,13 @@ test('host configures the exact seeded Risky Exchange setup', async (
           check: async () => {
             await expect(page.getByText('Column 8, row 2: Flag 1')).toBeVisible();
             await expect(page.getByText(/Column 6, row 16: Dock 1, Grace's bit, facing north/)).toBeVisible();
-            await page.getByText('Course text equivalent').click();
+            await page.getByText('Board details').click();
           }
         },
         {
           spec: 'The observer converges on the same first player and immutable setup',
           check: async () => {
-            await guest.getByText('Race details & connection', { exact: true }).click();
+            await guest.getByText('Race details', { exact: true }).click();
             await expect(
               guest.getByRole('list', { name: 'Original Dock order' }).getByRole('listitem').first()
             ).toContainText('Grace');

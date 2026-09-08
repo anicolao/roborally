@@ -55,7 +55,7 @@ async function chooseProgram(page: Page, labels: Program) {
   for (const label of labels) {
     await page.getByRole('button', { name: label, exact: true }).click();
   }
-  await page.getByRole('button', { name: 'Submit immutable program' }).click();
+  await page.getByRole('button', { name: 'Lock program' }).click();
 }
 
 test('ordered flags, archives, repairs, victory, and rematch span real turns', async (
@@ -71,8 +71,8 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
   const table = await tableContext.newPage();
 
   try {
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a`);
-    await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a&e2eSeed=REPAIR-4`);
+    await expect(host.getByRole('status')).toHaveText('Connected');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');
     await host.getByRole('button', { name: 'Axle' }).click();
@@ -90,7 +90,6 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
       'Two real clients play ten deterministic turns. Ada archives on a repair site, touches all three flags in order, wins from ordinary Program submissions, and a separately authenticated tabletop creates a fresh rematch room that both connected controllers follow automatically.'
     );
 
-    await host.getByLabel('Setup seed').fill('REPAIR-4');
     await host.getByRole('button', { name: 'Configure Risky Exchange' }).click();
     await guest.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Ready for race' }).click();
@@ -134,11 +133,11 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
             {
               spec: 'Repair happens once during cleanup, after the per-register Archive update',
               check: async () => {
-                await host.getByText('Full resolution text').click();
+                await host.getByText('Turn history').click();
                 const trace = host.getByRole('list', { name: 'Full resolution feed' });
                 await expect(trace).toContainText('Ada moved its Archive marker to (12,12)');
                 await expect(trace).toContainText('Ada repaired from 0 to 0 damage');
-                await host.getByText('Full resolution text').click();
+                await host.getByText('Turn history').click();
               }
             }
           ]
@@ -193,10 +192,10 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
         {
           spec: 'Owner and observer see the same winner summary',
           check: async () => {
-            await expect(host.getByRole('region', { name: 'Immutable race summary' })).toContainText(
+            await expect(host.getByRole('region', { name: 'Race results' })).toContainText(
               'Ada wins Risky Exchange'
             );
-            await expect(guest.getByRole('region', { name: 'Immutable race summary' })).toContainText(
+            await expect(guest.getByRole('region', { name: 'Race results' })).toContainText(
               'Ada wins Risky Exchange'
             );
           }
@@ -271,7 +270,7 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
     const rematchRoomCode = await table.locator('[data-e2e-tabletop]').getAttribute('data-room-code');
     expect(rematchRoomCode).toBe(rematchCode);
     await expect(table.getByLabel('Tabletop race configuration')).toBeVisible();
-    await expect(table.getByLabel('Setup seed')).toHaveValue('REPAIR-4:rematch');
+    await expect(table.getByLabel('Setup seed')).toHaveCount(0);
     await expect(table.locator('[data-seat="1"]')).toContainText('Ada');
     await expect(table.locator('[data-seat="2"]')).toContainText('Grace');
     await expect(table.getByRole('img', { name: /QR code to join position/ })).toHaveCount(6);

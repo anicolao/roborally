@@ -11,15 +11,15 @@
   <title>Robo Rally board gallery</title>
   <meta
     name="description"
-    content="Review the generated raster artwork for every Robo Rally 2005 board face."
+    content="Explore the Robo Rally factory boards."
   />
 </svelte:head>
 
 <main>
   <header>
-    <p>AVALON HILL 2005 · GENERATED RASTER TILE PROOF</p>
+    <p>ROBO RALLY</p>
     <h1>Factory board gallery</h1>
-    <span>Every preview is assembled from the reviewed semantic board manifests.</span>
+    <span>Explore conveyors, pits, lasers and repair sites before your next race.</span>
   </header>
 
   <ol aria-label="All board face artwork">

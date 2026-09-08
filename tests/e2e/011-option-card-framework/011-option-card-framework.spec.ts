@@ -35,7 +35,7 @@ async function chooseProgram(page: Page, labels: Program) {
     if ((await button.getAttribute('aria-pressed')) !== 'true') await button.click();
     await expect(button).toHaveAttribute('aria-pressed', 'true');
   }
-  const submit = page.getByRole('button', { name: 'Submit immutable program' });
+  const submit = page.getByRole('button', { name: 'Lock program' });
   if (!(await submit.isEnabled())) {
     const registers = await page
       .getByRole('list', { name: 'Chosen registers' })
@@ -52,7 +52,7 @@ async function chooseFirstProgram(page: Page) {
   const openText = await page.locator('.program-console').getByText(/\d\/\d open/).textContent();
   const count = Number(openText?.match(/\/(\d+) open/)?.[1] ?? 5);
   for (let index = 0; index < count; index += 1) await hand.nth(index).click();
-  await page.getByRole('button', { name: 'Submit immutable program' }).click();
+  await page.getByRole('button', { name: 'Lock program' }).click();
 }
 
 test('face-up Options remain available for execution-time decisions', async (
@@ -65,8 +65,8 @@ test('face-up Options remain available for execution-time decisions', async (
   const guest = await guestContext.newPage();
 
   try {
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a`);
-    await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a&e2eSeed=OPTION-11`);
+    await expect(host.getByRole('status')).toHaveText('Connected');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');
     await host.getByRole('button', { name: 'Axle' }).click();
@@ -84,7 +84,6 @@ test('face-up Options remain available for execution-time decisions', async (
       'Two ordinary clients reach the crossed repair site on successive turns, draw from one deterministic Option deck, and retain those cards until an actual execution-time choice occurs.'
     );
 
-    await host.getByLabel('Setup seed').fill('OPTION-11');
     await host.getByRole('button', { name: 'Configure Risky Exchange' }).click();
     await guest.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Ready for race' }).click();

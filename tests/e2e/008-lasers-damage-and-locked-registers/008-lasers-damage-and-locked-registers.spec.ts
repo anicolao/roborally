@@ -11,7 +11,7 @@ async function chooseProgram(page: Page, labels: readonly string[]) {
   for (const label of labels) {
     await page.getByRole('button', { name: label, exact: true }).click();
   }
-  await page.getByRole('button', { name: 'Submit immutable program' }).click();
+  await page.getByRole('button', { name: 'Lock program' }).click();
 }
 
 async function join(
@@ -40,8 +40,8 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
 
   try {
     await enableSyntheticPlaybackClock(host);
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a`);
-    await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a&e2eSeed=LASER4-0`);
+    await expect(host.getByRole('status')).toHaveText('Connected');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');
     await host.getByRole('button', { name: 'Axle' }).click();
@@ -65,7 +65,6 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
       'Four ordinary Programs create repeated unobstructed robot-laser snapshots. Margaret receives six damage, locking registers 4 and 5 with their exact card IDs; owner and observer clients converge on the same public result.'
     );
 
-    await host.getByLabel('Setup seed').fill('LASER4-0');
     await host.getByRole('button', { name: 'Configure Risky Exchange' }).click();
     for (const page of [grace, linus, margaret]) {
       await page.getByRole('button', { name: 'Ready for race' }).click();
@@ -150,7 +149,7 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
         {
           spec: 'Robot rays stop at the first visible target after board movement',
           check: async () => {
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
             const trace = host.getByRole('list', { name: 'Full resolution feed' });
             await expect(trace).toContainText(
               'Margaret fired through clear line of sight and hit Linus'
@@ -158,19 +157,19 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
             await expect(trace).toContainText(
               'Linus fired through clear line of sight and hit Margaret'
             );
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
           }
         },
         {
           spec: 'Multiple rays use the same target snapshot before damage is applied',
           check: async () => {
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
             const trace = host.getByRole('list', { name: 'Full resolution feed' });
             await expect(trace).toContainText(
               'Grace fired through clear line of sight and hit Margaret'
             );
             await expect(trace).toContainText('Margaret took one damage and now has 6');
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
           }
         },
         {
@@ -215,7 +214,7 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
         {
           spec: 'The UI exposes the fully locked repeat invariant',
           check: async () => {
-            await host.getByText('Recent moves & board rules', { exact: true }).click();
+            await host.getByText('Recent moves & rules', { exact: true }).click();
             await expect(host.getByText(/Damage 9 repeats all five locked registers/)).toBeVisible();
           }
         }
@@ -231,12 +230,12 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
     for (let index = 0; index < 3; index += 1) {
       await margaretHand.nth(index).click();
     }
-    await margaret.getByRole('button', { name: 'Submit immutable program' }).click();
+    await margaret.getByRole('button', { name: 'Lock program' }).click();
     const margaretLockedProgram = margaret.getByRole('list', { name: 'Locked Program' });
     await expect(margaretLockedProgram.getByRole('listitem')).toHaveCount(5);
-    await expect(margaretLockedProgram.getByRole('listitem').nth(0)).toContainText('committed');
-    await expect(margaretLockedProgram.getByRole('listitem').nth(1)).toContainText('committed');
-    await expect(margaretLockedProgram.getByRole('listitem').nth(2)).toContainText('committed');
+    await expect(margaretLockedProgram.getByRole('listitem').nth(0)).toContainText('ready');
+    await expect(margaretLockedProgram.getByRole('listitem').nth(1)).toContainText('ready');
+    await expect(margaretLockedProgram.getByRole('listitem').nth(2)).toContainText('ready');
     await expect(margaretLockedProgram.getByRole('listitem').nth(3)).toContainText('damage locked');
     await expect(margaretLockedProgram.getByRole('listitem').nth(4)).toContainText('damage locked');
     await expect(margaretLockedProgram.getByRole('button')).toHaveCount(0);
@@ -283,7 +282,7 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
         {
           spec: 'The owner distinguishes committed cards from damage-locked registers',
           check: async () => {
-            await expect(margaretLockedProgram).toContainText('committed');
+            await expect(margaretLockedProgram).toContainText('ready');
             await expect(margaretLockedProgram).toContainText('damage locked');
             await expect(margaretLockedProgram.getByRole('button')).toHaveCount(0);
           }

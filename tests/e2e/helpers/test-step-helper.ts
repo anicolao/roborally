@@ -40,6 +40,17 @@ export class TestStepHelper {
     this.page = page;
   }
 
+  async assertPlayerFacingCopy() {
+    const playerCopy = await this.page.locator('main').evaluateAll((roots) => roots.map((root) => [
+      (root as HTMLElement).innerText,
+      ...[...root.querySelectorAll('[aria-label]')].map((element) => element.getAttribute('aria-label'))
+    ].join(' ')).join(' '));
+    expect(playerCopy, 'Player screens must not expose implementation diagnostics').not.toMatch(
+      /immutable|append-only|microsteps|replay diagnostics|replay clean|setup seed|cards accounted|cache \+ cursor|raster proof|manifest inventory|geometry-auditor|rule probes|writing event|Firebase emulator|layout attention/i
+    );
+
+  }
+
   async step(id: string, options: StepOptions) {
     for (const verification of options.verifications) {
       await verification.check();
@@ -52,6 +63,8 @@ export class TestStepHelper {
         expectedStatus
       );
     }
+
+    await this.assertPlayerFacingCopy();
 
     await this.page.mouse.move(0, 0);
     await this.page.evaluate(async () => {

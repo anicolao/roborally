@@ -75,7 +75,7 @@ async function chooseProgram(page: Page, labels: Program) {
       }, { timeout: 15_000 })
       .toBe('true');
   }
-  const submit = page.getByRole('button', { name: 'Submit immutable program' });
+  const submit = page.getByRole('button', { name: 'Lock program' });
   await expect(submit).toBeEnabled();
   await submit.click();
 }
@@ -166,8 +166,8 @@ test('a keyboard and touch-operable race completes at every target viewport', as
   try {
     await enableSyntheticPlaybackClock(host);
     await host.emulateMedia({ reducedMotion: 'reduce' });
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a`);
-    await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a&e2eSeed=OPTION-11`);
+    await expect(host.getByRole('status')).toHaveText('Connected');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');
     await host.getByRole('button', { name: 'Axle' }).click();
@@ -182,7 +182,6 @@ test('a keyboard and touch-operable race completes at every target viewport', as
     await guest.getByRole('button', { name: 'Bit' }).click();
     await guest.getByRole('button', { name: 'Claim seat' }).click();
 
-    await host.getByLabel('Setup seed').fill('OPTION-11');
     await host.getByRole('button', { name: 'Configure Risky Exchange' }).click();
     await guest.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Ready for race' }).click();
@@ -259,7 +258,7 @@ test('a keyboard and touch-operable race completes at every target viewport', as
       ]
     });
 
-    await host.getByRole('button', { name: 'Submit immutable program' }).click();
+    await host.getByRole('button', { name: 'Lock program' }).click();
     await expect(host.getByRole('timer')).toContainText(/has (29|30) seconds/);
     await expect(host.getByRole('timer')).toContainText('Fill timed-out program');
     await steps.step('textual-timer-and-non-color-state', {
@@ -275,7 +274,7 @@ test('a keyboard and touch-operable race completes at every target viewport', as
           spec: 'Immutable submission is communicated in text, independent of color',
           check: async () => {
             await expect(
-              host.getByText('Program committed. It is locked and cannot be changed.')
+              host.getByText('Your program is locked.')
             ).toBeVisible();
           }
         }
@@ -285,7 +284,7 @@ test('a keyboard and touch-operable race completes at every target viewport', as
     await chooseProgram(guest, turns[0].guest);
     await closeResolutionInterrupts(host, guest, 1);
     await expect(host.getByTestId('resolution-live')).toContainText('Turn 1');
-    await host.getByText('Recent moves & board rules', { exact: true }).click();
+    await host.getByText('Recent moves & rules', { exact: true }).click();
     await expect(
       host.getByRole('list', { name: 'Resolution feed' }).getByRole('listitem').last()
     ).toHaveCSS('animation-name', 'none');
@@ -320,10 +319,10 @@ test('a keyboard and touch-operable race completes at every target viewport', as
         {
           spec: 'Actor and observer share the same immutable winner summary',
           check: async () => {
-            await expect(host.getByLabel('Immutable race summary')).toContainText(
+            await expect(host.getByLabel('Race results')).toContainText(
               'Ada wins Risky Exchange'
             );
-            await expect(guest.getByLabel('Immutable race summary')).toContainText(
+            await expect(guest.getByLabel('Race results')).toContainText(
               'Ada wins Risky Exchange'
             );
           }

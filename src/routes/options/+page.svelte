@@ -10,38 +10,25 @@
   import { OPTION_CARDS } from '$lib/game/option-manifest';
 
   let cardSize = $state<OptionCardSize>('medium');
-  let fitByCard = $state<Record<string, boolean | null>>({});
   const selectedSize = $derived(
     OPTION_CARD_PRESENTATIONS.find(({ id }) => id === cardSize) ?? OPTION_CARD_PRESENTATIONS[1]
   );
-  const measuredCount = $derived(
-    OPTION_CARDS.filter(({ id }) => typeof fitByCard[id] === 'boolean').length
-  );
-  const overflowCount = $derived(
-    OPTION_CARDS.filter(({ id }) => fitByCard[id] === false).length
-  );
-
-  function resetMeasurements() {
-    fitByCard = {};
-  }
 </script>
 
 <svelte:head>
-  <title>Option card artwork prototype — Robo Rally</title>
+  <title>Option cards — Robo Rally</title>
   <meta
     name="description"
-    content="Review the complete Robo Rally Option inventory using layered raster card prototypes."
+    content="Learn when and how to use every Robo Rally Option card."
   />
 </svelte:head>
 
 <main>
   <header>
-    <p>AVALON HILL 2005 · LAYERED RASTER PROOF</p>
+    <p>ROBO RALLY</p>
     <h1>Option cards</h1>
     <span>
-      All 26 manifest cards rendered with programmatic title, rules, timing, behavior, and payload.
-      Choose a production size to inspect the complete inventory. Every card uses its own generated,
-      reusable illustration layer.
+      Learn when and how to use each Option.
     </span>
 
     <fieldset class="size-selector">
@@ -53,11 +40,9 @@
             name="card-size"
             value={size.id}
             bind:group={cardSize}
-            onchange={resetMeasurements}
           />
           <span>
             <strong>{size.label}</strong>
-            <small>{size.width} × {size.height}</small>
           </span>
         </label>
       {/each}
@@ -67,23 +52,13 @@
   <section class="inventory" aria-labelledby="inventory-heading">
     <div class="section-heading">
       <div>
-        <p>LIVE MANIFEST INVENTORY</p>
+
         <h2 id="inventory-heading">All {OPTION_CARDS.length} Option cards</h2>
       </div>
-      <span>
-        {selectedSize.label} · {selectedSize.width} × {selectedSize.height} px · {selectedSize.use}
-      </span>
+
     </div>
 
-    <div class="measurement-summary" aria-live="polite">
-      {#if measuredCount < OPTION_CARDS.length}
-        Measuring content fit… {measuredCount}/{OPTION_CARDS.length}
-      {:else if overflowCount > 0}
-        {overflowCount} {overflowCount === 1 ? 'card needs' : 'cards need'} layout attention
-      {:else}
-        All card content fits this layout
-      {/if}
-    </div>
+
 
     <ol
       class:large={cardSize === 'large'}
@@ -95,22 +70,12 @@
         <li>
           <div class="card-heading">
             <span>{String(index + 1).padStart(2, '0')} · {card.name}</span>
-            <strong
-              class:fits={fitByCard[card.id] === true}
-              class:overflows={fitByCard[card.id] === false}
-            >
-              {fitByCard[card.id] === null || fitByCard[card.id] === undefined
-                ? 'MEASURING'
-                : fitByCard[card.id]
-                  ? 'FITS'
-                  : 'OVERFLOWS'}
-            </strong>
+
           </div>
           <div class="card-stage">
             <OptionCardFace
               {card}
               size={cardSize}
-              onfitchange={(fits) => (fitByCard[card.id] = fits)}
             />
           </div>
         </li>
@@ -118,17 +83,7 @@
     </ol>
   </section>
 
-  <section class="layer-note" aria-labelledby="layers-heading">
-    <div>
-      <p>LAYER STRATEGY</p>
-      <h2 id="layers-heading">Artwork stays reusable</h2>
-    </div>
-    <p>
-      The steel chassis, illustration, title, rules summary, timing, behavior, and payload remain
-      separate layers. Each Option has unique artwork while the standard chassis serves Large and Medium; the reference-inspired
-      long-copy chassis gives Small substantially more room for readable rules.
-    </p>
-  </section>
+
 </main>
 
 <style>
@@ -160,10 +115,7 @@
     max-width: 58rem;
     margin-bottom: 4rem;
   }
-
-  header > p,
-  .section-heading p,
-  .layer-note > div p {
+  header > p {
     margin: 0 0 0.55rem;
     color: #7de5ef;
     font: 0.75rem/1.4 'Space Mono', monospace;
@@ -247,9 +199,6 @@
     letter-spacing: 0.06em;
   }
 
-  .size-selector small {
-    font: 0.62rem/1.2 'Space Mono', monospace;
-  }
 
   .size-selector input:checked + span {
     background: #dbe84e;
@@ -279,24 +228,7 @@
     gap: 1.5rem;
   }
 
-  .section-heading > span {
-    max-width: 24rem;
-    color: #8fa19e;
-    font: 0.72rem/1.5 'Space Mono', monospace;
-    text-align: right;
-    text-transform: uppercase;
-  }
 
-  .measurement-summary {
-    margin: 1.25rem 0 2rem;
-    padding: 0.65rem 0.8rem;
-    border-block: 1px solid #2b3b3e;
-    color: #d2ff37;
-    font: 0.72rem/1.3 'Space Mono', monospace;
-    letter-spacing: 0.05em;
-    text-align: center;
-    text-transform: uppercase;
-  }
 
   ol {
     display: grid;
@@ -330,48 +262,14 @@
     white-space: nowrap;
   }
 
-  .card-heading > strong {
-    flex: none;
-    padding: 0.3rem 0.45rem;
-    border: 1px solid #536065;
-    color: #97a4a6;
-    background: #11191b;
-    font: 0.58rem/1 'Space Mono', monospace;
-    letter-spacing: 0.05em;
-  }
 
-  .card-heading > strong.fits {
-    border-color: #80a72c;
-    color: #d2ff37;
-    background: #19200f;
-  }
 
-  .card-heading > strong.overflows {
-    border-color: #c45c50;
-    color: #ff8b80;
-    background: #291311;
-  }
 
   .card-stage {
     width: 100%;
   }
 
-  .layer-note {
-    display: grid;
-    grid-template-columns: minmax(0, 0.8fr) minmax(18rem, 1.2fr);
-    gap: clamp(2rem, 6vw, 6rem);
-    align-items: start;
-    margin-top: 5rem;
-    padding-top: 2rem;
-    border-top: 1px solid #2d3a3d;
-  }
 
-  .layer-note > p {
-    margin: 0;
-    color: #acbab7;
-    font-size: 1.1rem;
-    line-height: 1.55;
-  }
 
   @media (max-width: 700px) {
     main {
@@ -398,14 +296,6 @@
       display: block;
     }
 
-    .section-heading > span {
-      display: block;
-      margin-top: 0.7rem;
-      text-align: left;
-    }
 
-    .layer-note {
-      grid-template-columns: 1fr;
-    }
   }
 </style>

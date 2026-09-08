@@ -22,9 +22,8 @@
   export let showHeading = true;
   export let instructionsVisible = true;
   export let viewportFit = false;
-  export let submitLabel = 'Submit immutable program';
-  export let submittedMessage = 'Program committed. It is locked and cannot be changed.';
-  export let previewText = '';
+  export let submitLabel = 'Lock program';
+  export let submittedMessage = 'Your program is locked.';
   export let ondraftchange: (
     slots: (ProgramCard['id'] | null)[],
     pairedSlots: (ProgramCard['id'] | null)[]
@@ -255,14 +254,14 @@
           <div
             class:damage-locked={register.locked}
             class="locked-register filled"
-            aria-label={`Register ${index + 1}, ${card ? `${card.action} priority ${card.priority}` : 'empty'}${pairedCard ? ` paired with ${pairedCard.action} priority ${pairedCard.priority}` : ''}, ${register.locked ? 'damage locked' : 'committed'}`}
+            aria-label={`Register ${index + 1}, ${card ? `${card.action} priority ${card.priority}` : 'empty'}${pairedCard ? ` paired with ${pairedCard.action} priority ${pairedCard.priority}` : ''}, ${register.locked ? 'damage locked' : 'ready'}`}
           >
             <span>R{index + 1}</span>
             <span class="register-cards">
               {#if card}<ProgramCardFace {card} compact variant="square" />{:else}<strong>empty</strong>{/if}
               {#if pairedCard}<ProgramCardFace card={pairedCard} compact variant="square" />{/if}
             </span>
-            <small>{register.locked ? 'damage locked' : 'committed'}</small>
+            <small>{register.locked ? 'damage locked' : 'ready'}</small>
           </div>
         </li>
       {/each}
@@ -333,9 +332,6 @@
         </li>
       {/each}
     </ol>
-    {#if previewText}
-      <details class="preview-note"><summary>Program preview</summary><p>{previewText}</p></details>
-    {/if}
     <div class="editor-actions">
       {#if canRecompile}
         <button
@@ -539,15 +535,12 @@
   }
   .chosen-registers small { color: #ffcf4b; font-size: 9px; }
   .chosen-registers .locked-register:not(.damage-locked) small { color: #d2ff37; }
-  .preview-note, .submission-state { margin: 0; color: #778487; font-size: 16px; line-height: 1.35; }
   .submission-state {
     padding: 9px;
     border: 1px solid #53613b;
     color: #d2ff37;
     background: #151d13;
   }
-  .preview-note summary { cursor: pointer; }
-  .preview-note p { margin: 6px 0; }
   .editor-actions { display: grid; gap: 8px; }
   .editor-actions button {
     min-height: 44px;
@@ -584,7 +577,7 @@
 
   @media (max-height: 720px) and (max-width: 820px) and (orientation: portrait) {
     .program-editor { gap: 2px; }
-    .instructions, .preview-note { display: none; }
+    .instructions { display: none; }
     .program-hand { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; }
     .viewport-fit .program-hand {
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -629,7 +622,7 @@
       gap: 3px 8px;
     }
     .viewport-fit .editor-heading { grid-column: 1 / -1; }
-    .viewport-fit .instructions, .viewport-fit .preview-note { display: none; }
+    .viewport-fit .instructions { display: none; }
     .viewport-fit .program-hand {
       grid-column: 1;
       grid-row: 2 / 4;

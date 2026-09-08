@@ -3,6 +3,7 @@
   import '@fontsource/atkinson-hyperlegible/700.css';
   import '@fontsource/space-mono/400.css';
   import '@fontsource/space-mono/700.css';
+  import { base } from '$app/paths';
   import { replaceState } from '$app/navigation';
   import { onDestroy, onMount, tick } from 'svelte';
   import type { Unsubscribe } from 'firebase/firestore';
@@ -31,7 +32,6 @@
     draftCardIdsInRegisterOrder,
     draftSlotsForPlayer,
     pairedDraftSlotsForPlayer,
-    previewProgram,
     programCardZones,
     recompileDecisionId,
     type ProgrammingPlayer
@@ -68,7 +68,7 @@
   type PlaybackPhase = 'idle' | 'countdown' | 'register' | 'complete';
 
   let connectionState: ConnectionState = 'connecting';
-  let connectionMessage = 'Connecting to the factory network';
+  let connectionMessage = 'Connecting…';
   let browserOnline = true;
   let cacheHydrated = false;
   let roomWatchGeneration = 0;
@@ -211,9 +211,6 @@
     !powerResponse &&
     (roomState.pendingPowerDownUid === currentPlayer.uid ||
       firstNextPowerUid === currentPlayer.uid);
-  $: programPreview = programmingPlayer
-    ? previewProgram(programmingPlayer, selectedProgramCardIds)
-    : [];
   $: recompileOptionCardIds = currentPlayer && activeProgramming
     ? programmingOptionCardIds(roomState, activeProgramming, currentPlayer.uid)
     : [];
@@ -522,7 +519,7 @@
         }
         if (nextState.players.some((player) => player.uid === services?.user.uid)) {
           mode = 'room';
-          connectionMessage = `Room ${roomCode} synced`;
+          connectionMessage = `Room ${roomCode}`;
         }
       },
       (error) => {
@@ -530,10 +527,10 @@
         console.error(error);
         if (!navigator.onLine) {
           connectionState = 'offline';
-          connectionMessage = `Room ${roomCode} cached · ${synchronizedEventCount} events`;
+          connectionMessage = 'Offline · reconnecting';
         } else {
           connectionState = 'error';
-          formError = 'The immutable room stream could not be read.';
+          formError = 'Unable to load the race. Please reconnect.';
         }
       },
       (status) => {
@@ -545,13 +542,13 @@
         if (status.source === 'room-cache') cacheHydrated = true;
         if (status.source === 'server') {
           connectionState = 'synced';
-          connectionMessage = `Room ${roomCode} synced`;
+          connectionMessage = `Room ${roomCode}`;
         } else if (!navigator.onLine) {
           connectionState = 'offline';
-          connectionMessage = `Room ${roomCode} cached · ${status.eventCount} events`;
+          connectionMessage = 'Offline · reconnecting';
         } else {
           connectionState = 'connecting';
-          connectionMessage = `Room ${roomCode} replaying cache`;
+          connectionMessage = 'Reconnecting…';
         }
       }
     );
@@ -561,26 +558,29 @@
     browserOnline = false;
     if (mode !== 'room') return;
     connectionState = 'offline';
-    connectionMessage = `Room ${roomCode} cached · ${synchronizedEventCount} events`;
+    connectionMessage = 'Offline · reconnecting';
   }
 
   function handleOnline() {
     browserOnline = true;
     if (mode !== 'room') return;
     connectionState = 'connecting';
-    connectionMessage = `Room ${roomCode} reconnecting`;
+    connectionMessage = 'Reconnecting…';
   }
 
   function retryRoomFromServer() {
     if (!roomService || !navigator.onLine || !roomCode) return;
     roomService.clearRoomEventCache(roomCode);
     connectionState = 'connecting';
-    connectionMessage = `Room ${roomCode} replaying from server`;
+    connectionMessage = 'Reconnecting…';
     watchRoom(roomCode);
   }
 
   onMount(async () => {
     try {
+      if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
+        setupSeed = new URLSearchParams(window.location.search).get('e2eSeed')?.slice(0, 64) || setupSeed;
+      }
       e2eCourseOverride = new URLSearchParams(window.location.search).get('e2eCourse') ?? '';
       if (
         import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' &&
@@ -594,10 +594,7 @@
       roomService = await import('$lib/room-service');
       identityLabel = deterministicIdentity(services.user.uid);
       connectionState = 'synced';
-      connectionMessage =
-        import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true'
-          ? 'Firebase emulator ready'
-          : 'Factory network ready';
+      connectionMessage = 'Connected';
       const requestedRoom = normalizeRoomCode(
         new URLSearchParams(window.location.search).get('room') ?? ''
       );
@@ -611,7 +608,7 @@
     } catch (error) {
       console.error(error);
       connectionState = 'error';
-      connectionMessage = 'Firebase configuration required';
+      connectionMessage = 'Unable to connect';
     }
   });
 
@@ -678,7 +675,7 @@
       formError =
         mode === 'create'
           ? 'That room code is already in use. Try creating another race.'
-          : 'Your seat could not be claimed. Replay the room and try again.';
+          : 'Your seat could not be claimed. Reload the room and try again.';
     } finally {
       pending = false;
     }
@@ -705,7 +702,7 @@
       });
     } catch (error) {
       console.error(error);
-      formError = 'The race configuration event could not be written.';
+      formError = 'Unable to save the race settings. Please try again.';
     } finally {
       pending = false;
     }
@@ -724,7 +721,7 @@
       );
     } catch (error) {
       console.error(error);
-      formError = 'The readiness event could not be written.';
+      formError = 'Unable to mark you ready. Please try again.';
     } finally {
       pending = false;
     }
@@ -770,7 +767,7 @@
       );
     } catch (error) {
       console.error(error);
-      formError = 'The Program draft could not be written.';
+      formError = 'The Program draft could not be saved. Please try again.';
     }
   }
 
@@ -798,7 +795,7 @@
       programDraftWriteQueue = Promise.resolve();
     } catch (error) {
       console.error(error);
-      formError = 'The immutable Program submission could not be written.';
+      formError = 'Unable to lock your program. Please try again.';
     } finally {
       pending = false;
     }
@@ -828,7 +825,7 @@
       programDraftWriteQueue = Promise.resolve();
     } catch (error) {
       console.error(error);
-      formError = 'The Recompile choice could not be written.';
+      formError = 'The Recompile choice could not be saved. Please try again.';
     } finally {
       pending = false;
     }
@@ -852,7 +849,7 @@
       programDraftDirty = false;
     } catch (error) {
       console.error(error);
-      formError = 'The timeout claim could not be written.';
+      formError = 'The timeout claim could not be saved. Please try again.';
     } finally {
       pending = false;
     }
@@ -885,7 +882,7 @@
       effectDraftDirty = false;
     } catch (error) {
       console.error(error);
-      formError = 'The re-entry choice could not be written.';
+      formError = 'The re-entry choice could not be saved. Please try again.';
     } finally {
       pending = false;
     }
@@ -904,7 +901,7 @@
       );
     } catch (error) {
       console.error(error);
-      formError = 'The Option loss choice could not be written.';
+      formError = 'The Option loss choice could not be saved. Please try again.';
     } finally {
       pending = false;
     }
@@ -933,7 +930,7 @@
       );
     } catch (error) {
       console.error(error);
-      formError = 'The re-entry draft could not be written.';
+      formError = 'The re-entry draft could not be saved. Please try again.';
     }
   }
 
@@ -961,7 +958,7 @@
       );
     } catch (error) {
       console.error(error);
-      formError = 'The Option decision could not be written.';
+      formError = 'The Option decision could not be saved. Please try again.';
     } finally {
       pending = false;
     }
@@ -996,7 +993,7 @@
       programDraftDirty = false;
     } catch (error) {
       console.error(error);
-      formError = 'The immutable rematch event could not be written.';
+      formError = 'Unable to start another race. Please try again.';
     } finally {
       pending = false;
     }
@@ -1012,7 +1009,7 @@
       });
     } catch (error) {
       console.error(error);
-      formError = 'The ordered power-down response could not be written.';
+      formError = 'Unable to save your power choice. Please try again.';
     } finally {
       pending = false;
     }
@@ -1035,9 +1032,9 @@
   <title>{mode === 'room' ? `Room ${roomCode} — Robo Rally` : 'Robo Rally — Program the factory'}</title>
 </svelte:head>
 
-<main class="shell" data-e2e-layout>
+<main data-testid="build-marker" data-build={buildHash} class="shell" data-e2e-layout>
   <header class="masthead">
-    <a class="brand" href="/" aria-label="Robo Rally home">
+    <a class="brand" href={base || "/"} aria-label="Robo Rally home">
       <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
       <span><strong>ROBO</strong> RALLY <small>2005</small></span>
     </a>
@@ -1055,7 +1052,7 @@
       </span>
       {#if connectionState === 'offline'}
         <button type="button" onclick={retryRoomFromServer} disabled={!browserOnline}>
-          Replay from server
+          Reconnect
         </button>
       {/if}
     </div>
@@ -1118,10 +1115,10 @@
         <p class="eyebrow">
           <span>{roomState.resolution ? '05' : showProgramming ? '04' : '03'}</span>
           {roomState.resolution
-            ? 'PRIORITY RESOLUTION'
+            ? 'ROBOTS MOVING'
             : showProgramming
-              ? `SHARED DECK / TURN ${activeProgramming?.turnNumber ?? 1}`
-              : 'SEEDED RACE SETUP'}
+              ? `TURN ${activeProgramming?.turnNumber ?? 1}`
+              : 'READY TO RACE'}
         </p>
         <h1 id="race-heading">
           {showProgramming ? 'Program.' : 'Ready.'}<br />
@@ -1133,7 +1130,7 @@
           <small>{currentPlayer.name} · {currentRobot?.mark ?? '—'} · BRIGHT YELLOW ON BOARD</small>
         </div>
         {#if showProgramming && programmingPlayer && activeProgramming}
-          <section class="program-console" aria-labelledby="hand-heading">
+          <section class="program-console" data-program-card-count={activeProgramming ? programCardZones(activeProgramming).size : undefined} aria-labelledby="hand-heading">
             <div class="program-head">
               <h2 id="hand-heading" tabindex="-1" bind:this={programHeadingElement}>
                 Your hand · {programmingPlayer.hand.length || 'submitted'}
@@ -1145,7 +1142,7 @@
               </span>
             </div>
             <details class="option-catalog" aria-label="2005 Option catalog">
-              <summary>26-card Option catalog · executable rules</summary>
+              <summary>Option cards</summary>
               <ol>
                 {#each OPTION_CARDS as option}
                   <li data-option-id={option.id}>
@@ -1157,6 +1154,7 @@
             {#if roomState.setup.powerDownAllowed}
               <div
                 class="power-control"
+                class:empty-power-control={!powerResponse && !canRespondPowerDown && !roomState.pendingPowerDownUid && !firstNextPowerUid}
                 aria-label="Ordered power-down control"
                 data-turn-id={activeProgramming.turnId}
                 data-can-respond={canRespondPowerDown}
@@ -1165,7 +1163,7 @@
               {#if powerResponse}
                 <span>
                   {powerResponse.powerDownNextTurn
-                    ? 'Power down committed for next turn'
+                    ? 'Powering down next turn'
                     : 'Active next turn'}
                 </span>
               {:else if canRespondPowerDown}
@@ -1191,7 +1189,7 @@
                 <span>
                   {pendingPowerPlayer
                     ? `Waiting for ${pendingPowerPlayer.name} in original Dock order`
-                    : 'No power-down decision required'}
+                    : ''}
                 </span>
               {/if}
               </div>
@@ -1210,7 +1208,6 @@
                   {pending}
                   showHeading={false}
                   instructionsVisible={false}
-                  previewText={`Preview excludes robots and unrevealed board outcomes. ${programPreview.join(' · ')}`}
                   {recompileOptionCardIds}
                   {recompileUsed}
                   ondraftchange={writeProgramDraft}
@@ -1263,7 +1260,7 @@
                           : roomState.resolution.phase === 'awaiting-option-decision'
                             ? `waiting for ${pendingOptionRobot?.name ?? 'Option decision'}`
                             : 'awaiting re-entry'}
-                  · {visibleResolutionTrace.length} microsteps
+
                 </h2>
                 <ul class="robot-state" aria-label="Robot Life and damage state">
                   {#each presentedResolutionRobots ?? [] as robot}
@@ -1438,51 +1435,44 @@
                   {@const winners = roomState.resolution.summary.winnerUids
                     .map((uid) => roomState.players.find((player) => player.uid === uid))
                     .filter((player) => player !== undefined)}
-                  <section class="race-summary" aria-label="Immutable race summary">
+                  <section class="race-summary" aria-label="Race results">
                     <strong>
                       {winners.length === 1
                         ? `${winners[0].name} wins ${configuredCourse?.name ?? 'the race'}`
                         : `${winners.map(({ name }) => name).join(' & ')} tie for the win in ${configuredCourse?.name ?? 'the race'}`}
                     </strong>
-                    <span>
-                      Epoch {roomState.raceEpoch} ·
-                      {roomState.resolution.summary.standings.length} final standings retained
-                    </span>
+
                     {#if isHost}
                       <button type="button" onclick={rematchRace} disabled={pending}>
-                        Start rematch epoch {roomState.raceEpoch + 1}
+                        Play again
                       </button>
                     {/if}
                   </section>
                 {/if}
                 <details class="race-details">
-                  <summary>Recent moves &amp; board rules</summary>
+                  <summary>Recent moves &amp; rules</summary>
                 <p class="reentry-policy">
                   Re-entry position: return to the current archive marker when it is clear. If it
                   is occupied, choose the nearest legal surrounding square and then a facing.
                 </p>
                 <p class="board-phase">
-                  Board phase: express conveyors → all conveyors → register pushers → gears →
-                  one laser snapshot.
-                  {roomState.configuration?.courseId === 'risky-exchange'
-                    ? 'Exchange prints no pushers; fixtures cover that stage.'
-                    : 'The configured board manifest supplies every active element.'}
+                  Board phase: express conveyors → all conveyors → pushers → gears → lasers.
                   Damage 9 repeats all five locked registers.
                 </p>
                 <ol aria-label="Resolution feed" aria-live="polite">
                   {#each visibleResolutionTrace.slice(-5) as entry, index}
                     <li style={`--trace-index:${index}`}>
-                      <span>{entry.register <= 5 ? `R${entry.register}` : 'CLEANUP'} · {entry.priority ?? 'SYS'}</span>
+                      <span>{entry.register <= 5 ? `R${entry.register}` : 'CLEANUP'} · {entry.priority ?? 'Board'}</span>
                       {entry.text}
                     </li>
                   {/each}
                 </ol>
                 </details>
                 <details class="full-resolution">
-                  <summary>Full resolution text</summary>
+                  <summary>Turn history</summary>
                   <ol aria-label="Full resolution feed">
                     {#each visibleResolutionTrace as entry}
-                      <li><span>{entry.register <= 5 ? `R${entry.register}` : 'CLEANUP'} · {entry.priority ?? 'SYS'}</span>{entry.text}</li>
+                      <li><span>{entry.register <= 5 ? `R${entry.register}` : 'CLEANUP'} · {entry.priority ?? 'Board'}</span>{entry.text}</li>
                     {/each}
                   </ol>
                 </details>
@@ -1491,43 +1481,12 @@
           </section>
         {/if}
         <details class="race-details">
-          <summary>Race details &amp; connection</summary>
-          {#if activeProgramming}
-            <p class="conservation" data-testid="program-conservation">
-              {programCardZones(activeProgramming).size}/84 cards accounted ·
-              {activeProgramming.drawPile.length} undealt ·
-              {activeProgramming.currentTurnDiscard.length} turn discard
-            </p>
-          {/if}
-
-        <p class="lede">
-          {#if showProgramming}
-            Seed <strong>{roomState.configuration.seed}</strong> deals one shared 84-card deck in
-            original Dock order. Opponent programs stay masked until the barrier closes.
-          {:else}
-            The readiness barrier is closed. This exact setup is derived from seed
-            <strong>{roomState.configuration.seed}</strong> and immutable manifest versions.
-          {/if}
-        </p>
+          <summary>Race details</summary>
         <dl class="setup-facts">
           <div><dt>{roomState.configuration.lives}</dt><dd>Lives each</dd></div>
           <div><dt>{roomState.setup.players.length}</dt><dd>robots</dd></div>
           <div><dt>{configuredCourse?.flags.length ?? 0}</dt><dd>flags</dd></div>
         </dl>
-        <p class="epoch-state">
-          Race epoch {roomState.raceEpoch} · {roomState.raceSummaries.length} retained
-          {roomState.raceSummaries.length === 1 ? 'summary' : 'summaries'}
-        </p>
-        {#if cacheHydrated}
-          <p class="reconnect-state">
-            <span aria-label={`Cache + cursor replay verified · ${synchronizedEventCount} immutable events`}>
-              Cache + cursor · {synchronizedEventCount} events
-            </span>
-            <button type="button" aria-label="Replay from server" onclick={retryRoomFromServer}>
-              Replay
-            </button>
-          </p>
-        {/if}
         <ol class="setup-order compact" aria-label="Original Dock order">
           {#each roomState.setup.players as player}
             {@const robot = ROBOTS.find((entry) => entry.id === player.robotId)}
@@ -1541,7 +1500,7 @@
         </ol>
         </details>
         {#if showProgramming}
-          <p class="archive-note">Archives remain on the original Dock cells. Trusted-client secrecy masks, but cannot cryptographically hide, readable events.</p>
+          <p class="archive-note">Choose five cards. Programs stay hidden until everyone is ready.</p>
         {:else}
           <p class="archive-note">
             Every robot’s archive begins on its Dock cell.
@@ -1561,11 +1520,10 @@
   {:else if mode === 'room' && currentPlayer}
     <section class="lobby" aria-labelledby="room-heading">
       <div class="room-console">
-        <p class="eyebrow"><span>02</span> IMMUTABLE RACE CONTROL</p>
+        <p class="eyebrow"><span>02</span> RACE ROOM</p>
         <h1 id="room-heading">Room<br /><em>{roomCode}</em></h1>
         <p class="lede">
-          Every seat is rebuilt from one ordered, append-only event stream. Share the invite;
-          reloads replay the same room.
+          Share the invite and choose a course. The race starts when everyone is ready.
         </p>
         <div class="room-actions">
           <button type="button" onclick={copyInvite}>{copied ? 'Invite copied' : 'Copy invite link'}</button>
@@ -1573,10 +1531,7 @@
         </div>
         <dl class="room-facts">
           <div><dt>{roomState.players.length}/{MAX_ROOM_PLAYERS}</dt><dd>seats claimed</dd></div>
-          <div><dt>{roomState.acceptedEventIds.length}</dt><dd>immutable events</dd></div>
-          <div><dt>{roomState.diagnostics.length}</dt><dd>replay diagnostics</dd></div>
         </dl>
-        <p class="identity">Identity <strong>{identityLabel}</strong> · Seat {currentPlayer.seat}</p>
         <CourseCatalog />
         {#if roomState.players.length >= 2}
           <div class="race-config" aria-label="Race configuration">
@@ -1593,10 +1548,6 @@
                 </select>
               </label>
               <label>
-                Setup seed
-                <input bind:value={setupSeed} maxlength="64" aria-label="Setup seed" />
-              </label>
-              <label>
                 Lives
                 <select bind:value={setupLives} aria-label="Starting Lives">
                   <option value={3}>3 Lives</option>
@@ -1611,18 +1562,16 @@
                 {roomState.configuration ? 'Replace configuration' : `Configure ${selectedCourse.name}`}
               </button>
             {:else if !roomState.configuration}
-              <p>Host is choosing a reviewed course.</p>
+              <p>Host is choosing a course.</p>
             {/if}
             {#if roomState.configuration}
               <p class="configuration-lock">
-                {configuredCourse?.name} · seed {roomState.configuration.seed} ·
+                {configuredCourse?.name} ·
                 {roomState.configuration.lives} Lives ·
-                {configuredCourse?.specialRules.length
-                  ? configuredCourse.specialRules.map(({ kind }) => kind.replaceAll('-', ' ')).join(' · ')
-                  : 'standard rules'}
+                {configuredCourse?.specialRules.length ? configuredCourse.description : 'Standard rules'}
               </p>
               <button type="button" onclick={becomeReady} disabled={pending || currentPlayerReady}>
-                {currentPlayerReady ? 'Ready event written' : 'Ready for race'}
+                {currentPlayerReady ? 'Ready' : 'Ready for race'}
               </button>
             {/if}
           </div>
@@ -1633,7 +1582,7 @@
       <div class="seat-console">
         <div class="telemetry-head">
           <span>SEATING / ORIGINAL DOCK ORDER</span>
-          <span class="live"><i></i> REPLAY CLEAN</span>
+          <span class="live"><i></i> ROOM OPEN</span>
         </div>
         <ol class="seats" aria-label="Race room players">
           {#each Array(MAX_ROOM_PLAYERS) as _, index}
@@ -1660,9 +1609,9 @@
         </ol>
         <p class="room-ready" class:full={roomState.readyPlayerUids.length === roomState.players.length && roomState.players.length >= 2}>
           {#if roomState.configuration}
-            {roomState.readyPlayerUids.length}/{roomState.players.length} racers ready for the immutable setup barrier.
+            {roomState.readyPlayerUids.length}/{roomState.players.length} racers ready.
           {:else if roomState.players.length >= 2}
-            Host may configure a reviewed playable course.
+            Host is choosing a course.
           {:else}
             Waiting for at least two racers.
           {/if}
@@ -1683,7 +1632,6 @@
           <div class="actions" aria-label="Race actions">
             <button type="button" onclick={showCreate} disabled={!services}>Create race</button>
             <button type="button" class="secondary" onclick={showJoin} disabled={!services}>Join with code</button>
-            <p>Identity {identityLabel}. Rooms replay from immutable events.</p>
           </div>
         {:else}
           <form
@@ -1745,7 +1693,7 @@
                 <p class="form-error" role="alert">Room full — all eight robot docks are claimed.</p>
               {/if}
               <button type="submit" disabled={!canSubmit}>
-                {pending ? 'Writing event…' : mode === 'create' ? 'Create and claim seat' : 'Claim seat'}
+                {pending ? 'Joining…' : mode === 'create' ? 'Create and claim seat' : 'Claim seat'}
               </button>
             {/if}
             {#if formError}<p class="form-error" role="alert">{formError}</p>{/if}
@@ -1795,11 +1743,7 @@
     </section>
   {/if}
 
-  <footer>
-    <span>Deterministic multiplayer / Avalon Hill 2005 rules target</span>
-    <span data-testid="build-marker">Build {buildHash}</span>
-    <span>GPL-3.0-only</span>
-  </footer>
+  <footer><span>Robo Rally · 2005 rules</span></footer>
 </main>
 
 <style>
@@ -1907,7 +1851,7 @@
   .shell {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 68px minmax(0, 1fr) 46px;
+    grid-template-rows: 40px minmax(0, 1fr) 22px;
     width: min(100%, 1228px);
     height: 100dvh;
     margin: 0 auto;
@@ -2047,7 +1991,7 @@
   }
   button.secondary { color: #a5b0ae; border-color: #4e5a5c; background: transparent; }
   button:disabled { cursor: not-allowed; opacity: 0.54; }
-  .actions p { display: none; }
+
   .facts {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -2326,14 +2270,8 @@
     font-size: 16px;
     text-transform: uppercase;
   }
-  .identity {
-    margin: 13px 0 0;
-    color: #718083;
-    font: 16px 'Space Mono', monospace;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-  .identity strong { color: #edf3ed; }
+
+
   .seat-console {
     position: relative;
     padding: 15px;
@@ -2421,7 +2359,7 @@
     font: 16px 'Space Mono', monospace;
     text-transform: uppercase;
   }
-  .race-config input, .race-config select {
+  .race-config select {
     min-width: 0;
     height: 34px;
     padding: 0 7px;
@@ -2455,7 +2393,7 @@
   }
   .setup-summary h1 { font-size: clamp(84px, 9.2vw, 128px); }
   .setup-summary h1 em { color: #d2ff37; -webkit-text-stroke: 0; }
-  .setup-summary .lede strong { color: #eef4ee; font-family: 'Space Mono', monospace; }
+
   .your-robot {
     display: grid;
     grid-template-columns: auto 1fr;
@@ -2472,38 +2410,14 @@
   .your-robot strong { font: 700 27px 'Space Mono', monospace; text-transform: uppercase; }
   .your-robot small { font: 700 13px 'Space Mono', monospace; text-transform: uppercase; }
   .setup-summary.resolution-active .setup-order.compact { display: none; }
-  .setup-summary.next-turn-programming .lede,
   .setup-summary.next-turn-programming .setup-facts,
   .setup-summary.next-turn-programming .reentry-policy,
   .setup-summary.next-turn-programming .board-phase {
     display: none;
   }
-  .epoch-state {
-    margin: 5px 0 0;
-    color: #718083;
-    font: 14px 'Space Mono', monospace;
-    text-transform: uppercase;
-  }
-  .reconnect-state {
-    position: relative;
-    margin: 5px 0 0;
-    padding: 5px 48px 5px 7px;
-    border-left: 2px solid #d2ff37;
-    color: #a9b6b3;
-    background: #17201a;
-    font: 14px 'Space Mono', monospace;
-    text-transform: uppercase;
-  }
-  .reconnect-state button {
-    position: absolute;
-    top: 3px;
-    right: 3px;
-    bottom: 3px;
-    min-height: 0;
-    padding: 0 4px;
-    border-color: #8b9d53;
-    font-size: 12px;
-  }
+
+
+
   .setup-facts {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -2551,7 +2465,6 @@
     padding-top: 9px;
     border-top: 1px solid #344043;
   }
-  .setup-summary:has(.program-console) .lede,
   .setup-summary:has(.program-console) .setup-facts,
   .setup-summary:has(.program-console) > .archive-note {
     display: none;
@@ -2573,12 +2486,7 @@
   }
   .program-head span { color: #d2ff37; font: 16px 'Space Mono', monospace; text-transform: uppercase; }
   .shared-program-editor { min-width: 0; }
-  .conservation {
-    margin: 0;
-    color: #ffcf4b;
-    font: 14px 'Space Mono', monospace;
-    text-transform: uppercase;
-  }
+
   .option-catalog {
     position: static;
     width: 100%;
@@ -2853,7 +2761,7 @@
 
   @media (max-width: 820px) {
     .shell {
-      grid-template-rows: 58px minmax(0, 1fr) 34px;
+      grid-template-rows: 40px minmax(0, 1fr) 22px;
       width: min(100%, 588px);
       padding-right: max(14px, env(safe-area-inset-right));
       padding-left: max(14px, env(safe-area-inset-left));
@@ -2875,7 +2783,7 @@
     h1 { font-size: clamp(70px, 22vw, 96px); line-height: 0.9; }
     .lede { align-self: center; max-width: 190px; margin: 0 0 0 16px; font-size: 22px; line-height: 1.35; }
     .actions { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; margin-top: 13px; }
-    .actions p { display: none; }
+
     button { min-height: 38px; padding: 0 10px; font-size: 18px; }
     .facts { grid-column: 1 / -1; margin-top: 12px; }
     .facts div { padding: 7px 3px 7px 0; }
@@ -2913,7 +2821,7 @@
     .room-console .lede { align-self: center; margin: 0; }
     .room-actions { margin-top: 10px; }
     .room-facts { margin-top: 10px; }
-    .identity { align-self: center; margin: 10px 0 0; text-align: right; }
+
     .seat-console {
       display: grid;
       min-height: 0;
@@ -2932,7 +2840,7 @@
     .your-robot { margin-top: 8px; padding: 6px 8px; }
     .your-robot strong { font-size: 22px; }
     .your-robot small { font-size: 11px; }
-    .setup-summary .lede { max-width: none; margin: 8px 0 0; font-size: 18px; }
+
     .setup-facts { margin-top: 8px; }
     .setup-facts div { padding: 5px 2px; }
     .setup-facts dt { font-size: 24px; }
@@ -2945,8 +2853,7 @@
     .program-head { gap: 4px; min-width: 0; }
     .program-head h2 { min-width: 0; }
     .program-head span { flex: none; white-space: nowrap; }
-    .setup-summary.resolution-active .lede,
-    .setup-summary.resolution-active > .archive-note { display: none; }
+  .setup-summary.resolution-active > .archive-note { display: none; }
     .setup-summary.resolution-active .setup-order.compact { display: none; }
     .setup-summary.resolution-active .resolution-console ol { max-height: 70px; }
     .robot-state { grid-template-columns: minmax(0, 1fr); }
@@ -3021,9 +2928,8 @@
       font-size: 54px;
       line-height: .86;
     }
-    .copy > .lede,
-    .copy > .facts,
-    .actions p { display: none; }
+  .copy > .lede,
+  .copy > .facts { display: none; }
     .actions {
       grid-template-columns: 1fr 1fr;
       gap: 4px;
@@ -3110,7 +3016,6 @@
     .room-console > .eyebrow,
     .room-console > .lede,
     .room-console > .room-facts,
-    .room-console > .identity,
     .room-console :global(.catalog) {
       display: none;
     }
@@ -3135,8 +3040,7 @@
     }
     .race-config label,
     .race-config p { gap: 2px; font-size: 12px; }
-    .race-config input,
-    .race-config select {
+  .race-config select {
       height: 24px;
       padding: 0 4px;
       font-size: 12px;
@@ -3212,8 +3116,7 @@
     .resolution-console {
       grid-column: 1 / -1;
     }
-    .conservation,
-    .option-catalog {
+  .option-catalog {
       display: none;
     }
     .program-head h2,
@@ -3353,7 +3256,7 @@
       grid-template-columns: 145px minmax(0, 1fr);
     }
     .setup-summary h1 { font-size: 44px; }
-    .setup-summary .lede { font-size: 16px; }
+
     .setup-order small { display: none; }
     .configured-race:has(.program-console) {
       grid-template-columns: minmax(0, 1fr);
@@ -3376,8 +3279,9 @@
   .your-robot small { grid-column: 1 / -1; font-size: 11px; }
   .race-details { margin-top: 10px; color: #aebbb9; font-size: 14px; }
   .race-details summary { cursor: pointer; padding: 8px 0; color: #aebbb9; }
-  .race-details .lede { display: block; font-size: 14px; }
-  .race-details .conservation, .race-details .reentry-policy, .race-details .board-phase { display: block; }
+
+  .race-details .reentry-policy,
+  .race-details .board-phase { display: block; }
   .race-details .setup-facts { display: grid; }
   .race-details .setup-order.compact { display: grid; max-height: none; }
   .program-console, .resolution-console { max-height: none; overflow: visible; }
@@ -3415,4 +3319,11 @@
       animation: none !important;
     }
   }
+  .empty-power-control { display: none; }
+  .network { max-width: none; font-size: 14px; letter-spacing: .02em; }
+  .masthead { padding-block: 0; }
+  .brand { font-size: 22px; }
+  .brand-mark, .brand small { display: none; }
+  footer { justify-content: center; padding-block: 0; font-size: 11px; }
+  footer span:first-child { display: inline; }
 </style>

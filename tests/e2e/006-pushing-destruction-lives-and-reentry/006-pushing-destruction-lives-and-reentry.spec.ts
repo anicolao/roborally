@@ -6,7 +6,7 @@ async function chooseProgram(page: Page, labels: readonly string[]) {
   for (const label of labels) {
     await page.getByRole('button', { name: label, exact: true }).click();
   }
-  await page.getByRole('button', { name: 'Submit immutable program' }).click();
+  await page.getByRole('button', { name: 'Lock program' }).click();
 }
 
 test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-entry', async (
@@ -17,8 +17,8 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
   let guestContext: BrowserContext | undefined;
 
   try {
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}`);
-    await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eSeed=PUSH-151`);
+    await expect(host.getByRole('status')).toHaveText('Connected');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');
     await host.getByRole('button', { name: 'Axle' }).click();
@@ -38,7 +38,6 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
     await guest.getByRole('button', { name: 'Bit' }).click();
     await guest.getByRole('button', { name: 'Claim seat' }).click();
 
-    await host.getByLabel('Setup seed').fill('PUSH-151');
     await host.getByRole('button', { name: 'Configure Risky Exchange' }).click();
     await guest.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Ready for race' }).click();
@@ -73,11 +72,11 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
         {
           spec: 'Grace pushes Ada repeatedly before Ada is destroyed off course first',
           check: async () => {
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
             const trace = host.getByRole('list', { name: 'Full resolution feed' });
             await expect(trace).toContainText('Ada was destroyed off course as destruction 1');
             await expect(trace).toContainText('Grace was destroyed off course as destruction 2');
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
           }
         },
         {
@@ -133,11 +132,11 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
         {
           spec: 'Destruction order authorizes Ada before Grace',
           check: async () => {
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
             const trace = host.getByRole('list', { name: 'Full resolution feed' });
             await expect(trace).toContainText('Ada re-entered at (6,16) facing north');
             await expect(trace).toContainText('Grace re-entered at (7,16) facing east');
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
           }
         },
         {

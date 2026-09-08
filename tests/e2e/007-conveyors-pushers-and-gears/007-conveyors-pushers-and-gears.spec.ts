@@ -6,7 +6,7 @@ async function chooseProgram(page: Page, labels: readonly string[]) {
   for (const label of labels) {
     await page.getByRole('button', { name: label, exact: true }).click();
   }
-  await page.getByRole('button', { name: 'Submit immutable program' }).click();
+  await page.getByRole('button', { name: 'Lock program' }).click();
 }
 
 async function join(
@@ -34,8 +34,8 @@ test('board phases resolve conveyors, dependency conflicts, and gears atomically
   let linusContext: BrowserContext | undefined;
 
   try {
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}`);
-    await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eSeed=BOARD3-0`);
+    await expect(host.getByRole('status')).toHaveText('Connected');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');
     await host.getByRole('button', { name: 'Axle' }).click();
@@ -51,7 +51,6 @@ test('board phases resolve conveyors, dependency conflicts, and gears atomically
       'Three ordinary Programs reach normal and express conveyors, a counterclockwise gear, and a simultaneous occupancy dependency. The same atomic board solver also has generic register-pusher and curve fixtures because reviewed Exchange prints neither pushers nor curved belts.'
     );
 
-    await host.getByLabel('Setup seed').fill('BOARD3-0');
     await host.getByRole('button', { name: 'Configure Risky Exchange' }).click();
     await grace.getByRole('button', { name: 'Ready for race' }).click();
     await linus.getByRole('button', { name: 'Ready for race' }).click();
@@ -92,32 +91,32 @@ test('board phases resolve conveyors, dependency conflicts, and gears atomically
         {
           spec: 'Linus rides a normal conveyor onto a counterclockwise gear',
           check: async () => {
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
             const trace = host.getByRole('list', { name: 'Full resolution feed' });
             await expect(trace).toContainText('Linus rode the conveyor to (4,9)');
             await expect(trace).toContainText(
               'Linus rotated counterclockwise from north to west'
             );
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
           }
         },
         {
           spec: 'An express substep hands Linus to the normal-conveyor substep',
           check: async () => {
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
             const trace = host.getByRole('list', { name: 'Full resolution feed' });
             await expect(trace).toContainText('Linus rode the express conveyor to (6,10)');
             await expect(trace).toContainText('Linus rode the conveyor to (6,11)');
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
           }
         },
         {
           spec: 'Docking Bay B resolves the conveyor chain without a conflicting rider',
           check: async () => {
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
             const trace = host.getByRole('list', { name: 'Full resolution feed' });
             await expect(trace).toContainText('Linus rode the conveyor to (6,13)');
-            await host.getByText('Full resolution text').click();
+            await host.getByText('Turn history').click();
           }
         },
         {
@@ -141,8 +140,8 @@ test('board phases resolve conveyors, dependency conflicts, and gears atomically
           spec: 'The selected course truthfully reports zero printed pushers',
           check: async () => {
             await expect(host.locator('.board-cell[aria-label*="pusher"]')).toHaveCount(0);
-            await host.getByText('Recent moves & board rules', { exact: true }).click();
-            await expect(host.getByText(/Exchange prints no pushers/)).toBeVisible();
+            await host.getByText('Recent moves & rules', { exact: true }).click();
+            await expect(host.getByText(/Board phase: express conveyors/)).toBeVisible();
           }
         }
       ]

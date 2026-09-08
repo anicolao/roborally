@@ -30,7 +30,7 @@ test('players create, join, fill, and replay an immutable room', async (
 
   try {
     await page.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}`);
-    await expect(page.getByRole('status')).toHaveText('Firebase emulator ready');
+    await expect(page.getByRole('status')).toHaveText('Connected');
     await page.getByRole('button', { name: 'Create race' }).click();
     await page.getByLabel('Racer name').fill('Ada');
     await page.getByRole('button', { name: 'Axle' }).click();
@@ -90,11 +90,11 @@ test('players create, join, fill, and replay an immutable room', async (
           }
         },
         {
-          spec: 'The room projects nine accepted immutable events with no replay diagnostics',
+          spec: 'The room shows connected racers without replay diagnostics',
           check: async () => {
-            await expect(page.getByText('9', { exact: true })).toBeVisible();
-            await expect(page.getByText('0', { exact: true })).toBeVisible();
-            await expect(page.getByText('Replay clean')).toBeVisible();
+            await expect(page.getByRole('status')).toHaveAttribute('data-event-count', '9');
+            await expect(page.getByText('Room open')).toBeVisible();
+            await expect(page.getByText(/immutable events|replay diagnostics/i)).toHaveCount(0);
           }
         },
         {
@@ -113,13 +113,13 @@ test('players create, join, fill, and replay an immutable room', async (
           }
         },
         {
-          spec: 'The creator has a shareable join link and a deterministic emulator identity',
+          spec: 'The creator has a shareable join link without internal identity labels',
           check: async () => {
             await expect(page.getByRole('link', { name: 'Open join link' })).toHaveAttribute(
               'href',
               new RegExp(`room=${roomCode}`)
             );
-            await expect(page.getByText('Identity HOST')).toBeVisible();
+            await expect(page.getByText('Identity HOST')).toHaveCount(0);
           }
         }
       ]

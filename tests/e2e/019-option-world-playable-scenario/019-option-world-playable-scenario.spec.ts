@@ -12,8 +12,8 @@ test('players can configure the Option World scenario', async ({ browser, page: 
   );
 
   try {
-    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}`);
-    await expect(host.getByRole('status')).toHaveText('Firebase emulator ready');
+    await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eSeed=OPTION-WORLD-E2E`);
+    await expect(host.getByRole('status')).toHaveText('Connected');
     await host.getByRole('button', { name: 'Create race' }).click();
     await host.getByLabel('Racer name').fill('Ada');
     await host.getByRole('button', { name: 'Axle' }).click();
@@ -26,7 +26,6 @@ test('players can configure the Option World scenario', async ({ browser, page: 
     await guest.getByRole('button', { name: 'Claim seat' }).click();
 
     await host.getByLabel('Course', { exact: true }).selectOption('option-world');
-    await host.getByLabel('Setup seed').fill('OPTION-WORLD-E2E');
     await host.getByRole('button', { name: 'Configure Option World' }).click();
     await guest.getByRole('button', { name: 'Ready for race' }).click();
     await host.getByRole('button', { name: 'Ready for race' }).click();
