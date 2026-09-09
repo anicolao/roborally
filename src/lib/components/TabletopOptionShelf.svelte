@@ -86,8 +86,9 @@
   }
   .option-icon {
     display: grid;
-    width: clamp(30px, 3vw, 64px);
-    height: clamp(30px, 3vw, 64px);
+    /* Keep the border on whole pixels when an icon is disabled and re-enabled. */
+    width: clamp(30px, round(down, 3vw, 1px), 64px);
+    height: clamp(30px, round(down, 3vw, 1px), 64px);
     flex: 0 0 auto;
     place-items: center;
     overflow: hidden;

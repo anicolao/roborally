@@ -246,6 +246,11 @@ test('face-up Options remain available for execution-time decisions', async (
           check: async () => {
             const robots = host.getByRole('list', { name: 'Robot Life and damage state' });
             await expect(robots.locator('[data-option-icon]')).toHaveCount(1);
+            const icon = robots.locator('[data-option-icon]').first();
+            await expect(icon).toBeEnabled();
+            const bounds = (await icon.boundingBox())!;
+            expect(bounds.width).toBe(Math.round(bounds.width));
+            expect(bounds.height).toBe(bounds.width);
             await expect(host.locator('.full-resolution')).toContainText(
               'to prevent one damage'
             );
