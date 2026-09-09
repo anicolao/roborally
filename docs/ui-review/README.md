@@ -175,3 +175,11 @@ now rounded down to whole pixels (38px instead of 38.4px at 1280px), retaining
 the same minimum and maximum sizes. Scenario 011 verifies that the icon is
 re-enabled and has square, whole-pixel bounds after the decision. Screenshot
 tolerance remains zero.
+
+After the whole-pixel sizing fix, the complete local `bun run verify:change`
+passed static/scenario/workflow checks, 165 unit tests, 15 rules tests, 112 browser
+cases (two intentional skips), the production build and whitespace validation.
+The [updated Linux baseline run](https://github.com/anicolao/roborally/actions/runs/34310621190)
+also passed. The sizing follow-up refreshes 26 macOS and 17 Linux screenshots;
+all were visually reviewed. The PR checks compare these committed baselines
+with updates disabled.
