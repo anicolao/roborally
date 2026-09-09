@@ -163,6 +163,8 @@ same component rather than separate markup and styles.
 The [shared-card Linux run](https://github.com/anicolao/roborally/actions/runs/34269671222)
 passed static checks, 165 unit tests, 15 rules tests, the build and all 112 browser
 cases (two intentional skips). Its 55 changed Linux screenshots were visually
-reviewed. Local static and focused browser checks passed; full macOS capture runs
-were interrupted by machine sleep, and their partial captures were discarded.
-Local screenshot refresh and the complete local verifier remain pending.
+reviewed. The 55 corresponding macOS screenshots were also regenerated and
+visually reviewed. Earlier local runs were interrupted by sleep and a full disk;
+the replacement runs use sleep prevention and recovered disk space. Screenshot
+comparison still requires zero differing pixels. See the PR checks and validation
+summary for the final local-verifier and CI results.
