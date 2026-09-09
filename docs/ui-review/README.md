@@ -168,3 +168,10 @@ visually reviewed. Earlier local runs were interrupted by sleep and a full disk;
 the replacement runs use sleep prevention and recovered disk space. Screenshot
 comparison still requires zero differing pixels. See the PR checks and validation
 summary for the final local-verifier and CI results.
+
+A final CI comparison found a 71-pixel difference confined to the rounded border
+of an Option icon after a damage decision. The responsive icon dimensions are
+now rounded down to whole pixels (38px instead of 38.4px at 1280px), retaining
+the same minimum and maximum sizes. Scenario 011 verifies that the icon is
+re-enabled and has square, whole-pixel bounds after the decision. Screenshot
+tolerance remains zero.
