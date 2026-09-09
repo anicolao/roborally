@@ -159,3 +159,10 @@ public lock badges and hidden future registers. Option inspection checks cover
 readable rules at desktop, phone and 320px widths, Escape/focus return, and the
 large card on a 4K tabletop. The tabletop inspector and web inspector now use the
 same component rather than separate markup and styles.
+
+The [shared-card Linux run](https://github.com/anicolao/roborally/actions/runs/34269671222)
+passed static checks, 165 unit tests, 15 rules tests, the build and all 112 browser
+cases (two intentional skips). Its 55 changed Linux screenshots were visually
+reviewed. Local static and focused browser checks passed; full macOS capture runs
+were interrupted by machine sleep, and their partial captures were discarded.
+Local screenshot refresh and the complete local verifier remain pending.
