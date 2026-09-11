@@ -155,12 +155,12 @@ test('power down clears damage, remains vulnerable, repeats, and restores progra
             await expect(ada).toContainText(
               'Ada active · 3 Lives · 5 Damage · Powered down · Locked R5'
             );
-            await host.getByText('Turn history').click();
-            const trace = host.getByRole('list', { name: 'Full resolution feed' });
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
+            const trace = host.getByRole('list', { name: /^(Full resolution feed|Running turn history)$/ });
             await expect(trace.getByText('A board laser hit Ada at (11,3).')).toHaveCount(5);
             await expect(trace).toContainText('Ada took one damage and now has 1');
             await expect(trace).toContainText('Ada took one damage and now has 5');
-            await host.getByText('Turn history').click();
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
           }
         },
         {
@@ -192,11 +192,11 @@ test('power down clears damage, remains vulnerable, repeats, and restores progra
             await expect(robotState(host, 'Ada')).toContainText(
               'Ada active · 3 Lives · 5 Damage · Powered down · Locked R5'
             );
-            await host.getByText('Turn history').click();
-            const trace = host.getByRole('list', { name: 'Full resolution feed' });
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
+            const trace = host.getByRole('list', { name: /^(Full resolution feed|Running turn history)$/ });
             await expect(trace).toContainText('Ada took one damage and now has 1');
             await expect(trace).toContainText('Ada took one damage and now has 5');
-            await host.getByText('Turn history').click();
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
           }
         },
         {

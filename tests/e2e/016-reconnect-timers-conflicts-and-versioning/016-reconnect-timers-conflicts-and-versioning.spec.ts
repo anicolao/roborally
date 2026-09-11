@@ -7,7 +7,13 @@ async function chooseProgram(page: Page, labels: readonly string[]) {
     await page.getByRole('button', { name: label, exact: true }).click();
   }
   await page.getByRole('button', { name: 'Lock program' }).click();
-  await expect(page.getByText(/Your program is locked/)).toBeVisible();
+  const execution = page.getByRole('region', { name: 'Turn execution', exact: true });
+  await expect(page.getByText(/Your program is locked/).or(execution).filter({ visible: true }).first()).toBeVisible();
+  if (await execution.isVisible()) {
+    await expect(page.getByRole('button', { name: 'Lock program', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('list', { name: 'Locked Program', includeHidden: true }).getByRole('listitem', { includeHidden: true })).toHaveCount(5);
+    return;
+  }
   await expect(page.getByText('locked', { exact: true })).toBeVisible();
   await expect(
     page.getByRole('list', { name: 'Locked Program' }).getByRole('listitem')

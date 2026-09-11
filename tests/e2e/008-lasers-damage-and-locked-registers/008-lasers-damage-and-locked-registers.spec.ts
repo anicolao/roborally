@@ -149,27 +149,27 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
         {
           spec: 'Robot rays stop at the first visible target after board movement',
           check: async () => {
-            await host.getByText('Turn history').click();
-            const trace = host.getByRole('list', { name: 'Full resolution feed' });
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
+            const trace = host.getByRole('list', { name: /^(Full resolution feed|Running turn history)$/ });
             await expect(trace).toContainText(
               'Margaret fired through clear line of sight and hit Linus'
             );
             await expect(trace).toContainText(
               'Linus fired through clear line of sight and hit Margaret'
             );
-            await host.getByText('Turn history').click();
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
           }
         },
         {
           spec: 'Multiple rays use the same target snapshot before damage is applied',
           check: async () => {
-            await host.getByText('Turn history').click();
-            const trace = host.getByRole('list', { name: 'Full resolution feed' });
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
+            const trace = host.getByRole('list', { name: /^(Full resolution feed|Running turn history)$/ });
             await expect(trace).toContainText(
               'Grace fired through clear line of sight and hit Margaret'
             );
             await expect(trace).toContainText('Margaret took one damage and now has 6');
-            await host.getByText('Turn history').click();
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
           }
         },
         {

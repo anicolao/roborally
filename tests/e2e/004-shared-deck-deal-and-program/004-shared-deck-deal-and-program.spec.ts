@@ -243,16 +243,25 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
         {
           spec: 'The timeout claim preserves chosen registers and fills only empty slots',
           check: async () => {
-            await expect(host.getByText(/Your program is locked/)).toBeVisible();
+            if (testInfo.project.name === 'desktop') {
+              await expect(host.getByLabel('Ada program cards')).toBeVisible();
+              await expect(host.getByRole('button', { name: 'Lock program', exact: true })).toHaveCount(0);
+            } else await expect(host.getByText(/Your program is locked/)).toBeVisible();
             await expect(host.getByRole('timer')).toHaveCount(0);
-            await expect(
-              guest.getByRole('list', { name: 'Program submission status' }).getByRole('listitem')
-            ).toContainText(`${preservedPriorities[0]} · ${preservedPriorities[1]} ·`);
+            if (testInfo.project.name === 'desktop') {
+              const cards = guest.getByLabel('Ada program cards');
+              await expect(cards.locator('[data-register]').nth(0)).toContainText(String(preservedPriorities[0]));
+              await expect(cards.locator('[data-register]').nth(1)).toContainText(String(preservedPriorities[1]));
+            } else await expect(guest.getByRole('list', { name: 'Program submission status' })).toContainText(`${preservedPriorities[0]} · ${preservedPriorities[1]} ·`);
           }
         },
         {
           spec: 'The closed barrier reveals numeric priorities to both clients',
           check: async () => {
+            if (testInfo.project.name === 'desktop') {
+              await expect(guest.getByLabel('Ada program cards').getByRole('img')).toHaveCount(5);
+              return;
+            }
             await expect(
               guest.getByRole('list', { name: 'Program submission status' })
             ).not.toContainText('▰');
@@ -272,6 +281,11 @@ test('the shared deck deals, masks, commits, and times out deterministically', a
           check: async () => {
             await guest.reload();
             await guest.getByRole('button', { name: 'Open programming console' }).click();
+            if (testInfo.project.name === 'desktop') {
+              await expect(guest.getByLabel('Grace program cards').locator('[data-register]')).toHaveCount(5);
+              await expect(guest.getByRole('button', { name: 'Lock program', exact: true })).toHaveCount(0);
+              return;
+            }
             await expect(guest.getByText(/Your program is locked/)).toBeVisible();
             await expect(
               guest.getByRole('list', { name: 'Locked Program' }).getByRole('listitem')

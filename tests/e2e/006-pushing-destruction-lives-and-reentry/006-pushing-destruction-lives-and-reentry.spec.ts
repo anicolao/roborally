@@ -72,11 +72,11 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
         {
           spec: 'Grace pushes Ada repeatedly before Ada is destroyed off course first',
           check: async () => {
-            await host.getByText('Turn history').click();
-            const trace = host.getByRole('list', { name: 'Full resolution feed' });
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
+            const trace = host.getByRole('list', { name: /^(Full resolution feed|Running turn history)$/ });
             await expect(trace).toContainText('Ada was destroyed off course as destruction 1');
             await expect(trace).toContainText('Grace was destroyed off course as destruction 2');
-            await host.getByText('Turn history').click();
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
           }
         },
         {
@@ -132,11 +132,11 @@ test('ordinary Programs push, destroy, spend Lives, and pause for ordered re-ent
         {
           spec: 'Destruction order authorizes Ada before Grace',
           check: async () => {
-            await host.getByText('Turn history').click();
-            const trace = host.getByRole('list', { name: 'Full resolution feed' });
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
+            const trace = host.getByRole('list', { name: /^(Full resolution feed|Running turn history)$/ });
             await expect(trace).toContainText('Ada re-entered at (6,16) facing north');
             await expect(trace).toContainText('Grace re-entered at (7,16) facing east');
-            await host.getByText('Turn history').click();
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
           }
         },
         {

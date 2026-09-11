@@ -36,7 +36,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     const steps = new TestStepHelper(host, testInfo);
     steps.setMetadata(
       'Resolve Program priority movement and walls',
-      'Two ordinary five-card programs cover every 2005 instruction class. A large synchronized countdown introduces priority-ordered Program card, conveyor, and factory-element animations for all five registers before the deterministic trace proves descending priority, stepwise movement, an open board seam, and a wall that blocks from either side.'
+      'Two ordinary five-card programs cover every 2005 instruction class. A synchronized countdown, beside the board on desktop, introduces priority-ordered Program card, conveyor, and factory-element animations for all five registers before the deterministic trace proves descending priority, stepwise movement, an open board seam, and a wall that blocks from either side.'
     );
 
     await guest.goto(`/?room=${roomCode}&e2eIdentity=GUEST&e2ePlayback=slow`);
@@ -70,6 +70,22 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     const countdown = host.getByTestId('program-countdown');
     await expect(countdown).toContainText('ALL PROGRAMS LOCKED');
     await expect(countdown).toContainText('3');
+    if (testInfo.project.name === 'desktop') {
+      await steps.step('countdown-beside-board', {
+        description: 'The movement countdown stays beside the unobstructed board',
+        verifications: [{
+          spec: 'The countdown fits inside the right column and never overlaps the board',
+          check: async () => {
+            const board = (await host.locator('.course-panel').boundingBox())!;
+            const cue = (await countdown.boundingBox())!;
+            expect(cue.x).toBeGreaterThanOrEqual(board.x + board.width);
+            await expect(host.getByRole('region', { name: 'Running turn log' })).toBeVisible();
+            await expect(host.getByRole('list', { name: 'Running turn history' })).toContainText('Moves will appear');
+            await expect(host.getByRole('list', { name: 'Running turn history' })).not.toContainText('revealed');
+          }
+        }]
+      });
+    }
     await advanceSyntheticPlayback([host, guest]);
     await expect(countdown).toContainText('2');
     await advanceSyntheticPlayback([host, guest]);
@@ -85,6 +101,36 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     await advanceSyntheticPlayback([host, guest]);
     await expect(registerPlayback).toContainText('Ada · rotate right');
     await expect(registerPlayback).toContainText('priority 110');
+    if (testInfo.project.name === 'desktop') {
+      await steps.step('execution-and-running-log', {
+        description: 'The current instruction and accumulated moves share the right column',
+        verifications: [{
+          spec: 'The current step is readable beside the board and earlier moves remain in the log',
+          check: async () => {
+            const board = (await host.locator('.course-panel').boundingBox())!;
+            const cue = (await registerPlayback.boundingBox())!;
+            expect(cue.x).toBeGreaterThanOrEqual(board.x + board.width);
+            const log = host.getByRole('list', { name: 'Running turn history' });
+            await expect(log).toContainText('Grace');
+            await expect(log).toContainText('Ada');
+            expect(await log.getByRole('listitem').count()).toBeGreaterThan(1);
+            await expect(host.getByRole('button', { name: 'Back to top', exact: false })).toBeHidden();
+            await expect(host.getByRole('button', { name: 'More below', exact: false })).toBeHidden();
+          }
+        }]
+      });
+      await host.setViewportSize({ width: 1280, height: 650 });
+      const more = host.getByRole('button', { name: 'More below', exact: false });
+      await expect(more).toBeVisible();
+      await more.click();
+      const top = host.getByRole('button', { name: 'Back to top', exact: false });
+      await expect(top).toBeVisible();
+      await expect(registerPlayback).toBeInViewport();
+      await top.click();
+      await expect(top).toBeHidden();
+      await host.setViewportSize({ width: 1280, height: 1000 });
+    }
+
     await advanceSyntheticPlayback([host, guest]);
     await expect(registerPlayback).toHaveAttribute('data-stage', 'express-conveyors');
     await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '1000');
@@ -114,6 +160,18 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
         timeout: 10_000
       });
     }
+    if (testInfo.project.name === 'desktop') {
+      const log = host.getByRole('list', { name: 'Running turn history' });
+      await log.focus();
+      await host.keyboard.press('Home');
+      await expect.poll(() => log.evaluate(node => node.scrollTop)).toBe(0);
+      const latest = host.getByRole('button', { name: 'Latest ↓', exact: true });
+      await expect(latest).toBeVisible();
+      await advanceSyntheticPlayback([host, guest]);
+      await expect(latest).toBeVisible();
+      await latest.click();
+      await expect(latest).toBeHidden();
+    }
     await finishSyntheticPlayback([host, guest]);
     await expect(registerPlayback).toBeHidden({ timeout: 10_000 });
 
@@ -135,12 +193,12 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     await expect(host.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();
     await expect(guest.getByRole('heading', { name: /Turn 1 complete/ })).toBeVisible();
 
-    await host.getByText('Turn history').click();
-    const fullTrace = host.getByRole('list', { name: 'Full resolution feed' });
+    if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
+    const fullTrace = host.getByRole('list', { name: /^(Full resolution feed|Running turn history)$/ });
     await expect(fullTrace).toContainText('Ada stopped at (6,16); a wall blocks east.');
     await expect(fullTrace).toContainText('Ada completed step 3 at (6,13) facing north.');
     await expect(fullTrace).toContainText('Grace was destroyed off course as destruction 1.');
-    await host.getByText('Turn history').click();
+    if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
 
     await guest.emulateMedia({ reducedMotion: 'reduce' });
     await expect
@@ -155,7 +213,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
       description: 'All seven instructions resolve into one wall-safe final projection',
       verifications: [
         {
-          spec: 'The full-screen countdown announces that all Programs are locked',
+          spec: 'The synchronized countdown announces that all Programs are locked',
           check: async () => expect(playbackEvidence.countdownObserved).toBe(true)
         },
         {
@@ -170,8 +228,9 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
           spec: 'Register cards resolve from highest unique priority to lowest',
           check: async () => {
             await host.getByText('Recent moves & rules', { exact: true }).click();
-            const feed = host.getByRole('list', { name: 'Resolution feed' });
-            await expect(feed.getByRole('listitem')).toHaveCount(5);
+            const feed = host.getByRole('list', { name: /^(Resolution feed|Running turn history)$/ });
+            if (testInfo.project.name === 'desktop') expect(await feed.getByRole('listitem').count()).toBeGreaterThan(5);
+            else await expect(feed.getByRole('listitem')).toHaveCount(5);
             await expect(host.getByRole('heading', { name: /Turn 1 complete/ })).toContainText(
               'Turn 1 complete'
             );
@@ -180,11 +239,11 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
         {
           spec: 'The wall between Dock 1 and Dock 2 stops eastward movement at (6,16)',
           check: async () => {
-            await host.getByText('Turn history').click();
-            await expect(host.getByRole('list', { name: 'Full resolution feed' })).toContainText(
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
+            await expect(host.getByRole('list', { name: /^(Full resolution feed|Running turn history)$/ })).toContainText(
               'wall blocks east'
             );
-            await host.getByText('Turn history').click();
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
           }
         },
         {
@@ -203,8 +262,8 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
         {
           spec: 'Move 1, Move 2, Move 3, Back Up, both rotations, and U-Turn all execute',
           check: async () => {
-            await host.getByText('Turn history').click();
-            const trace = host.getByRole('list', { name: 'Full resolution feed' });
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
+            const trace = host.getByRole('list', { name: /^(Full resolution feed|Running turn history)$/ });
             for (const action of [
               'move-1',
               'move-3',
@@ -215,7 +274,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
             ]) {
               await expect(trace).toContainText(`revealed ${action}`);
             }
-            await host.getByText('Turn history').click();
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
           }
         },
         {
