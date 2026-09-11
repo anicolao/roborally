@@ -286,7 +286,7 @@ test('a keyboard and touch-operable race completes at every target viewport', as
     await expect(host.getByTestId('resolution-live')).toContainText('Turn 1');
     await host.getByText('Recent moves & rules', { exact: true }).click();
     await expect(
-      host.getByRole('list', { name: 'Resolution feed' }).getByRole('listitem').last()
+      host.getByRole('list', { name: /^(Resolution feed|Running turn history)$/ }).getByRole('listitem').last()
     ).toHaveCSS('animation-name', 'none');
 
     for (let index = 1; index < turns.length; index += 1) {
