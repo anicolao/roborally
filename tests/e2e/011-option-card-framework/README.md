@@ -38,9 +38,9 @@ Two ordinary clients reach the crossed repair site on successive turns, draw fro
 - [x] Both clients converge without precommitting future Option use
 - [x] Graphical Options remain face up until their actual timing window
 
-## The shared tabletop icon opens readable Option rules without filling the sidebar
+## The shared tabletop icon opens readable Option rules over the controls, leaving the board clear
 
-![The shared tabletop icon opens readable Option rules without filling the sidebar](./screenshots/004-inspect-owned-option-desktop.png)
+![The shared tabletop icon opens readable Option rules over the controls, leaving the board clear](./screenshots/004-inspect-owned-option-desktop.png)
 
 **Verifications:**
 

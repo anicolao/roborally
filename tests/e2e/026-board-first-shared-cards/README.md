@@ -25,3 +25,11 @@ A real two-player deal keeps the board visible while graphical cards move into r
 **Verifications:**
 
 - [x] The owner sees five graphical locked registers and the observer sees only card backs
+
+## The Option catalog opens over the controls while the whole board stays clear
+
+![The Option catalog opens over the controls while the whole board stays clear](./screenshots/003-option-catalog-beside-board-desktop.png)
+
+**Verifications:**
+
+- [x] Catalog cards stay inside the controls column and outside the board

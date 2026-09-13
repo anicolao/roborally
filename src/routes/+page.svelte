@@ -1474,7 +1474,7 @@
                   </section>
                 {/if}
                 <details class="race-details">
-                  <summary>Recent moves &amp; rules</summary>
+                  <summary>Race rules</summary>
                 <p class="reentry-policy">
                   Re-entry position: return to the current archive marker when it is clear. If it
                   is occupied, choose the nearest legal surrounding square and then a facing.
@@ -1483,23 +1483,10 @@
                   Board phase: express conveyors → all conveyors → pushers → gears → lasers.
                   Damage 9 repeats all five locked registers.
                 </p>
-                <ol aria-label="Resolution feed" aria-live="polite">
-                  {#each visibleResolutionTrace.slice(-5) as entry, index}
-                    <li style={`--trace-index:${index}`}>
-                      <span>{entry.register <= 5 ? `R${entry.register}` : 'CLEANUP'} · {entry.priority ?? 'Board'}</span>
-                      {entry.text}
-                    </li>
-                  {/each}
-                </ol>
                 </details>
-                <details class="full-resolution">
-                  <summary>Turn history</summary>
-                  <ol aria-label="Full resolution feed">
-                    {#each visibleResolutionTrace as entry}
-                      <li><span>{entry.register <= 5 ? `R${entry.register}` : 'CLEANUP'} · {entry.priority ?? 'Board'}</span>{entry.text}</li>
-                    {/each}
-                  </ol>
-                </details>
+                <section class="full-resolution" aria-label="Turn log">
+                  <ExecutionHistory trace={playbackPhase === 'countdown' || playbackPhase === 'register' ? playbackHistory : roomState.resolution.trace} />
+                </section>
               </section>
             {/if}
           </section>
@@ -2722,15 +2709,6 @@
   }
   .race-summary strong { color: #d2ff37; font-size: 18px; }
   .race-summary button { min-height: 28px; padding: 0 6px; font-size: 14px; }
-  .resolution-console ol {
-    display: grid;
-    gap: 2px;
-    max-height: 100px;
-    margin: 0;
-    padding: 0;
-    overflow: auto;
-    list-style: none;
-  }
   .resolution-console li {
     padding: 3px 5px;
     border-left: 2px solid #536164;
@@ -2741,15 +2719,7 @@
     animation: trace-in 180ms ease-out both;
     animation-delay: calc(var(--trace-index) * 18ms);
   }
-  .resolution-console li span { color: #ffcf4b; font: 14px 'Space Mono', monospace; }
-  .full-resolution summary {
-    color: #91a09f;
-    cursor: pointer;
-    font: 14px 'Space Mono', monospace;
-    text-transform: uppercase;
-  }
-  .full-resolution:not([open]) > ol { display: none; }
-  .full-resolution[open] > ol { max-height: 160px; margin-top: 4px; }
+  .full-resolution :global(.history) { height: 180px; }
   @keyframes trace-in {
     from { opacity: 0; transform: translateX(5px); }
     to { opacity: 1; transform: translateX(0); }
@@ -2867,7 +2837,6 @@
     .program-head span { flex: none; white-space: nowrap; }
   .setup-summary.resolution-active > .archive-note { display: none; }
     .setup-summary.resolution-active .setup-order.compact { display: none; }
-    .setup-summary.resolution-active .resolution-console ol { max-height: 70px; }
     .robot-state { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .robot-state li { display: grid; grid-template-columns: minmax(0, 1fr); justify-content: stretch; gap: 4px; padding: 10px; border: 1px solid #4b5a5c; border-radius: 8px; background: #11191aee; }
     .robot-state li { align-content: flex-start; flex-wrap: wrap; overflow: hidden; }
@@ -3324,6 +3293,37 @@
     .full-resolution { display: block; }
   }
 
+  .full-resolution { display: block; }
+
+  /* Fixed prompts follow the controls' actual bounds, including below-board layouts. */
+  .setup-summary { anchor-name: --web-controls; }
+  .damage-choice {
+    position-anchor: --web-controls;
+    inset: auto;
+    top: anchor(top);
+    left: anchor(left);
+    width: anchor-size(width);
+    max-height: anchor-size(height);
+    transform: none;
+    padding: 10px;
+    box-shadow: none;
+  }
+  .option-catalog { display: block; }
+  .option-catalog[open]::before { display: none; }
+  .option-catalog[open] summary, .option-catalog ol {
+    position-anchor: --web-controls;
+    inset: auto;
+    left: anchor(left);
+    width: anchor-size(width);
+    box-shadow: none;
+  }
+  .option-catalog[open] summary { top: anchor(top); }
+  .option-catalog ol {
+    top: calc(anchor(top) + 35px);
+    max-height: calc(anchor-size(height) - 35px);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .play-column { display: contents; }
   .execution-dock { display: contents; }
   .execution-history, .column-scroll-cues { display: none; }
@@ -3351,7 +3351,7 @@
     .setup-summary.resolution-active .your-robot { display: none; }
     .program-console, .resolution-console { margin-top: 0; padding-top: 0; border-top: 0; }
     .play-column .resolution-console h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-    .full-resolution, .race-details ol[aria-label="Resolution feed"] { display: none; }
+    .full-resolution { display: none; }
     .robot-state { gap: 5px; }
     .robot-state li { padding: 6px; }
   }
