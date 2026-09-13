@@ -103,6 +103,27 @@ test('the board stays visible beside graphical programming controls', async ({ b
     });
     await host.getByText('Race details', { exact: true }).click();
     await expect(host.getByTestId('program-conservation')).toHaveCount(0);
+    const catalog = host.getByLabel('2005 Option catalog');
+    await catalog.locator('summary').click();
+    await steps.step('option-catalog-beside-board', {
+      description: 'The Option catalog opens over the controls while the whole board stays clear',
+      verifications: [{
+        spec: 'Catalog cards stay inside the controls column and outside the board',
+        check: async () => {
+          const panel = (await catalog.getByRole('list').boundingBox())!;
+          const course = (await host.locator('.course-panel').boundingBox())!;
+          const controls = (await host.locator('.setup-summary').boundingBox())!;
+          expect(panel.x).toBeGreaterThanOrEqual(controls.x - 1);
+          expect(panel.x + panel.width).toBeLessThanOrEqual(controls.x + controls.width + 1);
+          expect(panel.y + panel.height).toBeLessThanOrEqual(controls.y + controls.height + 1);
+          expect(panel.x >= course.x + course.width || panel.y >= course.y + course.height).toBe(true);
+          await expect(catalog.getByRole('img')).toHaveCount(26);
+        }
+      }]
+    });
+    await catalog.getByRole('img').last().scrollIntoViewIfNeeded();
+    await expect(catalog.getByRole('img').last()).toBeInViewport();
+    await catalog.locator('summary').click();
     steps.generateDocs();
   } finally {
     await guestContext?.close();

@@ -8,6 +8,7 @@
 
   export let playerName: string;
   export let disabled = false;
+  export let column = false;
   export let cardIds: OptionCardId[];
   let dialog: HTMLDialogElement;
   let inspectedIds: OptionCardId[] = [];
@@ -27,7 +28,7 @@
     dialog.showModal();
   }}
 />
-<dialog bind:this={dialog} class="option-inspector" aria-label={`${playerName} Option inspection`}>
+<dialog bind:this={dialog} class="option-inspector" class:column-inspector={column} aria-label={`${playerName} Option inspection`}>
   <section>
     <header>
       <div><small>OPTIONS</small><h2>{playerName}</h2></div>
@@ -46,7 +47,7 @@
         {/each}
       </nav>
     {/if}
-    {#if selectedCard}<OptionCardFace card={selectedCard} size={narrow ? 'small' : 'large'} />{/if}
+    {#if selectedCard}<OptionCardFace card={selectedCard} size={narrow || column ? 'small' : 'large'} />{/if}
   </section>
 </dialog>
 <style>
@@ -166,4 +167,20 @@
     .option-inspector h2 { font-size: 24px; overflow-wrap: anywhere; }
     .option-inspector :global(.option-card) { width: 100%; }
   }
+  dialog.column-inspector {
+    position-anchor: --web-controls;
+    inset: auto;
+    top: anchor(top);
+    left: anchor(left);
+    width: anchor-size(width);
+    max-width: anchor-size(width);
+    max-height: anchor-size(height);
+    margin: 0;
+    overflow: auto;
+  }
+  dialog.column-inspector::backdrop { background: transparent; }
+  .column-inspector > section { padding: 8px; gap: 8px; max-height: none; border-width: 2px; border-radius: 8px; }
+  .column-inspector h2 { font-size: 24px; }
+  .column-inspector header { gap: 8px; }
+  .column-inspector :global(.option-card) { width: 100%; }
 </style>

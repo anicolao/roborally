@@ -91,32 +91,32 @@ test('board phases resolve conveyors, dependency conflicts, and gears atomically
         {
           spec: 'Linus rides a normal conveyor onto a counterclockwise gear',
           check: async () => {
-            await host.getByText('Turn history').click();
-            const trace = host.getByRole('list', { name: 'Full resolution feed' });
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
+            const trace = host.getByRole('list', { name: /^(Full resolution feed|Running turn history)$/ });
             await expect(trace).toContainText('Linus rode the conveyor to (4,9)');
             await expect(trace).toContainText(
               'Linus rotated counterclockwise from north to west'
             );
-            await host.getByText('Turn history').click();
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
           }
         },
         {
           spec: 'An express substep hands Linus to the normal-conveyor substep',
           check: async () => {
-            await host.getByText('Turn history').click();
-            const trace = host.getByRole('list', { name: 'Full resolution feed' });
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
+            const trace = host.getByRole('list', { name: /^(Full resolution feed|Running turn history)$/ });
             await expect(trace).toContainText('Linus rode the express conveyor to (6,10)');
             await expect(trace).toContainText('Linus rode the conveyor to (6,11)');
-            await host.getByText('Turn history').click();
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
           }
         },
         {
           spec: 'Docking Bay B resolves the conveyor chain without a conflicting rider',
           check: async () => {
-            await host.getByText('Turn history').click();
-            const trace = host.getByRole('list', { name: 'Full resolution feed' });
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
+            const trace = host.getByRole('list', { name: /^(Full resolution feed|Running turn history)$/ });
             await expect(trace).toContainText('Linus rode the conveyor to (6,13)');
-            await host.getByText('Turn history').click();
+            if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
           }
         },
         {
@@ -140,7 +140,7 @@ test('board phases resolve conveyors, dependency conflicts, and gears atomically
           spec: 'The selected course truthfully reports zero printed pushers',
           check: async () => {
             await expect(host.locator('.board-cell[aria-label*="pusher"]')).toHaveCount(0);
-            await host.getByText('Recent moves & rules', { exact: true }).click();
+            await host.getByText('Race rules', { exact: true }).click();
             await expect(host.getByText(/Board phase: express conveyors/)).toBeVisible();
           }
         }

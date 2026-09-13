@@ -27,6 +27,19 @@ const turns: readonly { host: Program; guest: Program }[] = [
   }
 ];
 
+async function expectBoardClear(page: Page, panel: import('@playwright/test').Locator) {
+  const board = (await page.locator('.course-panel').boundingBox())!;
+  const popup = (await panel.boundingBox())!;
+  const overlapWidth = Math.min(board.x + board.width, popup.x + popup.width) - Math.max(board.x, popup.x);
+  const overlapHeight = Math.min(board.y + board.height, popup.y + popup.height) - Math.max(board.y, popup.y);
+  expect(overlapWidth <= 0 || overlapHeight <= 0).toBe(true);
+  const controls = (await page.locator('.setup-summary').boundingBox())!;
+  expect(popup.x).toBeGreaterThanOrEqual(controls.x - 1);
+  expect(popup.x + popup.width).toBeLessThanOrEqual(controls.x + controls.width + 1);
+  expect(popup.y).toBeGreaterThanOrEqual(controls.y - 1);
+  expect(popup.y + popup.height).toBeLessThanOrEqual(controls.y + controls.height + 1);
+}
+
 async function chooseProgram(page: Page, labels: Program) {
   const clear = page.getByRole('button', { name: 'Clear register choices' });
   if (await clear.isVisible()) await clear.click();
@@ -165,6 +178,8 @@ test('face-up Options remain available for execution-time decisions', async (
           spec: 'Ada sees the exact pending damage point and her owned Options',
           check: async () => {
             await expect(damageChoice).toContainText('damage 1 of 1');
+            await expectBoardClear(host, damageChoice);
+            await expectBoardClear(guest, guest.getByLabel('Damage prevention choice'));
             await expect(
               damageChoice.getByRole('button', { name: /Discard .* to prevent this damage/ }).first()
             ).toBeVisible();
@@ -263,11 +278,12 @@ test('face-up Options remain available for execution-time decisions', async (
     await optionIcon.click();
     const inspection = host.getByRole('dialog', { name: / Option inspection$/ });
     await steps.step('inspect-owned-option', {
-      description: 'The shared tabletop icon opens readable Option rules without filling the sidebar',
+      description: 'The shared tabletop icon opens readable Option rules over the controls, leaving the board clear',
       verifications: [{
         spec: 'The full graphical card matches the owned icon and its text fits the inspection panel',
         check: async () => {
           await expect(inspection).toBeVisible();
+          await expectBoardClear(host, inspection);
           await expect(inspection.getByRole('img')).toHaveAttribute('data-card-id', optionId!);
           const clips = await inspection.locator('.title, .copy, .continuation').evaluateAll(
             (panels) => panels.some((panel) => panel.scrollHeight > panel.clientHeight + 1 || panel.scrollWidth > panel.clientWidth + 1)
@@ -288,6 +304,7 @@ test('face-up Options remain available for execution-time decisions', async (
         spec: 'The inspector fits 320 pixels without clipping its rules or close button',
         check: async () => {
           await expect(inspection.getByRole('button', { name: 'Close Option inspection' })).toBeVisible();
+          await expectBoardClear(host, inspection);
           const fits = await inspection.evaluate((dialog) => dialog.scrollWidth <= dialog.clientWidth);
           expect(fits).toBe(true);
           const clips = await inspection.locator('.title, .copy, .continuation').evaluateAll(

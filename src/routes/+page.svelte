@@ -8,6 +8,7 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import type { Unsubscribe } from 'firebase/firestore';
   import type { FirebaseServices } from '$lib/firebase';
+  import ExecutionHistory from '$lib/components/ExecutionHistory.svelte';
   import CourseBoard from '$lib/components/CourseBoard.svelte';
   import CourseCatalog from '$lib/components/CourseCatalog.svelte';
   import PlayerStatusCard from '$lib/components/PlayerStatusCard.svelte';
@@ -109,6 +110,27 @@
   let selectedReentryFacing: Direction | '' = '';
   let reentryPoweredDown = false;
   let effectDraftDirty = false;
+  let controlsElement: HTMLElement;
+  let controlsAbove = false;
+  let controlsBelow = false;
+  function measureControls() {
+    if (!controlsElement) return;
+    controlsAbove = controlsElement.scrollTop > 2;
+    controlsBelow = controlsElement.scrollHeight - controlsElement.clientHeight - controlsElement.scrollTop > 2;
+  }
+  function observeControls(node: HTMLElement) {
+    const resize = new ResizeObserver(measureControls);
+    resize.observe(node);
+    const observeChildren = () => {
+      for (const child of node.children) resize.observe(child);
+      measureControls();
+    };
+    const mutations = new MutationObserver(observeChildren);
+    mutations.observe(node, { childList: true, subtree: true });
+    observeChildren();
+    return { destroy() { resize.disconnect(); mutations.disconnect(); } };
+  }
+
   let playbackPhase: PlaybackPhase = 'idle';
   let playbackCountdown = 3;
   let playbackRegister: number | null = null;
@@ -117,6 +139,7 @@
   let playbackCardId: ProgramCard['id'] | null = null;
   let playbackRobots: RaceRobotPosition[] | undefined;
   let playbackTrace: ProgramPlayback['frames'][number]['trace'] = [];
+  let playbackHistory: ProgramPlayback['frames'][number]['trace'] = [];
   let playbackLaserBeams: ProgramPlayback['frames'][number]['laserBeams'] = [];
   let playbackFrameIndex = 0;
   let playbackFrameCount = 0;
@@ -312,6 +335,7 @@
     playbackCardId = null;
     playbackRobots = undefined;
     playbackTrace = [];
+    playbackHistory = [];
     playbackLaserBeams = [];
     playbackFrameIndex = 0;
     playbackFrameCount = 0;
@@ -344,6 +368,7 @@
         playbackCardId = frame.cardId;
         playbackRobots = frame.robots;
         playbackTrace = frame.trace;
+        playbackHistory = playback.frames.slice(0, index + 1).flatMap(({ trace }) => trace);
         playbackLaserBeams = frame.laserBeams ?? [];
         playbackFrameIndex = index + 1;
         playbackProductionDurationMs = productionDuration;
@@ -1051,6 +1076,20 @@
     {resolutionAnnouncement}
   </div>
 
+
+  {#if mode === 'room' && currentPlayer && roomState.setup && roomState.configuration}
+    <section class="configured-race" aria-labelledby="race-heading">
+      <CourseBoard
+        setup={roomState.setup}
+        robots={presentedResolutionRobots}
+        currentPlayerUid={currentPlayer.uid}
+        animateRobots={playbackIsActive}
+        transitionDurationMs={playbackTransitionMs}
+        laserBeams={playbackLaserBeams}
+      />
+      <div class="play-column">
+        {#if roomState.resolution}
+          <section class="execution-dock" aria-label="Turn execution">
   {#if playbackPhase === 'countdown'}
     <div
       class="program-countdown"
@@ -1084,22 +1123,28 @@
     </div>
   {/if}
 
-  {#if mode === 'room' && currentPlayer && roomState.setup && roomState.configuration}
-    <section class="configured-race" aria-labelledby="race-heading">
-      <CourseBoard
-        setup={roomState.setup}
-        robots={presentedResolutionRobots}
-        currentPlayerUid={currentPlayer.uid}
-        animateRobots={playbackIsActive}
-        transitionDurationMs={playbackTransitionMs}
-        laserBeams={playbackLaserBeams}
-      />
+            <div class="execution-history">
+              {#if !playbackIsActive}
+                <strong class="execution-idle">Turn {roomState.resolution.turnNumber} · {roomState.resolution.phase === 'turn-complete' ? 'Complete' : roomState.resolution.phase === 'race-finished' ? 'Finished' : `Waiting for ${pendingOptionRobot?.name ?? roomState.players.find(({ uid }) => uid === roomState.resolution?.nextReentryUid)?.name ?? 'a decision'}`}</strong>
+              {/if}
+              <ExecutionHistory trace={playbackPhase === 'countdown' || playbackPhase === 'register' ? playbackHistory : roomState.resolution.trace} />
+            </div>
+          </section>
+        {/if}
+        <div class="column-scroll-cues" aria-label="Controls scroll position">
+          <button type="button" class:unavailable={!controlsAbove} onclick={() => controlsElement?.scrollTo({ top: 0 })}>↑ Back to top</button>
+          <span>{controlsAbove ? 'Scrolled' : 'Controls'}</span>
+          <button type="button" class:unavailable={!controlsBelow} onclick={() => controlsElement?.scrollBy({ top: controlsElement.clientHeight * .7 })}>More below ↓</button>
+        </div>
       <aside
         class:resolution-active={!!roomState.resolution}
         class:next-turn-programming={!!roomState.resolution &&
           !!activeProgramming &&
           activeProgramming.turnNumber > roomState.resolution.turnNumber}
         class:many-robots={roomState.setup.players.length >= 3}
+        bind:this={controlsElement}
+        use:observeControls
+        onscroll={measureControls}
         class="setup-summary"
       >
         <p class="eyebrow">
@@ -1429,7 +1474,7 @@
                   </section>
                 {/if}
                 <details class="race-details">
-                  <summary>Recent moves &amp; rules</summary>
+                  <summary>Race rules</summary>
                 <p class="reentry-policy">
                   Re-entry position: return to the current archive marker when it is clear. If it
                   is occupied, choose the nearest legal surrounding square and then a facing.
@@ -1438,23 +1483,10 @@
                   Board phase: express conveyors → all conveyors → pushers → gears → lasers.
                   Damage 9 repeats all five locked registers.
                 </p>
-                <ol aria-label="Resolution feed" aria-live="polite">
-                  {#each visibleResolutionTrace.slice(-5) as entry, index}
-                    <li style={`--trace-index:${index}`}>
-                      <span>{entry.register <= 5 ? `R${entry.register}` : 'CLEANUP'} · {entry.priority ?? 'Board'}</span>
-                      {entry.text}
-                    </li>
-                  {/each}
-                </ol>
                 </details>
-                <details class="full-resolution">
-                  <summary>Turn history</summary>
-                  <ol aria-label="Full resolution feed">
-                    {#each visibleResolutionTrace as entry}
-                      <li><span>{entry.register <= 5 ? `R${entry.register}` : 'CLEANUP'} · {entry.priority ?? 'Board'}</span>{entry.text}</li>
-                    {/each}
-                  </ol>
-                </details>
+                <section class="full-resolution" aria-label="Turn log">
+                  <ExecutionHistory trace={playbackPhase === 'countdown' || playbackPhase === 'register' ? playbackHistory : roomState.resolution.trace} />
+                </section>
               </section>
             {/if}
           </section>
@@ -1495,6 +1527,7 @@
           </button>
         {/if}
       </aside>
+      </div>
     </section>
   {:else if mode === 'room' && currentPlayer}
     <section class="lobby" aria-labelledby="room-heading">
@@ -2676,15 +2709,6 @@
   }
   .race-summary strong { color: #d2ff37; font-size: 18px; }
   .race-summary button { min-height: 28px; padding: 0 6px; font-size: 14px; }
-  .resolution-console ol {
-    display: grid;
-    gap: 2px;
-    max-height: 100px;
-    margin: 0;
-    padding: 0;
-    overflow: auto;
-    list-style: none;
-  }
   .resolution-console li {
     padding: 3px 5px;
     border-left: 2px solid #536164;
@@ -2695,15 +2719,7 @@
     animation: trace-in 180ms ease-out both;
     animation-delay: calc(var(--trace-index) * 18ms);
   }
-  .resolution-console li span { color: #ffcf4b; font: 14px 'Space Mono', monospace; }
-  .full-resolution summary {
-    color: #91a09f;
-    cursor: pointer;
-    font: 14px 'Space Mono', monospace;
-    text-transform: uppercase;
-  }
-  .full-resolution:not([open]) > ol { display: none; }
-  .full-resolution[open] > ol { max-height: 160px; margin-top: 4px; }
+  .full-resolution :global(.history) { height: 180px; }
   @keyframes trace-in {
     from { opacity: 0; transform: translateX(5px); }
     to { opacity: 1; transform: translateX(0); }
@@ -2821,7 +2837,6 @@
     .program-head span { flex: none; white-space: nowrap; }
   .setup-summary.resolution-active > .archive-note { display: none; }
     .setup-summary.resolution-active .setup-order.compact { display: none; }
-    .setup-summary.resolution-active .resolution-console ol { max-height: 70px; }
     .robot-state { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .robot-state li { display: grid; grid-template-columns: minmax(0, 1fr); justify-content: stretch; gap: 4px; padding: 10px; border: 1px solid #4b5a5c; border-radius: 8px; background: #11191aee; }
     .robot-state li { align-content: flex-start; flex-wrap: wrap; overflow: hidden; }
@@ -3276,6 +3291,69 @@
     .program-console { display: grid; grid-template-columns: minmax(0, 1fr); overflow: visible; }
     .resolution-console { height: auto; overflow: visible; }
     .full-resolution { display: block; }
+  }
+
+  .full-resolution { display: block; }
+
+  /* Fixed prompts follow the controls' actual bounds, including below-board layouts. */
+  .setup-summary { anchor-name: --web-controls; }
+  .damage-choice {
+    position-anchor: --web-controls;
+    inset: auto;
+    top: anchor(top);
+    left: anchor(left);
+    width: anchor-size(width);
+    max-height: anchor-size(height);
+    transform: none;
+    padding: 10px;
+    box-shadow: none;
+  }
+  .option-catalog { display: block; }
+  .option-catalog[open]::before { display: none; }
+  .option-catalog[open] summary, .option-catalog ol {
+    position-anchor: --web-controls;
+    inset: auto;
+    left: anchor(left);
+    width: anchor-size(width);
+    box-shadow: none;
+  }
+  .option-catalog[open] summary { top: anchor(top); }
+  .option-catalog ol {
+    top: calc(anchor(top) + 35px);
+    max-height: calc(anchor-size(height) - 35px);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .play-column { display: contents; }
+  .execution-dock { display: contents; }
+  .execution-history, .column-scroll-cues { display: none; }
+  @media (min-width: 1001px) and (min-height: 561px) {
+    .play-column { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .execution-dock { display: grid; flex: 0 0 auto; height: clamp(180px, 28vh, 260px); grid-template-rows: auto minmax(0, 1fr); padding: 10px; gap: 8px; border: 1px solid #566b37; border-radius: 6px; background: #11191a; }
+    .execution-history { display: flex; flex-direction: column; min-height: 0; gap: 6px; }
+    .execution-history :global(.history) { flex: 1; }
+    .execution-dock:not(:has(.register-playback, .program-countdown)) { grid-template-rows: minmax(0, 1fr); }
+    .execution-idle { font: 700 14px 'Space Mono', monospace; color: #d2ff37; }
+    .program-countdown, .register-playback { position: static; inset: auto; width: auto; transform: none; box-shadow: none; border: 0; padding: 0; background: none; text-align: left; }
+    .program-countdown { grid-template-columns: auto 1fr; justify-content: start; place-items: start; gap: 4px 10px; }
+    .program-countdown strong { grid-column: 1; grid-row: 1 / 3; font-size: 48px; animation: none; }
+    .program-countdown small, .program-countdown span { grid-column: 2; font-size: 12px; letter-spacing: .04em; }
+    .register-playback strong { font-size: 16px; letter-spacing: 0; line-height: 1.4; }
+    .register-playback span { font: 14px/1.35 'Atkinson Hyperlegible', sans-serif; white-space: normal; overflow: visible; }
+    .column-scroll-cues { display: flex; flex: 0 0 28px; align-items: center; justify-content: space-between; color: #9caba5; font-size: 11px; }
+    .column-scroll-cues button { min-height: 24px; padding: 2px 5px; border: 0; border-radius: 3px; color: #d2ff37; background: #17211b; font: inherit; cursor: pointer; }
+    .column-scroll-cues .unavailable { visibility: hidden; }
+    .setup-summary { flex: 1; scrollbar-width: thin; scrollbar-color: #879a58 #11191a; overscroll-behavior: contain; }
+    .setup-summary.resolution-active:not(.next-turn-programming) .program-head,
+    .setup-summary.resolution-active:not(.next-turn-programming) .option-catalog,
+    .setup-summary.resolution-active:not(.next-turn-programming) .shared-program-editor,
+    .setup-summary.resolution-active:not(.next-turn-programming) .opponent-programs { display: none; }
+    .setup-summary.resolution-active .your-robot { display: none; }
+    .program-console, .resolution-console { margin-top: 0; padding-top: 0; border-top: 0; }
+    .play-column .resolution-console h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .full-resolution { display: none; }
+    .robot-state { gap: 5px; }
+    .robot-state li { padding: 6px; }
   }
 
   @media (prefers-reduced-motion: reduce) {

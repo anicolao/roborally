@@ -133,11 +133,11 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
             {
               spec: 'Repair happens once during cleanup, after the per-register Archive update',
               check: async () => {
-                await host.getByText('Turn history').click();
-                const trace = host.getByRole('list', { name: 'Full resolution feed' });
+                if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
+                const trace = host.getByRole('list', { name: /^(Full resolution feed|Running turn history)$/ });
                 await expect(trace).toContainText('Ada moved its Archive marker to (12,12)');
                 await expect(trace).toContainText('Ada repaired from 0 to 0 damage');
-                await host.getByText('Turn history').click();
+                if (await host.getByText('Turn history', { exact: true }).isVisible()) await host.getByText('Turn history', { exact: true }).click();
               }
             }
           ]
