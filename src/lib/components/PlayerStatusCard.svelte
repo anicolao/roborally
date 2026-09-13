@@ -78,7 +78,7 @@
             </div>
           </div>
           {#if optionCardIds.length > 0}
-            <OptionInventory {playerName} cardIds={optionCardIds} disabled={optionsDisabled} />
+            <OptionInventory column={compact} {playerName} cardIds={optionCardIds} disabled={optionsDisabled} />
           {/if}
   {#if compact && status !== 'active'}<span class="board-status">{status === 'destroyed' ? 'Awaiting re-entry' : 'Eliminated'}</span>{/if}
           <div

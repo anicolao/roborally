@@ -214,7 +214,7 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
         {
           spec: 'The UI exposes the fully locked repeat invariant',
           check: async () => {
-            await host.getByText('Recent moves & rules', { exact: true }).click();
+            await host.getByText('Race rules', { exact: true }).click();
             await expect(host.getByText(/Damage 9 repeats all five locked registers/)).toBeVisible();
           }
         }

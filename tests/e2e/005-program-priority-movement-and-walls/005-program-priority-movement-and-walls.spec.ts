@@ -227,10 +227,9 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
         {
           spec: 'Register cards resolve from highest unique priority to lowest',
           check: async () => {
-            await host.getByText('Recent moves & rules', { exact: true }).click();
+            await host.getByText('Race rules', { exact: true }).click();
             const feed = host.getByRole('list', { name: /^(Resolution feed|Running turn history)$/ });
-            if (testInfo.project.name === 'desktop') expect(await feed.getByRole('listitem').count()).toBeGreaterThan(5);
-            else await expect(feed.getByRole('listitem')).toHaveCount(5);
+            expect(await feed.getByRole('listitem').count()).toBeGreaterThan(5);
             await expect(host.getByRole('heading', { name: /Turn 1 complete/ })).toContainText(
               'Turn 1 complete'
             );
