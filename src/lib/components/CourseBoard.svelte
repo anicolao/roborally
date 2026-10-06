@@ -15,6 +15,8 @@
     currentPlayerUid,
     animateRobots = false,
     transitionDurationMs = 2_000,
+    movementDelayMs = 0,
+    activeRobotUid,
     laserBeams = [],
     presentationOnly = false,
     rotatePortrait = false
@@ -24,6 +26,8 @@
     currentPlayerUid?: string;
     animateRobots?: boolean;
     transitionDurationMs?: number;
+    movementDelayMs?: number;
+    activeRobotUid?: string;
     laserBeams?: RobotLaserBeam[];
     presentationOnly?: boolean;
     rotatePortrait?: boolean;
@@ -190,6 +194,7 @@
           {#each displayedRobots.filter((player) => player.position.x === position.x && player.position.y === position.y) as player}
             {@const robot = ROBOTS.find((entry) => entry.id === player.robotId)}
             <span
+              class:active-robot={player.uid === activeRobotUid}
               class:current-player={player.uid === currentPlayerUid}
               class={`race-robot robot-${player.robotId} facing-${player.facing}`}
               title={`${player.name}, ${robot?.name}, facing ${player.facing}`}
@@ -204,11 +209,12 @@
           {@const robot = ROBOTS.find((entry) => entry.id === player.robotId)}
           <span
             aria-hidden="true"
+            class:active-robot={player.uid === activeRobotUid}
             class:current-player={player.uid === currentPlayerUid}
             class={`animated-race-robot robot-${player.robotId}`}
             data-playback-robot={player.uid}
             data-facing={player.facing}
-            style={`left:${((player.position.x - compiledCourse.minX + 0.5) / compiledCourse.width) * 100}%;top:${((player.position.y - compiledCourse.minY + 0.5) / compiledCourse.height) * 100}%;--playback-duration:${transitionDurationMs}ms;transform:translate(-50%, -50%) rotate(${playbackRotation(player)}deg)`}
+            style={`left:${((player.position.x - compiledCourse.minX + 0.5) / compiledCourse.width) * 100}%;top:${((player.position.y - compiledCourse.minY + 0.5) / compiledCourse.height) * 100}%;--playback-duration:${transitionDurationMs}ms;--movement-delay:${movementDelayMs}ms;transform:translate(-50%, -50%) rotate(${playbackRotation(player)}deg)`}
           >
             <i></i>{robot?.mark}
           </span>
@@ -398,6 +404,9 @@
       top var(--playback-duration) ease-in-out,
       transform var(--playback-duration) ease-in-out;
   }
+  .animated-race-robot { transition-delay: var(--movement-delay, 0ms); }
+  .active-robot { outline: 3px solid #ffe493; z-index: 8;
+    box-shadow: 0 0 12px 6px #ffce45e6, 0 0 28px 10px #ffb90099; }
   .race-robot i, .animated-race-robot i {
     position: absolute; top: -7px; left: 8px;
     width: 4px; height: 7px; background: var(--robot-color, #d2ff37);

@@ -245,26 +245,26 @@ test('post-board laser snapshots apply damage and lock exact registers', async (
     await expect(margaretDock.locator('.program-card[data-locked="true"]')).toHaveCount(2);
     steps.setPage(table);
     await steps.step('locked-registers-stay-visible-next-turn', {
-      description: 'Locked cards remain public in the tabletop dock while new cards stay hidden',
+      description: 'Lock badges remain visible while all tabletop registers await the simultaneous reveal',
       verifications: [
         {
-          spec: 'The three unlocked registers return to face-down card backs for Turn 2',
+          spec: 'All five registers return to graphical face-down backs for Turn 2',
           check: async () => {
             await expect(
               margaretDock.locator(
-                '.program-card[data-register]:not([data-locked]) .program-card-back'
+                '.program-card[data-register] .flip-card:not(.face-up)'
               )
-            ).toHaveCount(3);
+            ).toHaveCount(5);
           }
         },
         {
-          spec: 'Registers 4 and 5 retain their exact locked cards in the player dock',
+          spec: 'The owner retains the exact locked cards while the tabletop masks their faces',
           check: async () => {
             await expect(
-              margaretDock.getByRole('img', { name: 'Rotate left, priority 380' })
+              margaretLockedProgram.getByRole('img', { name: 'Rotate left, priority 380' })
             ).toBeVisible();
             await expect(
-              margaretDock.getByRole('img', { name: 'Rotate right, priority 150' })
+              margaretLockedProgram.getByRole('img', { name: 'Rotate right, priority 150' })
             ).toBeVisible();
           }
         },
