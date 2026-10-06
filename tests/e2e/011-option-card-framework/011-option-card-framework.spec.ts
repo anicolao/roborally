@@ -169,7 +169,7 @@ test('face-up Options remain available for execution-time decisions', async (
     await expect(damageChoice).toBeVisible({ timeout: 45_000 });
     const tableDamagePrompt = table.getByTestId('tabletop-damage-prompt');
     await expect(tableDamagePrompt).toBeVisible({ timeout: 45_000 });
-    const decisionCopies = tableDamagePrompt.locator('.decision-copy');
+    const decisionCopies = table.locator('.log-card');
     await expect(decisionCopies).toHaveCount(2);
     await steps.step('damage-choice-at-impact', {
       description: 'Laser damage pauses execution and prompts the affected player at impact time',
@@ -197,13 +197,13 @@ test('face-up Options remain available for execution-time decisions', async (
     });
     steps.setPage(table);
     await steps.step('tabletop-identifies-damage-decision', {
-      description: 'Mirrored gutter rails keep the board visible while naming the prompted player',
+      description: 'Each player log names the prompted player without covering the board',
       verifications: [
         {
           spec: 'Both table orientations prominently identify Ada as the current responder',
           check: async () => {
             await expect(tableDamagePrompt).toContainText('Ada');
-            await expect(tableDamagePrompt).toContainText('WAITING FOR');
+            await expect(tableDamagePrompt).toContainText('Waiting for');
             await expect(decisionCopies).toHaveCount(2);
             await expect(table.getByTestId('tabletop-register-playback')).toBeHidden();
             const attention = table.locator('[data-awaiting-decision="true"]');
@@ -211,7 +211,7 @@ test('face-up Options remain available for execution-time decisions', async (
             await expect(attention).toContainText('Ada');
             await expect(attention).toContainText('YOUR DECISION');
             await expect(attention).not.toHaveCSS('box-shadow', 'none');
-            await expect(tableDamagePrompt).toContainText('CHECK YOUR PHONE');
+            await expect(tableDamagePrompt).toContainText('Check your phone.');
           }
         },
         {
@@ -220,16 +220,13 @@ test('face-up Options remain available for execution-time decisions', async (
             await expect(table.locator('[data-laser-source]')).not.toHaveCount(0);
             const board = await table.locator('.course-board').boundingBox();
             const wrap = await table.locator('.course-wrap').boundingBox();
-            const near = await decisionCopies.nth(0).boundingBox();
-            const far = await decisionCopies.nth(1).boundingBox();
             expect(board).not.toBeNull();
             expect(wrap).not.toBeNull();
-            expect(near).not.toBeNull();
-            expect(far).not.toBeNull();
-            expect(near!.x + near!.width).toBeLessThanOrEqual(board!.x + 1);
-            expect(far!.x).toBeGreaterThanOrEqual(board!.x + board!.width - 1);
-            expect(near!.x).toBeGreaterThanOrEqual(wrap!.x - 1);
-            expect(far!.x + far!.width).toBeLessThanOrEqual(wrap!.x + wrap!.width + 1);
+            for (const log of await decisionCopies.all()) {
+              const bounds = (await log.boundingBox())!;
+              expect(bounds.x + bounds.width <= wrap!.x + 1 || bounds.x >= wrap!.x + wrap!.width - 1).toBe(true);
+              await expect(log).toContainText('Waiting for Ada');
+            }
           }
         }
       ]

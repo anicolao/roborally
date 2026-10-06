@@ -2,9 +2,9 @@
 
 A 3840×2160 tabletop uses the available display width for public player seats. Each starting Option appears as a tappable icon, and selecting one opens a legible shared card inspector.
 
-## Wide 4K player seats expose each public Option as an icon
+## Square 4K player seats expose each public Option as an icon
 
-![Wide 4K player seats expose each public Option as an icon](./screenshots/000-wide-tabletop-option-icons-desktop.png)
+![Square 4K player seats expose each public Option as an icon](./screenshots/000-wide-tabletop-option-icons-desktop.png)
 
 **Verifications:**
 

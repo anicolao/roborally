@@ -29,7 +29,7 @@ The shared display creates a fresh room, exposes eight position-specific QR join
 
 **Verifications:**
 
-- [x] Mirrored playback rails remain in the course gutters without covering the board
+- [x] Each player sees the current action beside the unobscured board
 
 ## A private controller handles its next-turn power choice without a Program hand
 

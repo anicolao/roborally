@@ -417,8 +417,8 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     expect(cellBounds).not.toBeNull();
     expect(Math.abs(cellBounds!.width - cellBounds!.height)).toBeLessThanOrEqual(1);
     const courseWrapBounds = await table.locator('.course-wrap').boundingBox();
-    const seatOneBounds = await table.locator('[data-seat="1"]').boundingBox();
-    const seatEightBounds = await table.locator('[data-seat="8"]').boundingBox();
+    const seatOneBounds = await table.locator('[data-seat="2"]').boundingBox();
+    const seatEightBounds = await table.locator('[data-seat="7"]').boundingBox();
     expect(courseWrapBounds).not.toBeNull();
     expect(seatOneBounds).not.toBeNull();
     expect(seatEightBounds).not.toBeNull();
@@ -571,6 +571,8 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await submitVisibleProgram(secondPhone);
 
     await expect(table.getByTestId('tabletop-program-countdown')).toBeVisible();
+    await expect(table.locator('.program-card.revealed')).toHaveCount(10);
+    await expect(table.locator('.program-card.executing')).toHaveCount(0);
     await advanceSyntheticPlayback([table]);
     await advanceSyntheticPlayback([table]);
     await advanceSyntheticPlayback([table]);
@@ -579,14 +581,12 @@ test('the tabletop owns configuration and seat QR codes open private controllers
       'data-stage',
       'program-card'
     );
-    const playbackCopies = table.getByTestId('tabletop-register-playback').locator('.playback-copy');
+    const playbackCopies = table.locator('.log-card');
     await expect(playbackCopies).toHaveCount(2);
-    await expect(
-      table.getByTestId('tabletop-register-playback').locator('[data-table-facing="west"]')
-    ).toHaveCount(1);
-    await expect(
-      table.getByTestId('tabletop-register-playback').locator('[data-table-facing="east"]')
-    ).toHaveCount(1);
+    await expect(table.getByRole('img', { name: /QR code to join position/ })).toHaveCount(0);
+    await expect(table.locator('.seat.executing')).toHaveCount(1);
+    await expect(table.locator('.program-card.executing')).toHaveCount(1);
+    await expect(table.locator('.animated-race-robot.active-robot')).toHaveCount(1);
     for (let advance = 0; advance < 150; advance += 1) {
       const frame = await table.evaluate(() => {
         const playback = document.querySelector<HTMLElement>(
@@ -621,29 +621,32 @@ test('the tabletop owns configuration and seat QR codes open private controllers
       description: 'The tabletop reveals both Programs during staged register playback',
       verifications: [
         {
-          spec: 'Mirrored playback rails remain in the course gutters without covering the board',
+          spec: 'Each player sees the current action beside the unobscured board',
           check: async () => {
             await expect(table.locator('.program-card.revealed')).toHaveCount(10);
             const board = await courseBoard.boundingBox();
             const wrap = await table.locator('.course-wrap').boundingBox();
-            const near = await playbackCopies.nth(0).boundingBox();
-            const far = await playbackCopies.nth(1).boundingBox();
             expect(board).not.toBeNull();
             expect(wrap).not.toBeNull();
-            expect(near).not.toBeNull();
-            expect(far).not.toBeNull();
-            expect(near!.x + near!.width).toBeLessThanOrEqual(board!.x + 1);
-            expect(far!.x).toBeGreaterThanOrEqual(board!.x + board!.width - 1);
-            expect(near!.x).toBeGreaterThanOrEqual(wrap!.x - 1);
-            expect(far!.x + far!.width).toBeLessThanOrEqual(wrap!.x + wrap!.width + 1);
+            for (const log of await playbackCopies.all()) {
+              const bounds = (await log.boundingBox())!;
+              expect(bounds.x + bounds.width <= wrap!.x + 1 || bounds.x >= wrap!.x + wrap!.width - 1).toBe(true);
+              await expect(log.locator('header')).toContainText('Register');
+            }
             await expect(firstPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toHaveCount(0);
             await expect(secondPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toHaveCount(0);
           }
         }
       ]
     });
+    const graceLog = table.getByLabel("Grace's game log");
+    await graceLog.getByRole('button', { name: "Show Grace's turn log" }).click();
+    const history = graceLog.getByRole('list', { name: 'Running turn history' });
+    const initialEntries = await history.getByRole('listitem').count();
+    expect(initialEntries).toBeGreaterThan(0);
     await finishSyntheticPlayback([table]);
     await completePrivateResolutionChoices(table, [firstPhone, secondPhone]);
+    await expect.poll(() => history.getByRole('listitem').count()).toBeGreaterThan(initialEntries);
     await expect.poll(async () =>
       await table.locator('.damage-track i.taken').count() +
       await table.locator('.life-track i:not(.remaining)').count()
@@ -664,6 +667,11 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expect(fastReplay).toBeVisible();
     await fastReplay.click();
     await expect(table.locator('.course-wrap')).toHaveAttribute('data-review-replay', 'true');
+    await advanceSyntheticPlayback([table]);
+    await expect(table.getByTestId('tabletop-program-countdown')).toBeVisible();
+    await expect(table.locator('.program-card.revealed')).toHaveCount(10);
+    await advanceSyntheticPlayback([table]);
+    await advanceSyntheticPlayback([table]);
     await advanceSyntheticPlayback([table]);
     await expect(table.getByTestId('tabletop-register-playback')).toBeVisible();
     await expect(firstPhone.getByRole('button', { name: 'BEGIN TURN 2' })).toBeVisible();

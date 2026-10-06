@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from "$app/paths";
   import ProgramCardFace from './ProgramCardFace.svelte';
   import { PROGRAM_CARDS, type ProgramCard } from '$lib/game/program-manifest';
   import type { ProgramPlaybackFrame, LockedRegisterState } from '$lib/game/movement';
@@ -6,10 +7,13 @@
   export let registers: readonly { cardId: ProgramCard['id'] | null; locked: boolean }[] = [];
   export let playbackFrames: ProgramPlaybackFrame[] = [];
   export let revealThrough = 0;
+  export let revealedRegisters: readonly number[] | undefined = undefined;
+  export let activeRegister: number | null = null;
   import OptionInventory from './OptionInventory.svelte';
   import type { OptionCardId } from '$lib/game/option-manifest';
   export let uid: string;
   export let playerName: string;
+  export let showRobotName = true;
   export let robotName: string | undefined;
   export let startingLives: number;
   export let lives: number;
@@ -29,7 +33,7 @@
     <span class="sr-only">{playerName} {status} · {lives} Lives · {damage} Damage{powerMode === 'down' ? ' · Powered down' : powerMode === 'announced' ? ' · Shutdown announced' : ''}{lockedRegisters.length ? ` · Locked ${lockedRegisters.map(({ register }) => `R${register}`).join('/')}` : ''} · Flags {touchedFlags.length ? touchedFlags.join('→') : 'none'}</span>
   {/if}
           <strong class="player-name">{playerName}</strong>
-          <small class="robot-name">{robotName}</small>
+          {#if showRobotName}<small class="robot-name">{robotName}</small>{/if}
           <div
             class="robot-vitals"
             aria-hidden={compact ? true : undefined}
@@ -77,16 +81,13 @@
               >
             </div>
           </div>
-          {#if optionCardIds.length > 0}
-            <OptionInventory column={compact} {playerName} cardIds={optionCardIds} disabled={optionsDisabled} />
-          {/if}
   {#if compact && status !== 'active'}<span class="board-status">{status === 'destroyed' ? 'Awaiting re-entry' : 'Eliminated'}</span>{/if}
           <div
             class="program-cards"
             aria-label={`${playerName} program cards`}
           >
             {#each Array(5) as _, cardIndex}
-              {@const revealed = cardIndex + 1 <= revealThrough}
+              {@const revealed = revealedRegisters ? revealedRegisters.includes(cardIndex + 1) : cardIndex + 1 <= revealThrough}
               {@const register = registers[cardIndex]}
               {@const damageLock = lockedRegisters.find(({ register }) => register === cardIndex + 1)}
               {@const locked = register?.locked || !!damageLock}
@@ -97,14 +98,25 @@
                 damageLock?.cardId ?? register?.cardId ?? null,
               )}
               {@const card = PROGRAM_CARDS.find((entry) => entry.id === cardId)}
+              {@const faceUp = revealed || (revealedRegisters === undefined && locked)}
               <span
-                class:revealed={revealed || locked}
+                class:executing={activeRegister === cardIndex + 1}
+                class:revealed={faceUp}
                 class:locked
                 class="program-card"
                 data-register={cardIndex + 1}
                 data-locked={locked ? "true" : undefined}
               >
-                {#if (revealed || locked) && card}
+                {#if revealedRegisters !== undefined}
+                  <span class="flip-card" class:face-up={faceUp && !!card}>
+                    <span class="card-back-face" role="img" aria-label={`Register ${cardIndex + 1} face down`} aria-hidden={faceUp && !!card}>
+                      <img src={`${base}/assets/cards/program-back.png`} alt="" />
+                    </span>
+                    <span class="card-front-face">
+                      {#if faceUp && card}<ProgramCardFace {card} compact variant="square" />{/if}
+                    </span>
+                  </span>
+                {:else if faceUp && card}
                   <ProgramCardFace {card} compact variant="square" />
                 {:else}
                   <span class="program-card-back" aria-hidden="true">●</span>
@@ -125,6 +137,9 @@
               </span>
             {/each}
           </div>
+          {#if optionCardIds.length > 0}
+            <OptionInventory column={compact} {playerName} cardIds={optionCardIds} disabled={optionsDisabled} />
+          {/if}
   {#if archive}<small class="archive">Archive ({archive.x},{archive.y})</small>{/if}
 </div>
 <style>
@@ -292,6 +307,27 @@
       monospace;
     text-align: center;
     text-transform: uppercase;
+  }
+  .flip-card { position: relative; width: 100%; height: 100%; }
+  .card-back-face, .card-front-face { position: absolute; inset: 0; display: grid;
+    backface-visibility: hidden; border-radius: inherit; }
+  .card-back-face img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; }
+  .card-front-face { visibility: hidden; }
+  /* Settle on untransformed artwork so text remains crisp after the flip. */
+  .face-up .card-back-face { visibility: hidden; animation: turn-away 350ms ease-in-out; }
+  .face-up .card-front-face { visibility: visible; animation: turn-over 350ms ease-in-out; }
+  @keyframes turn-away {
+    from { visibility: visible; transform: none; }
+    to { visibility: hidden; transform: rotateY(180deg); }
+  }
+  @keyframes turn-over {
+    from { transform: rotateY(-180deg); }
+    to { transform: none; }
+  }
+  .program-card.executing { z-index: 5; outline: 2px solid #ffe493;
+    box-shadow: 0 0 9px 4px #ffc83de6, 0 0 24px 7px #ffb70099; }
+  @media (prefers-reduced-motion: reduce) {
+    .face-up .card-back-face, .face-up .card-front-face { animation: none; }
   }
   .program-card.revealed {
     overflow: visible;

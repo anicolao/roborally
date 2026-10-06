@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { TestStepHelper } from '../helpers/test-step-helper';
 
-test('the 4K tabletop gives players wide seats and inspectable public Options', async ({
+test('the 4K tabletop gives players square seats and inspectable public Options', async ({
   browser,
   page: table
 }, testInfo) => {
@@ -56,25 +56,28 @@ test('the 4K tabletop gives players wide seats and inspectable public Options', 
     await expect(adaOptions).toHaveAttribute('data-option-count', '1');
     await expect(graceOptions).toHaveAttribute('data-option-count', '1');
 
+    await table.evaluate(async () => {
+      await Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => {})));
+    });
     const seatGeometry = await Promise.all([
       adaSeat.boundingBox(),
       graceSeat.boundingBox()
     ]);
     for (const bounds of seatGeometry) {
       expect(bounds).not.toBeNull();
-      expect(bounds!.width).toBeGreaterThanOrEqual(680);
-      expect(bounds!.width).toBeLessThanOrEqual(721);
+      expect(bounds!.width).toBeGreaterThanOrEqual(500);
+      expect(bounds!.width).toBeLessThanOrEqual(550);
     }
 
     await steps.step('wide-tabletop-option-icons', {
-      description: 'Wide 4K player seats expose each public Option as an icon',
+      description: 'Square 4K player seats expose each public Option as an icon',
       status: 'skip',
       verifications: [
         {
           spec: 'Side seats expand well beyond the old narrow desktop cap',
           check: async () => {
-            expect(seatGeometry[0]!.width).toBeGreaterThanOrEqual(680);
-            expect(seatGeometry[1]!.width).toBeGreaterThanOrEqual(680);
+            expect(seatGeometry[0]!.width).toBeGreaterThanOrEqual(500);
+            expect(seatGeometry[1]!.width).toBeGreaterThanOrEqual(500);
           }
         },
         {
@@ -91,9 +94,10 @@ test('the 4K tabletop gives players wide seats and inspectable public Options', 
               width: document.documentElement.scrollWidth,
               height: document.documentElement.scrollHeight,
               innerWidth,
-              innerHeight
+              innerHeight,
+              tabletopScroll: document.querySelector('[data-e2e-tabletop]')!.scrollLeft
             }));
-            expect(viewport).toEqual({ width: 3840, height: 2160, innerWidth: 3840, innerHeight: 2160 });
+            expect(viewport).toEqual({ width: 3840, height: 2160, innerWidth: 3840, innerHeight: 2160, tabletopScroll: 0 });
           }
         }
       ]

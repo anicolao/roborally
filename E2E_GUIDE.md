@@ -105,6 +105,13 @@ ordering, focus transfer, textual timer and submission states, polite
 resolution announcements, reduced motion, and zero overflow or control
 overlap at every viewport.
 
+Scenario 027 joins eight real private controllers to an Option Lab tabletop. It
+checks per-player log counts, independent expansion, rotated mat/log alignment,
+full gutter width at desktop and 4K sizes, Options below registers, graphical
+face-down cards, and reduced motion. Scenario 020 additionally verifies that all
+registers reveal during the countdown before execution highlights appear, and
+that each player's expanded history accumulates as playback progresses.
+
 ## Scenario layout
 
 Use the next three-digit sequence and a short kebab-case capability name:

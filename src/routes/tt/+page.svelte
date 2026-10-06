@@ -7,8 +7,9 @@
   import { onDestroy, onMount } from "svelte";
   import QRCode from "qrcode";
   import CourseBoard from "$lib/components/CourseBoard.svelte";
+  import TabletopGutterLog from "$lib/components/TabletopGutterLog.svelte";
+  import RobotMarker from "$lib/components/RobotMarker.svelte";
   import PlayerStatusCard from "$lib/components/PlayerStatusCard.svelte";
-  import ProgramCardFace from "$lib/components/ProgramCardFace.svelte";
   import { initializeFirebase, type FirebaseServices } from "$lib/firebase";
   import {
     MAX_ROOM_PLAYERS,
@@ -59,6 +60,25 @@
   let error = "";
   let pending = false;
   let seatQrs: SeatQr[] = [];
+  let seatRotations: Record<number, number> = {};
+
+  function defaultSeatRotation(seat: number, layout: ReturnType<typeof tabletopLayoutForCourse>): number {
+    if (layout === "side-seats") {
+      if (seat === 1 || seat === 8) return 180;
+      if (seat === 4 || seat === 5) return 0;
+      return seat < 5 ? 90 : 270;
+    }
+    if (seat === 1 || seat === 4) return 180;
+    if (seat === 5 || seat === 8) return 0;
+    return seat === 2 || seat === 7 ? 90 : 270;
+  }
+
+  function rotateSeat(seat: number) {
+    seatRotations = {
+      ...seatRotations,
+      [seat]: ((seatRotations[seat] ?? defaultSeatRotation(seat, state.setup ? "side-seats" : tabletopLayout)) + 90),
+    };
+  }
   let selectedCourseId: PlayableCourseId = "risky-exchange";
   let setupSeed = "";
   let setupLives: 3 | 4 = 3;
@@ -71,7 +91,7 @@
   let playbackActorUid: string | null = null;
   let playbackCardId: ProgramCard["id"] | null = null;
   let playbackRobots: RaceRobotPosition[] | undefined;
-  let playbackTrace: ProgramPlayback["frames"][number]["trace"] = [];
+  let playbackHistory: ProgramPlayback["frames"][number]["trace"] = [];
   let playbackLaserBeams: ProgramPlayback["frames"][number]["laserBeams"] = [];
   let playbackFrameIndex = 0;
   let playbackFrameCount = 0;
@@ -111,6 +131,8 @@
     playbackProductionDurationMs *
       (manualReplayActive ? reviewPlaybackTimeScale : playbackTimeScale),
   );
+  $: actorIsExecuting = playbackPhase === "register" && playbackStage === "program-card" && !waitingPlayer;
+  $: robotCueMs = actorIsExecuting ? Math.min(350, Math.round(playbackTransitionMs * 0.3)) : 0;
   $: countdownStepMs = Math.round(
     PRODUCTION_COUNTDOWN_STEP_MS * playbackTimeScale,
   );
@@ -141,7 +163,7 @@
     !state.resolution?.nextReentryUid;
   $: presentedRobots = robotsForPlaybackPresentation(
     state.resolution,
-    presentationSettled && !manualReplayActive ? undefined : playbackRobots,
+    presentationSettled && !manualReplayActive && !playbackIsActive ? undefined : playbackRobots,
     resolutionPlaybackKey,
     playbackKey,
   );
@@ -183,7 +205,17 @@
         : waitingPowerDownUid
           ? "Choose your power state for next turn"
           : "");
-  $: latestPlaybackEntry = playbackTrace.at(-1);
+  $: gutterTrace = presentationSettled && !manualReplayActive && !playbackIsActive
+    ? state.resolution?.trace ?? [] : playbackHistory;
+  $: gutterHeading = waitingPlayer ? `Waiting for ${waitingPlayer.name}`
+    : playbackPhase === "countdown" ? `Moving in ${playbackCountdown}`
+    : playbackPhase === "register" ? `Register ${playbackRegister ?? 1}`
+    : `Turn ${state.programming?.turnNumber ?? state.resolution?.turnNumber ?? 1}`;
+  $: gutterDetail = waitingPlayer ? `${waitingPrompt}. Check your phone.`
+    : playbackPhase === "countdown" ? "All Programs locked. Watch the board."
+    : playbackPhase === "register" ? playbackStageLabel
+    : playbackPhase === "complete" ? "Turn complete. Choose your next action on your phone."
+    : "Choose your Program on your phone.";
   $: finishWinners = (state.resolution?.summary?.winnerUids ?? [])
     .map((uid) => state.players.find((player) => player.uid === uid))
     .filter((player) => player !== undefined);
@@ -315,7 +347,7 @@
     playbackActorUid = null;
     playbackCardId = null;
     playbackRobots = undefined;
-    playbackTrace = [];
+    playbackHistory = [];
     playbackLaserBeams = [];
     playbackFrameIndex = 0;
     playbackFrameCount = 0;
@@ -371,7 +403,8 @@
     playbackActorUid = frame.actorUid;
     playbackCardId = frame.cardId;
     playbackRobots = frame.robots;
-    playbackTrace = frame.trace;
+    playbackHistory = state.resolution?.playback.frames
+      .slice(0, frameIndex + 1).flatMap(({ trace }) => trace) ?? frame.trace;
     playbackLaserBeams = frame.laserBeams ?? [];
     playbackFrameIndex = frameIndex + 1;
     playbackFrameCount = Math.max(frameCount, frameIndex + 1);
@@ -384,18 +417,23 @@
 
     clearPlaybackTimers();
     manualReplayActive = true;
-    playbackPhase = "register";
+    playbackPhase = "idle";
+    playbackCountdown = 3;
     playbackRegister = null;
     playbackStage = null;
     playbackActorUid = null;
     playbackCardId = null;
     playbackRobots = playback.initialRobots;
-    playbackTrace = [];
+    playbackHistory = [];
     playbackLaserBeams = [];
     playbackFrameIndex = 0;
     playbackFrameCount = playback.frames.length;
 
-    let frameStart = 0;
+    const revealStepMs = PRODUCTION_COUNTDOWN_STEP_MS * reviewPlaybackTimeScale;
+    schedulePlayback(() => { playbackPhase = "countdown"; }, 0);
+    schedulePlayback(() => { playbackCountdown = 2; }, revealStepMs);
+    schedulePlayback(() => { playbackCountdown = 1; }, revealStepMs * 2);
+    let frameStart = revealStepMs * 3;
     for (const [frameIndex, frame] of playback.frames.entries()) {
       schedulePlayback(
         () => showPlaybackFrame(frame, frameIndex, playback.frames.length),
@@ -413,7 +451,6 @@
       playbackActorUid = null;
       playbackCardId = null;
       playbackRobots = undefined;
-      playbackTrace = [];
       playbackLaserBeams = [];
       manualReplayActive = false;
     }, frameStart);
@@ -578,7 +615,6 @@
     playbackStage = null;
     playbackActorUid = null;
     playbackCardId = null;
-    playbackTrace = [];
     if (!waitingForPlayer) {
       playbackRegister = null;
       playbackRobots = undefined;
@@ -682,19 +718,6 @@
   </p>
   {#if error}<p class="table-error" role="alert">{error}</p>{/if}
 
-  {#if playbackPhase === "countdown"}
-    <div
-      class="program-countdown"
-      role="timer"
-      aria-live="assertive"
-      data-testid="tabletop-program-countdown"
-    >
-      <small>ALL PROGRAMS LOCKED</small>
-      {#key playbackCountdown}<strong>{playbackCountdown}</strong>{/key}
-      <span>Movement incoming</span>
-    </div>
-  {/if}
-
   {#if finishOverlayVisible}
     <div
       class="race-finish-overlay"
@@ -735,6 +758,8 @@
     class:side-seats={tabletopLayout === "side-seats"}
     class:top-bottom-seats={tabletopLayout === "top-bottom-seats"}
     class="table"
+    class:playing={!!state.setup}
+    style={`--course-aspect:${layoutCourse.width / layoutCourse.height}`}
     aria-label="Shared tabletop"
     data-course-layout={tabletopLayout}
   >
@@ -747,65 +772,89 @@
         ? ROBOTS.find((entry) => entry.id === player.robotId)
         : undefined}
       {@const qr = seatQrs.find((candidate) => candidate.seat === seat)}
-      <article
-        class:open={!player}
-        class:awaiting-decision={!!player && player.uid === waitingPlayerUid}
-        class={`seat seat-${seat}`}
-        data-seat={seat}
-        data-player-uid={player?.uid ?? ""}
-        data-awaiting-decision={player?.uid === waitingPlayerUid ? "true" : undefined}
-      >
-        <div class="seat-head">
-          <b>D{String(seat).padStart(2, "0")}</b><span
-            >{player?.uid === waitingPlayerUid ? "YOUR DECISION" : robot?.mark ?? "OPEN"}</span
-          >
-        </div>
-        {#if player}
-          {@const raceRobot = presentedRobots?.find(
-            (candidate) => candidate.uid === player.uid,
-          )}
-          {@const startingLives =
-            state.setup?.players.find(
+      {#if player || !state.setup}
+        <div class={`seat-slot seat-${seat}`}>
+        <article
+          style:transform={`rotate(${seatRotations[seat] ?? defaultSeatRotation(seat, state.setup ? "side-seats" : tabletopLayout)}deg)`}
+          class:executing={actorIsExecuting && player?.uid === playbackActorUid}
+          class:open={!player}
+          class:awaiting-decision={!!player && player.uid === waitingPlayerUid}
+          class="seat"
+          data-seat={seat}
+          data-player-uid={player?.uid ?? ""}
+          data-awaiting-decision={player?.uid === waitingPlayerUid ? "true" : undefined}
+        >
+          <div class="seat-head">
+            <b>D{String(seat).padStart(2, "0")}</b>
+            {#if player?.uid === waitingPlayerUid}<span>YOUR DECISION</span>{/if}
+            <span class="seat-robot">{#if player}<RobotMarker robotId={player.robotId} />{:else}OPEN{/if}</span>
+            {#if player}<button class="rotate-seat" type="button"
+              aria-label={`Rotate ${player?.name ?? `position ${seat}`} card clockwise`}
+              title="Rotate card clockwise" onclick={() => rotateSeat(seat)}>↻</button>{/if}
+          </div>
+          {#if player}
+            {@const raceRobot = presentedRobots?.find(
               (candidate) => candidate.uid === player.uid,
-            )?.lives ??
-            state.configuration?.lives ??
-            3}
-          {@const lives = raceRobot?.lives ?? startingLives}
-          {@const damage = Math.max(
-            0,
-            Math.min(10, raceRobot?.damage ?? state.setup?.startingDamage ?? 0),
-          )}
-          {@const powerMode = raceRobot?.poweredDown
-            ? "down"
-            : raceRobot?.powerDownNextTurn
-              ? "announced"
-              : "active"}
-          {@const touchedFlags = raceRobot?.touchedFlags ?? []}
-          {@const optionCardIds = optionCardIdsForPlayer(player.uid, raceRobot)}
-          <PlayerStatusCard uid={player.uid} playerName={player.name} robotName={robot?.name}
-            {startingLives} {lives} {damage} {powerMode} {touchedFlags}
-            flags={layoutCourse.course.flags} {optionCardIds}
-            registers={state.programming?.players.find(({ uid }) => uid === player.uid)?.registers ?? []}
-            playbackFrames={state.resolution?.turnNumber === state.programming?.turnNumber ? state.resolution?.playback.frames ?? [] : []}
-            revealThrough={state.resolution?.turnNumber === state.programming?.turnNumber
-              ? playbackPhase === 'complete' ? 5 : ['register', 'waiting'].includes(playbackPhase) ? playbackRegister ?? 0 : 0
-              : 0} />
-        {:else if qr}
-          <a
-            class="seat-join"
-            href={qr.url}
-            aria-label={`Join tabletop ${roomCode} at position ${seat}`}
-          >
-            <img src={qr.image} alt={`QR code to join position ${seat}`} />
-            <span
-              ><strong>SCAN TO JOIN</strong><small>Position {seat}</small></span
+            )}
+            {@const startingLives =
+              state.setup?.players.find(
+                (candidate) => candidate.uid === player.uid,
+              )?.lives ??
+              state.configuration?.lives ??
+              3}
+            {@const lives = raceRobot?.lives ?? startingLives}
+            {@const damage = Math.max(
+              0,
+              Math.min(10, raceRobot?.damage ?? state.setup?.startingDamage ?? 0),
+            )}
+            {@const powerMode = raceRobot?.poweredDown
+              ? "down"
+              : raceRobot?.powerDownNextTurn
+                ? "announced"
+                : "active"}
+            {@const touchedFlags = raceRobot?.touchedFlags ?? []}
+            {@const optionCardIds = optionCardIdsForPlayer(player.uid, raceRobot)}
+            <PlayerStatusCard uid={player.uid} playerName={player.name} robotName={robot?.name} showRobotName={false}
+              {startingLives} {lives} {damage} {powerMode} {touchedFlags}
+              flags={layoutCourse.course.flags} {optionCardIds}
+              registers={state.programming?.players.find(({ uid }) => uid === player.uid)?.registers ?? []}
+              playbackFrames={state.resolution?.turnNumber === state.programming?.turnNumber ? state.resolution?.playback.frames ?? [] : []}
+              revealedRegisters={state.resolution?.turnNumber === state.programming?.turnNumber && playbackPhase !== 'idle'
+                ? [1, 2, 3, 4, 5] : []}
+              activeRegister={actorIsExecuting && player.uid === playbackActorUid ? playbackRegister : null} />
+          {:else if qr}
+            <a
+              class="seat-join"
+              href={qr.url}
+              aria-label={`Join tabletop ${roomCode} at position ${seat}`}
             >
-          </a>
-        {:else}
-          <span class="qr-placeholder">Generating join code…</span>
-        {/if}
-      </article>
+              <img src={qr.image} alt={`QR code to join position ${seat}`} />
+              <span
+                ><strong>SCAN TO JOIN</strong><small>Position {seat}</small></span
+              >
+            </a>
+          {:else}
+            <span class="qr-placeholder">Generating join code…</span>
+          {/if}
+        </article>
+        </div>
+      {/if}
     {/each}
+
+    {#if state.setup}
+      {#each state.players as player, index (player.uid)}
+        {@const seat = player.seat ?? 1}
+        <div class="gutter" data-log-seat={seat}
+          data-testid={index === 0 ? (waitingPlayer ? 'tabletop-damage-prompt' : playbackPhase === 'countdown' ? 'tabletop-program-countdown' : playbackPhase === 'register' ? 'tabletop-register-playback' : undefined) : undefined}
+          data-register={playbackRegister} data-stage={playbackStage} data-frame={playbackFrameIndex}
+          data-production-duration-ms={playbackProductionDurationMs}
+          style={`grid-column:${seat <= 4 ? 2 : 4};grid-row:${seat <= 4 ? seat : 9 - seat}`}>
+          <TabletopGutterLog playerName={player.name} announce={index === 0}
+            rotation={seatRotations[seat] ?? defaultSeatRotation(seat, 'side-seats')}
+            trace={gutterTrace} heading={gutterHeading} detail={gutterDetail} waiting={!!waitingPlayer} />
+        </div>
+      {/each}
+    {/if}
 
     <div
       class:playback-active={playbackPhase === "register" && !!playbackRegister}
@@ -818,90 +867,12 @@
           setup={state.setup}
           robots={presentedRobots}
           animateRobots={playbackIsActive}
-          transitionDurationMs={playbackTransitionMs}
+          transitionDurationMs={Math.max(0, playbackTransitionMs - robotCueMs)}
+          movementDelayMs={robotCueMs}
+          activeRobotUid={actorIsExecuting ? playbackActorUid ?? undefined : undefined}
           laserBeams={presentationSettled && !manualReplayActive ? [] : playbackLaserBeams}
           presentationOnly
         />
-        {#if waitingPlayer}
-          <div
-            class:side-facing={tabletopLayout === "side-seats"}
-            class="course-decision"
-            role="status"
-            aria-live="assertive"
-            data-testid="tabletop-damage-prompt"
-            data-decision-id={pendingOptionDecision?.decisionId ?? pendingPresentationDecisionKey}
-          >
-            {#each ["near", "far"] as position}
-              <div
-                class:near={position === "near"}
-                class:far={position === "far"}
-                class="decision-copy"
-                aria-hidden={position === "far"}
-                data-table-facing={tabletopLayout === "side-seats"
-                  ? position === "near"
-                    ? "west"
-                    : "east"
-                  : position === "near"
-                    ? "north"
-                    : "south"}
-              >
-                <small
-                  >{pendingOptionDecision?.timing === "damage"
-                    ? "DAMAGE DECISION"
-                    : pendingOptionDecision
-                      ? "OPTION DECISION"
-                      : state.resolution?.nextReentryUid
-                        ? "RE-ENTRY DECISION"
-                        : waitingPowerDownUid
-                          ? "POWER DECISION"
-                          : "OPTION LOSS"} · WAITING FOR</small
-                >
-                <strong>{waitingPlayer.name}</strong>
-                <span>{waitingPrompt}</span>
-                <em>CHECK YOUR PHONE</em>
-              </div>
-            {/each}
-          </div>
-        {/if}
-        {#if playbackPhase === "register" && playbackRegister && !waitingPlayer}
-          <div
-            class:side-facing={tabletopLayout === "side-seats"}
-            class="course-playback"
-            role="status"
-            aria-live="polite"
-            data-testid="tabletop-register-playback"
-            data-register={playbackRegister}
-            data-stage={playbackStage}
-            data-frame={playbackFrameIndex}
-            data-production-duration-ms={playbackProductionDurationMs}
-          >
-            {#each ["near", "far"] as position}
-              <div
-                class:near={position === "near"}
-                class:far={position === "far"}
-                class="playback-copy"
-                aria-hidden={position === "far"}
-                data-table-facing={tabletopLayout === "side-seats"
-                  ? position === "near"
-                    ? "west"
-                    : "east"
-                  : position === "near"
-                    ? "north"
-                    : "south"}
-              >
-                <strong>REGISTER {playbackRegister}</strong>
-                <b>{playbackStageLabel}</b>
-                <span
-                  >{latestPlaybackEntry?.text ??
-                    `${playbackStageLabel} resolved with no movement`}</span
-                >
-                <i
-                  style={`--playback-progress:${playbackFrameIndex / playbackFrameCount}`}
-                ></i>
-              </div>
-            {/each}
-          </div>
-        {/if}
         {#if manualReplayAvailable && !finishOverlayVisible}
           <button class="round-replay" type="button" onclick={replayCompletedRound}>
             Fast replay · Turn {state.resolution?.turnNumber}
@@ -1011,8 +982,9 @@
     inset: 0;
     width: 100vw;
     height: 100dvh;
-    overflow: hidden;
-    padding: clamp(4px, 0.75vw, 24px);
+    /* Rotating edge cards must not create a focus-scrollable viewport. */
+    overflow: clip;
+    padding: 4px;
     background: radial-gradient(circle at center, #263637, #0c1112 72%);
   }
   .table-error {
@@ -1030,32 +1002,6 @@
     font-size: 18px;
     text-align: center;
     transform: translateX(-50%);
-  }
-  .program-countdown {
-    position: fixed;
-    z-index: 50;
-    inset: 0;
-    display: grid;
-    place-content: center;
-    place-items: center;
-    background: #050909dd;
-    font-family: "Space Mono", monospace;
-    text-transform: uppercase;
-  }
-  .program-countdown small {
-    color: #d2ff37;
-    font-size: clamp(18px, 3vw, 38px);
-    letter-spacing: 0.12em;
-  }
-  .program-countdown strong {
-    color: #eef4ee;
-    font-size: clamp(150px, 35vw, 420px);
-    line-height: 0.9;
-    text-shadow: 0 0 45px #d2ff3788;
-  }
-  .program-countdown span {
-    color: #ffcf4b;
-    font-size: clamp(22px, 4vw, 50px);
   }
   .round-replay {
     position: absolute;
@@ -1166,8 +1112,31 @@
       );
     grid-template-rows: repeat(4, minmax(0, 1fr));
   }
+  .table.playing {
+    grid-template-columns: repeat(2, minmax(0, 1fr))
+      min(40vw, calc(98vh * var(--course-aspect))) repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(4, minmax(0, 1fr));
+    gap: clamp(4px, 0.45vw, 14px);
+  }
+  .table.playing .course-wrap { grid-column: 3; grid-row: 1 / -1; }
+  .table.playing .seat-1 { grid-column: 1; grid-row: 1; }
+  .table.playing .seat-2 { grid-column: 1; grid-row: 2; }
+  .table.playing .seat-3 { grid-column: 1; grid-row: 3; }
+  .table.playing .seat-4 { grid-column: 1; grid-row: 4; }
+  .table.playing .seat-5 { grid-column: 5; grid-row: 4; }
+  .table.playing .seat-6 { grid-column: 5; grid-row: 3; }
+  .table.playing .seat-7 { grid-column: 5; grid-row: 2; }
+  .table.playing .seat-8 { grid-column: 5; grid-row: 1; }
+  .seat-slot:nth-child(-n+4) { justify-items: start; }
+  .seat-slot:nth-child(n+5) { justify-items: end; }
+  .table.playing .seat-slot { justify-items: start; }
+  .table.playing :is(.seat-5, .seat-6, .seat-7, .seat-8) { justify-items: end; }
+  .gutter { min-width: 0; min-height: 0; display: grid; align-items: center; container-type: size; }
+  /* Recover the unused width beside a mat when its row limits its square size. */
+  .gutter:is([data-log-seat="1"], [data-log-seat="2"], [data-log-seat="3"], [data-log-seat="4"]) :global(.log-slot) {
+    margin-left: calc(-1 * max(0px, 100cqw - 100cqh));
+  }
   .course-wrap {
-    --playback-gutter-width: clamp(38px, 8vw, 140px);
     container-type: size;
     position: relative;
     z-index: 1;
@@ -1192,147 +1161,17 @@
   .course-wrap :global(.board-viewport) {
     height: 100%;
   }
-  .course-wrap.playback-active :global(.course-panel.presentation-only),
-  .course-wrap.decision-active :global(.course-panel.presentation-only) {
-    padding-inline: var(--playback-gutter-width);
-  }
-  .course-playback,
-  .course-decision {
-    position: absolute;
-    z-index: 3;
-    inset: 4px;
-    overflow: hidden;
-    pointer-events: none;
-  }
-  .playback-copy,
-  .decision-copy {
-    position: absolute;
-    top: 0;
-    bottom: 0;
+  .seat-slot {
+    container-type: size;
     display: grid;
-    width: var(--playback-gutter-width);
+    place-items: center;
     min-width: 0;
-    grid-template-rows: auto auto minmax(0, 1fr) 7px;
-    align-content: start;
-    gap: clamp(5px, 1vh, 12px);
-    padding: clamp(7px, 1vw, 14px);
-    border: 2px solid #d2ff37;
-    border-radius: 8px;
-    color: #eef4ee;
-    background: #0b1212f2;
-    box-shadow: 0 0 24px #000a;
-    font-family: "Space Mono", monospace;
-  }
-  .playback-copy.near,
-  .decision-copy.near {
-    left: 0;
-  }
-  .playback-copy.far,
-  .decision-copy.far {
-    right: 0;
-    transform: rotate(180deg);
-  }
-  .playback-copy strong {
-    color: #d2ff37;
-    font-size: clamp(14px, 1.5vw, 24px);
-    line-height: 1;
-    text-transform: uppercase;
-  }
-  .playback-copy b {
-    color: #ffcf4b;
-    font-size: clamp(11px, 1vw, 17px);
-    line-height: 1.12;
-    text-transform: uppercase;
-  }
-  .playback-copy span {
-    overflow: hidden;
-    font-size: clamp(11px, 0.9vw, 16px);
-    line-height: 1.18;
-    overflow-wrap: anywhere;
-  }
-  .playback-copy i {
-    display: block;
-    align-self: end;
-    background: linear-gradient(
-      90deg,
-      #d2ff37 0 calc(var(--playback-progress) * 100%),
-      #344043 calc(var(--playback-progress) * 100%) 100%
-    );
-  }
-  .decision-copy {
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
-    border-color: #ff4545;
-    box-shadow:
-      0 0 24px #ff202033,
-      0 0 24px #000a;
-  }
-  .decision-copy small {
-    color: #ffcf4b;
-    font-size: clamp(10px, 0.8vw, 14px);
-    font-weight: 700;
-    line-height: 1.15;
-    text-transform: uppercase;
-  }
-  .decision-copy strong {
-    overflow: hidden;
-    color: #fff;
-    font-size: clamp(16px, 1.8vw, 28px);
-    line-height: 1;
-    overflow-wrap: anywhere;
-    text-transform: uppercase;
-  }
-  .decision-copy span {
-    overflow: hidden;
-    font-size: clamp(11px, 0.9vw, 16px);
-    line-height: 1.18;
-    overflow-wrap: anywhere;
-  }
-  .decision-copy em {
-    color: #ffcf4b;
-    font-size: clamp(9px, 0.8vw, 14px);
-    font-style: normal;
-    font-weight: 700;
-  }
-  .course-playback.side-facing .playback-copy,
-  .course-decision.side-facing .decision-copy {
-    top: 0;
-    bottom: auto;
-    width: 100cqh;
-    height: var(--playback-gutter-width);
-    grid-template-columns: auto minmax(0, auto) minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) 7px;
-    align-items: center;
-  }
-  .course-playback.side-facing .playback-copy.near,
-  .course-decision.side-facing .decision-copy.near {
-    left: var(--playback-gutter-width);
-    transform: rotate(90deg);
-    transform-origin: top left;
-  }
-  .course-playback.side-facing .playback-copy.far,
-  .course-decision.side-facing .decision-copy.far {
-    top: 100%;
-    right: auto;
-    left: calc(100% - var(--playback-gutter-width));
-    transform: rotate(-90deg);
-    transform-origin: top left;
-  }
-  .course-playback.side-facing .playback-copy span {
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-  .course-playback.side-facing .playback-copy i {
-    grid-column: 1 / -1;
-  }
-  .course-decision.side-facing .decision-copy {
-    grid-template-columns: auto minmax(0, auto) minmax(0, 1fr) auto;
-    grid-template-rows: minmax(0, 1fr);
-  }
-  .course-decision.side-facing .decision-copy span {
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    min-height: 0;
   }
   .seat {
+    width: min(100cqw, 100cqh);
+    height: min(100cqw, 100cqh);
+    box-sizing: border-box;
     container-type: size;
     z-index: 2;
     display: grid;
@@ -1347,9 +1186,18 @@
     background: #11191aee;
     box-shadow: 0 7px 18px #05070799;
   }
+  .seat { transition: transform 350ms ease-in-out; }
+  @media (prefers-reduced-motion: reduce) { .seat { transition: none; } }
   .seat.open {
+    width: 100%;
+    height: 100%;
+    transform: none !important;
     border-color: #7e9130;
     grid-template-rows: auto minmax(0, 1fr);
+  }
+  .seat.executing {
+    border-color: #ffe493;
+    box-shadow: inset 0 0 26px #ffcb4055, 0 0 18px 3px #ffc43ba6;
   }
   .seat.awaiting-decision {
     border-color: #ffcf4b;
@@ -1434,9 +1282,29 @@
       clamp(10px, 4cqh, 24px) "Space Mono",
       monospace;
   }
+  .seat-robot { padding-top: 5px; }
   .seat-head span {
     color: #ffcf4b;
+    margin-left: auto;
   }
+  .seat-head { align-items: center; gap: 6px; }
+  .rotate-seat {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: clamp(24px, 9cqw, 44px);
+    height: clamp(24px, 9cqw, 44px);
+    padding: 0;
+    border: 1px solid #657577;
+    border-radius: 50%;
+    color: #d2ff37;
+    background: #202b2d;
+    font-size: clamp(18px, 6cqw, 32px);
+    line-height: 1;
+    cursor: pointer;
+  }
+  .rotate-seat:hover { background: #344245; }
+  .rotate-seat:focus-visible { outline: 2px solid #d2ff37; outline-offset: 2px; }
   .seat-join {
     display: grid;
     min-width: 0;

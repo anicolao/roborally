@@ -20,9 +20,9 @@ Two ordinary clients reach the crossed repair site on successive turns, draw fro
 - [x] Ada sees the exact pending damage point and her owned Options
 - [x] Grace sees that Ada is the player currently being prompted
 
-## Mirrored gutter rails keep the board visible while naming the prompted player
+## Each player log names the prompted player without covering the board
 
-![Mirrored gutter rails keep the board visible while naming the prompted player](./screenshots/002-tabletop-identifies-damage-decision-desktop.png)
+![Each player log names the prompted player without covering the board](./screenshots/002-tabletop-identifies-damage-decision-desktop.png)
 
 **Verifications:**
 

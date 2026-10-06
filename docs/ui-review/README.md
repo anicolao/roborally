@@ -1,5 +1,8 @@
 # Web and tabletop playability review
 
+For the subsequent rotating mats, graphical reveal and per-player logs, see the
+[tabletop player-log review](tabletop-player-logs.md).
+
 This change makes the course the primary web play surface and reuses the existing
 tabletop card artwork, player status cards and Option inspector. The intended improvement is less searching
 between the board, the hand and the controls needed for the current turn.

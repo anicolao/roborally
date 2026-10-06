@@ -186,7 +186,7 @@ async function documentPowerChoices(
       });
       if (!(await button.isEnabled())) continue;
       const waiting = table.getByTestId('tabletop-damage-prompt');
-      await expect(waiting).toContainText('POWER DECISION');
+      await expect(waiting).toContainText('Choose your power state');
       await expect(waiting).toContainText(racer.name);
       const attention = table.locator('[data-awaiting-decision="true"]');
       await expect(attention).toHaveCount(1);
