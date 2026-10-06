@@ -77,3 +77,12 @@ New scenario 027 joins eight ordinary phone clients and checks independent logs,
 rotation, register/Option ordering, reduced motion and alignment at 1280, 1920
 and 3840 pixels. Generated walkthroughs and reviewed screenshots accompany the
 implementation. Final local and CI results are recorded in the PR.
+
+The complete local verifier passed on 2026-10-06: static/scenario/workflow
+checks, 165 unit tests, 15 Firestore Rules tests, 113 browser cases (three
+intentional skips), production build and whitespace validation. All 48 changed
+or new macOS screenshots were visually reviewed and passed exact comparison.
+The [Linux baseline workflow](https://github.com/anicolao/roborally/actions/runs/37489826877)
+also passed all checks and the same browser cases. Its 48 changed/new Linux
+screenshots were visually reviewed before committing. Normal PR CI compares
+these baselines with updates disabled before deploying the preview.
