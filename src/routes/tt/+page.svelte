@@ -87,6 +87,11 @@
   let playbackPhase: PlaybackPhase = "idle";
   let playbackCountdown = 3;
   let playbackRegister: number | null = null;
+  // Reveal a whole register together, retaining past cards but never future ones.
+  $: revealedRegisterCount = playbackPhase === "idle" ? 0
+    : playbackPhase === "countdown" ? 1
+    : playbackPhase === "complete" ? 5
+    : playbackRegister ?? 0;
   let playbackStage: ProgramPlayback["frames"][number]["stage"] | null = null;
   let playbackActorUid: string | null = null;
   let playbackCardId: ProgramCard["id"] | null = null;
@@ -615,7 +620,10 @@
     playbackStage = null;
     playbackActorUid = null;
     playbackCardId = null;
-    if (!waitingForPlayer) {
+    if (waitingForPlayer) {
+      // Before-register Options can pause before the first frame of this cycle.
+      playbackRegister = resolution.pendingOptionDecision?.register ?? playbackRegister;
+    } else {
       playbackRegister = null;
       playbackRobots = undefined;
       playbackLaserBeams = [];
@@ -820,7 +828,7 @@
               registers={state.programming?.players.find(({ uid }) => uid === player.uid)?.registers ?? []}
               playbackFrames={state.resolution?.turnNumber === state.programming?.turnNumber ? state.resolution?.playback.frames ?? [] : []}
               revealedRegisters={state.resolution?.turnNumber === state.programming?.turnNumber && playbackPhase !== 'idle'
-                ? [1, 2, 3, 4, 5] : []}
+                ? [1, 2, 3, 4, 5].filter((register) => register <= revealedRegisterCount) : []}
               activeRegister={actorIsExecuting && player.uid === playbackActorUid ? playbackRegister : null} />
           {:else if qr}
             <a

@@ -12,9 +12,10 @@ did not correspond to the people actually playing.
   short edge. A clockwise control animates each mat and its corresponding log.
 - Show the robot in the existing mat header using the board's familiar marker
   appearance. Keep Options below registers so gaining Options cannot move them.
-- Render graphical backs while programs are private. Reveal all five registers
-  for all players together during the countdown, before any execution highlight.
-  Keep them visible during decisions so players can make informed Option choices.
+- Render graphical backs while programs are private. Reveal R1 for all players together during the countdown. After each register’s
+  execution and factory motion, reveal the next register for everyone together.
+  Keep past and current cards visible during decisions, including before-register
+  Options; future registers remain face down. Fast replay follows the same sequence.
 - Highlight only the executing register and mat in gold. Give the active robot a
   short visual cue before movement; retain the existing board marker appearance.
 - Give each occupied seat its own log, collapsed by default. The collapsed view

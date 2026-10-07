@@ -1581,22 +1581,33 @@ test("Abort Switch replaces the current and all later registers", async ({
   browser,
   page: host,
 }, testInfo) => {
-  const { guest, guestContext } = await createOptionRace(
+  const { guest, guestContext, roomCode } = await createOptionRace(
     browser,
     host,
     testInfo,
     "abort-switch",
   );
+  const table = await host.context().newPage();
+  await enableSyntheticPlaybackClock(table);
+  await table.goto(`/tt/?room=${roomCode}`);
   try {
     await chooseProgram(host);
     await chooseProgram(guest);
 
     const decision = host.getByLabel("Option decision");
     await expect(decision).toContainText("Use Abort Switch?");
+    // This Option pauses before any frame exists: still reveal all current cards.
+    await expect(table.getByTestId('tabletop-damage-prompt')).toHaveAttribute('data-register', '1');
+    await expect(table.locator('.program-card.revealed[data-register="1"]')).toHaveCount(2);
+    await expect(table.getByRole('img', { name: /Register [2-5] face down/ })).toHaveCount(8);
+    await table.reload();
+    await expect(table.getByTestId('tabletop-damage-prompt')).toHaveAttribute('data-register', '1');
+    await expect(table.locator('.program-card.revealed')).toHaveCount(2);
     await decision
       .getByRole("button", { name: "Abort remaining Program" })
       .click();
 
+    await finishSyntheticPlayback([table]);
     await expect(host.locator(".full-resolution")).toContainText(
       "Ada's abort switch replaced registers 1-5 with top-deck Programs.",
     );
@@ -1604,6 +1615,7 @@ test("Abort Switch replaces the current and all later registers", async ({
       "Ada's abort switch replaced registers 1-5 with top-deck Programs.",
     );
   } finally {
+    await table.close();
     await guestContext.close();
   }
 });

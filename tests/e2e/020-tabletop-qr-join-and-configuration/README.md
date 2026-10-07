@@ -23,9 +23,9 @@ The shared display creates a fresh room, exposes eight position-specific QR join
 - [x] Private phones receive Program decks without course controls
 - [x] Private Program controllers fill the phone viewport and support touch dragging without scrolling
 
-## The tabletop reveals both Programs during staged register playback
+## The tabletop reveals both current registers while keeping future cards face down
 
-![The tabletop reveals both Programs during staged register playback](./screenshots/002-animated-program-execution-desktop.png)
+![The tabletop reveals both current registers while keeping future cards face down](./screenshots/002-animated-program-execution-desktop.png)
 
 **Verifications:**
 

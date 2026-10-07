@@ -108,8 +108,9 @@ overlap at every viewport.
 Scenario 027 joins eight real private controllers to an Option Lab tabletop. It
 checks per-player log counts, independent expansion, rotated mat/log alignment,
 full gutter width at desktop and 4K sizes, Options below registers, graphical
-face-down cards, and reduced motion. Scenario 020 additionally verifies that all
-registers reveal during the countdown before execution highlights appear, and
+face-down cards, and reduced motion. Scenario 020 additionally verifies that all players’
+current registers reveal together, with future cards hidden through factory motion
+and Option decisions, and
 that each player's expanded history accumulates as playback progresses.
 
 ## Scenario layout

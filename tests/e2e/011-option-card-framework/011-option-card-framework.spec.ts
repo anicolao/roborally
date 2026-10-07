@@ -161,6 +161,14 @@ test('face-up Options remain available for execution-time decisions', async (
     await finishSyntheticPlayback([table]);
     const fireControl = guest.getByLabel('Option decision');
     await expect(fireControl).toContainText('Use Fire Control?');
+    const currentRegister = Number(await table.getByTestId('tabletop-damage-prompt').getAttribute('data-register'));
+    expect(currentRegister).toBeGreaterThan(0);
+    expect(currentRegister).toBeLessThan(5);
+    await expect(table.locator('.program-card.revealed')).toHaveCount(currentRegister * 2);
+    await expect(table.locator(`.program-card.revealed[data-register="${currentRegister}"]`)).toHaveCount(2);
+    for (let register = currentRegister + 1; register <= 5; register += 1) {
+      await expect(table.getByRole('img', { name: `Register ${register} face down`, exact: true })).toHaveCount(2);
+    }
     await fireControl.getByRole('button', { name: 'Deal normal damage' }).click();
 
     await expect(fireControl).toBeHidden();
