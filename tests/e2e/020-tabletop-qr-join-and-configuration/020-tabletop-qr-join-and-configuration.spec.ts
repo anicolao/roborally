@@ -571,7 +571,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await submitVisibleProgram(secondPhone);
 
     await expect(table.getByTestId('tabletop-program-countdown')).toBeVisible();
-    await expect(table.locator('.program-card.revealed')).toHaveCount(10);
+    await expect(table.locator('.program-card.revealed')).toHaveCount(2);
     await expect(table.locator('.program-card.executing')).toHaveCount(0);
     await advanceSyntheticPlayback([table]);
     await advanceSyntheticPlayback([table]);
@@ -598,7 +598,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
           stage: playback.dataset.stage
         } : null;
       });
-      if ((await table.locator('.program-card.revealed').count()) === 10 &&
+      if ((await table.locator('.program-card.revealed').count()) === 2 &&
         frame?.stage === 'express-conveyors') break;
       await advanceSyntheticPlayback([table]);
       await expect.poll(() => table.evaluate(() => {
@@ -612,18 +612,18 @@ test('the tabletop owns configuration and seat QR codes open private controllers
         } : null;
       })).not.toEqual(frame);
     }
-    await expect(table.locator('.program-card.revealed')).toHaveCount(10);
+    await expect(table.locator('.program-card.revealed')).toHaveCount(2);
     await expect(table.getByTestId('tabletop-register-playback')).toHaveAttribute(
       'data-stage',
       'express-conveyors'
     );
     await steps.step('animated-program-execution', {
-      description: 'The tabletop reveals both Programs during staged register playback',
+      description: 'The tabletop reveals both current registers while keeping future cards face down',
       verifications: [
         {
           spec: 'Each player sees the current action beside the unobscured board',
           check: async () => {
-            await expect(table.locator('.program-card.revealed')).toHaveCount(10);
+            await expect(table.locator('.program-card.revealed')).toHaveCount(2);
             const board = await courseBoard.boundingBox();
             const wrap = await table.locator('.course-wrap').boundingBox();
             expect(board).not.toBeNull();
@@ -644,6 +644,17 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     const history = graceLog.getByRole('list', { name: 'Running turn history' });
     const initialEntries = await history.getByRole('listitem').count();
     expect(initialEntries).toBeGreaterThan(0);
+    // Factory motion must finish before both R2 cards become visible together.
+    while (await table.getByTestId('tabletop-register-playback').getAttribute('data-register') === '1') {
+      await expect(table.locator('.program-card.revealed')).toHaveCount(2);
+      await advanceSyntheticPlayback([table]);
+    }
+    await expect(table.getByTestId('tabletop-register-playback')).toHaveAttribute('data-register', '2');
+    await expect(table.locator('.program-card.revealed')).toHaveCount(4);
+    for (const register of [1, 2]) {
+      await expect(table.locator(`.program-card.revealed[data-register="${register}"]`)).toHaveCount(2);
+    }
+    await expect(table.getByRole('img', { name: /Register [3-5] face down/ })).toHaveCount(6);
     await finishSyntheticPlayback([table]);
     await completePrivateResolutionChoices(table, [firstPhone, secondPhone]);
     await expect.poll(() => history.getByRole('listitem').count()).toBeGreaterThan(initialEntries);
@@ -669,7 +680,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expect(table.locator('.course-wrap')).toHaveAttribute('data-review-replay', 'true');
     await advanceSyntheticPlayback([table]);
     await expect(table.getByTestId('tabletop-program-countdown')).toBeVisible();
-    await expect(table.locator('.program-card.revealed')).toHaveCount(10);
+    await expect(table.locator('.program-card.revealed')).toHaveCount(2);
     await advanceSyntheticPlayback([table]);
     await advanceSyntheticPlayback([table]);
     await advanceSyntheticPlayback([table]);
