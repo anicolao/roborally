@@ -12,6 +12,11 @@ on:
         required: false
         default: false
         type: boolean
+      snapshot_grep:
+        description: Optional Playwright test-name filter for baseline generation
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: write
@@ -61,9 +66,26 @@ jobs:
       - run: nix develop --command bun install --frozen-lockfile
       - run: nix develop --command bunx playwright install chromium
       - name: Generate Linux screenshot baselines
-        run: nix develop --command bun run test:e2e:update-snapshots
+        run: |
+          if [[ -n "$SNAPSHOT_GREP" ]]; then
+            # The emulator child shell expands the filter as one quoted argument.
+            # shellcheck disable=SC2016
+            nix develop --command bunx firebase emulators:exec --project roborally-e2e --only auth,firestore 'bunx playwright test --update-snapshots --grep "$SNAPSHOT_GREP"'
+          else
+            nix develop --command bun run test:e2e:update-snapshots
+          fi
         env:
           CI: 'true'
+          SNAPSHOT_GREP: ${{ inputs.snapshot_grep }}
+      - name: Retain failed baseline diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-baseline-failure-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: linux-screenshot-baselines
