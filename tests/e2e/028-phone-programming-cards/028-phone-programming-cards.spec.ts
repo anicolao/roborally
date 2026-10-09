@@ -32,16 +32,6 @@ test('phones program with square cards, inspect Options, and call time together'
     await table.getByRole('button', { name: 'CONFIGURE RACE' }).click();
     for (const phone of [ada, grace]) await phone.getByRole('button', { name: 'READY FOR RACE' }).click();
     const hand = ada.getByLabel('Your Program hand');
-    await ada.evaluate(() => {
-      const events: unknown[] = [];
-      Object.assign(window, { phoneInputEvents: events });
-      for (const type of ['pointerdown', 'pointerup', 'pointercancel', 'click', 'touchstart', 'touchend']) {
-        document.addEventListener(type, (event) => {
-          const input = event as PointerEvent;
-          events.push({ type, detail: input.detail, pointerId: input.pointerId, pointerType: input.pointerType, target: (event.target as HTMLElement)?.closest('button')?.getAttribute('aria-label'), x: input.clientX, y: input.clientY });
-        }, true);
-      }
-    });
     await expect(hand.getByRole('button')).toHaveCount(9);
     for (const viewport of [{ width: 393, height: 852 }, { width: 320, height: 568 }, { width: 852, height: 393 }]) {
       await ada.setViewportSize(viewport);
@@ -113,7 +103,6 @@ test('phones program with square cards, inspect Options, and call time together'
 
     await ada.emulateMedia({ reducedMotion: 'reduce' });
     await hand.getByRole('button').nth(2).tap();
-    console.log('Phone input trace', await ada.evaluate(() => (window as unknown as { phoneInputEvents: unknown[] }).phoneInputEvents));
     await expect(ada.locator('[data-card-flight]')).toHaveCount(0);
     await expect(ada.getByRole('button', { name: /^Register 2, (?!empty)/ })).toBeVisible();
     await steps.step('tap-and-drag-registers', {
