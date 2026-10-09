@@ -111,7 +111,21 @@ test('phones program with square cards, inspect Options, and call time together'
         await expect(grace.getByLabel('Chosen registers').locator('[data-card-id]')).toHaveCount(0);
       }}]
     });
-    await hand.getByRole('button').nth(3).tap();
+    // Reproduce a browser that delays its compatibility click beyond an animation frame.
+    const delayedSource = hand.getByRole('button').nth(3);
+    const delayedCard = await delayedSource.getAttribute('aria-label');
+    const delayedFrom = (await delayedSource.boundingBox())!;
+    const delayedTo = (await ada.getByRole('button', { name: 'Register 4, empty', exact: true }).boundingBox())!;
+    const pointer = { pointerType: 'touch', pointerId: 77, isPrimary: true, button: 0, buttons: 1 };
+    await delayedSource.dispatchEvent('pointerdown', { ...pointer, clientX: delayedFrom.x + delayedFrom.width / 2, clientY: delayedFrom.y + delayedFrom.height / 2 });
+    const drop = { ...pointer, clientX: delayedTo.x + delayedTo.width / 2, clientY: delayedTo.y + delayedTo.height / 2 };
+    await delayedSource.dispatchEvent('pointermove', drop);
+    await delayedSource.dispatchEvent('pointerup', { ...drop, buttons: 0 });
+    await expect(ada.getByRole('button', { name: `Register 4, ${delayedCard}`, exact: true })).toBeVisible();
+    await ada.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await delayedSource.dispatchEvent('click', { detail: 1 });
+    await expect(ada.getByRole('button', { name: `Register 4, ${delayedCard}`, exact: true })).toBeVisible();
+    await ada.getByRole('button', { name: 'Register 5, empty', exact: true }).tap();
     await hand.getByRole('button').nth(4).tap();
     await ada.getByRole('button', { name: 'Lock program', exact: true }).click();
     await expect(ada.getByRole('timer')).toContainText(/Grace has \d+ seconds/);

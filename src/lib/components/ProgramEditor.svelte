@@ -148,7 +148,8 @@
     updateDraft(nextSlots, nextPairedSlots);
   }
 
-  function tapCard(cardId: ProgramCard['id']) {
+  function tapCard(cardId: ProgramCard['id'], event: MouseEvent) {
+    if (event.detail === 0) suppressCardClick = null;
     if (suppressCardClick === cardId) {
       suppressCardClick = null;
       return;
@@ -170,7 +171,8 @@
     placeCard(cardId);
   }
 
-  function tapSlot(registerIndex: number) {
+  function tapSlot(registerIndex: number, event: MouseEvent) {
+    if (event.detail === 0) suppressCardClick = null;
     if (suppressCardClick) { suppressCardClick = null; return; }
     if (!editableRegister(registerIndex)) return;
     const nextSlots = [...draftSlots];
@@ -215,8 +217,10 @@
     return registerIndex >= 0 && editableRegister(registerIndex) ? registerIndex : null;
   }
 
-  function startPointerDrag(event: PointerEvent, cardId: ProgramCard['id']) {
-    if (event.pointerType === 'mouse' || player.submitted) return;
+  function startPointerDrag(event: PointerEvent, cardId?: ProgramCard['id']) {
+    // A fresh gesture (including a mouse click on an empty slot) ends suppression.
+    suppressCardClick = null;
+    if (!cardId || event.pointerType === 'mouse' || player.submitted) return;
     pointerDrag = {
       cardId,
       pointerId: event.pointerId,
@@ -256,9 +260,8 @@
     pointerDrag = undefined;
     if (completedDrag) {
       suppressCardClick = cardId;
-      requestAnimationFrame(() => {
-        if (suppressCardClick === cardId) suppressCardClick = null;
-      });
+      // Keep this until the compatibility click or a fresh gesture, not one frame.
+      // Some browsers emit that click after the drop animation has already finished.
       event.preventDefault();
       if (targetIndex !== null) placeCard(cardId, targetIndex);
     }
@@ -341,7 +344,7 @@
           onpointermove={movePointerDrag}
           onpointerup={finishPointerDrag}
           onpointercancel={cancelPointerDrag}
-          onclick={() => tapCard(cardId)}
+          onclick={(event) => tapCard(cardId, event)}
         >
           {#if card}<ProgramCardFace {card} compact variant={viewportFit ? 'square' : 'adaptive'} />{/if}
           {#if selectedIndex >= 0}<span class="register-badge">R{selectedIndex + 1}{paired ? '+' : ''}</span>{/if}
@@ -366,13 +369,13 @@
             disabled={register.locked}
             draggable={!!card && !register.locked}
             ondragstart={(event) => card && startCardDrag(event, card.id)}
-            onpointerdown={(event) => card && !register.locked && startPointerDrag(event, card.id)}
+            onpointerdown={(event) => startPointerDrag(event, !register.locked ? card?.id : undefined)}
             onpointermove={movePointerDrag}
             onpointerup={finishPointerDrag}
             onpointercancel={cancelPointerDrag}
             ondragover={(event) => allowCardDrop(event, index)}
             ondrop={(event) => dropCard(event, index)}
-            onclick={() => tapSlot(index)}
+            onclick={(event) => tapSlot(index, event)}
           >
             <span>R{index + 1}</span>
             <span class="register-cards">

@@ -8,7 +8,9 @@ controls, including on a 320 × 568 phone.
 Tapping loads the next empty register, or a register selected first. A graphical
 copy flies to its destination. Touch dragging follows the finger and highlights
 the destination; dragging a filled register also works. Mouse dragging and
-keyboard activation remain available. Reduced motion skips the flight. Assigned
+keyboard activation remain available. A delayed click generated after touch dragging
+is consumed without undoing the drop; the next gesture or keyboard activation
+starts normally. Reduced motion skips the flight. Assigned
 cards retain their register badges in the hand. Locked Programs use compact graphical
 cards, stay read-only, and show an accurate locked status.
 
