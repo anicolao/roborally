@@ -113,6 +113,11 @@ current registers reveal together, with future cards hidden through factory moti
 and Option decisions, and
 that each player's expanded history accumulates as playback progresses.
 
+Scenario 028 covers private phone square cards at three viewport sizes, real touch
+dragging, tap flight and reduced motion, owned Option inspection, and a shared
+countdown whose expired timeout is claimed by another phone without replacing
+already chosen registers.
+
 ## Scenario layout
 
 Use the next three-digit sequence and a short kebab-case capability name:
