@@ -133,16 +133,19 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
 
     await advanceSyntheticPlayback([host, guest]);
     await expect(registerPlayback).toHaveAttribute('data-stage', 'express-conveyors');
-    await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '1000');
+    // This scenario uses half-speed test time: 100 production ms is 50 clock ms.
+    await Promise.all([host, guest].map((page) => page.evaluate(() => window.__roborallyE2ePlaybackClock?.advanceBy?.(49))));
+    await expect(registerPlayback).toHaveAttribute('data-stage', 'express-conveyors');
+    await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '100');
     await advanceSyntheticPlayback([host, guest]);
     await expect(registerPlayback).toHaveAttribute('data-stage', 'conveyors');
-    await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '1000');
+    await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '100');
     await advanceSyntheticPlayback([host, guest]);
     await expect(registerPlayback).toHaveAttribute('data-stage', 'pushers');
-    await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '1000');
+    await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '100');
     await advanceSyntheticPlayback([host, guest]);
     await expect(registerPlayback).toHaveAttribute('data-stage', 'gears');
-    await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '1000');
+    await expect(registerPlayback).toHaveAttribute('data-production-duration-ms', '100');
     // Grace has already fallen into the pit in this frame, so only Ada remains
     // physically present in the animated board layer.
     await expect(host.locator('[data-playback-robot]')).toHaveCount(1);
@@ -217,7 +220,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
           check: async () => expect(playbackEvidence.countdownObserved).toBe(true)
         },
         {
-          spec: 'Each Program card gets two seconds and each ordered factory stage gets one',
+          spec: 'Program cards remain readable while empty factory phases take only 100 ms',
           check: async () => expect(playbackEvidence.stageDurationsObserved).toBe(true)
         },
         {

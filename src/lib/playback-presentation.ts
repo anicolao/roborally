@@ -76,3 +76,9 @@ export function firstChangedPlaybackFrame(
   }
   return previous.length === next.length ? null : sharedLength;
 }
+
+/** Empty phases still appear in the log without pausing play for a full beat. */
+export function playbackFrameDurationMs(frame: ProgramPlaybackFrame): number {
+  if (frame.trace.length === 0 && !frame.laserBeams?.length) return 100;
+  return frame.stage === 'program-card' ? 2_000 : 1_000;
+}

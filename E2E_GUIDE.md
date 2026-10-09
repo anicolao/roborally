@@ -49,8 +49,9 @@ Scenario 005 observes the complete playback handoff rather than only the final
 projection. Two ordinary clients close the Program barrier, see the large
 3–2–1 movement warning, and then follow every priority-ordered Program card,
 conveyor, and remaining factory-element stage across all five registers. The
-browser asserts the production two-second card and one-second express belt,
-all-belt, pusher, and gear-stage duration contracts, the animated robot layer,
+browser asserts the production two-second card and 100 ms empty express belt,
+all-belt, pusher, and gear-stage duration contracts (active factory phases retain
+one second), the animated robot layer,
 the staged register HUD, and the same final wall-safe coordinates.
 
 Scenario 006 follows that boundary deliberately: two ordinary browser-authored

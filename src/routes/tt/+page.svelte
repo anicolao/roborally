@@ -46,6 +46,7 @@
   } from "$lib/playback-clock";
   import { persistPresentationEventWithRetry } from "$lib/presentation-reveal";
   import {
+    playbackFrameDurationMs,
     robotsForPlaybackPresentation,
   } from "$lib/playback-presentation";
 
@@ -112,7 +113,6 @@
   let playbackTimers: PlaybackTimer[] = [];
   let manualReplayActive = false;
   const PRODUCTION_PROGRAM_CARD_MS = 2_000;
-  const PRODUCTION_FACTORY_STAGE_MS = 1_000;
   const PRODUCTION_COUNTDOWN_STEP_MS = 1_000;
   const playbackTimeScale =
     import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true" ? 0.1 : 1;
@@ -369,13 +369,6 @@
     playbackTimers.push(schedulePlaybackTimer(callback, delay));
   }
 
-  function productionDurationForFrame(
-    frame: ProgramPlayback["frames"][number],
-  ) {
-    return frame.stage === "program-card"
-      ? PRODUCTION_PROGRAM_CARD_MS
-      : PRODUCTION_FACTORY_STAGE_MS;
-  }
 
   function prepareProgramPlayback(key: string, playback: ProgramPlayback) {
     resetProgramPlayback();
@@ -413,7 +406,7 @@
     playbackLaserBeams = frame.laserBeams ?? [];
     playbackFrameIndex = frameIndex + 1;
     playbackFrameCount = Math.max(frameCount, frameIndex + 1);
-    playbackProductionDurationMs = productionDurationForFrame(frame);
+    playbackProductionDurationMs = playbackFrameDurationMs(frame);
   }
 
   function replayCompletedRound() {
@@ -446,7 +439,7 @@
       );
       frameStart += Math.max(
         50,
-        Math.round(productionDurationForFrame(frame) * reviewPlaybackTimeScale),
+        Math.round(playbackFrameDurationMs(frame) * reviewPlaybackTimeScale),
       );
     }
     schedulePlayback(() => {
@@ -560,7 +553,7 @@
         presentationTimelineIndex += 1;
         presentationBusy = false;
         queueMicrotask(() => void driveEventPresentation());
-      }, Math.round(productionDurationForFrame(timelineEntry.frame) * playbackTimeScale));
+      }, Math.round(playbackFrameDurationMs(timelineEntry.frame) * playbackTimeScale));
       return;
     }
 
@@ -607,7 +600,7 @@
           presentationBusy = false;
           queueMicrotask(() => void driveEventPresentation());
         });
-      }, Math.round(productionDurationForFrame(frame) * playbackTimeScale));
+      }, Math.round(playbackFrameDurationMs(frame) * playbackTimeScale));
       return;
     }
 

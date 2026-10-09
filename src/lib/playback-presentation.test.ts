@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ProgramPlaybackFrame } from '$lib/game/movement';
 import {
   facingDegrees,
+  playbackFrameDurationMs,
   firstChangedPlaybackFrame,
   nextFacingDegrees,
   programCardIdForPlayback,
@@ -69,5 +70,23 @@ describe('playback presentation', () => {
     expect(programCardIdForPlayback(frames, 'other', 2, 'program-650')).toBe(
       'program-650'
     );
+  });
+});
+
+
+describe('playback frame timing', () => {
+  const frame: ProgramPlaybackFrame = {
+    register: 1, stage: 'conveyors', actorUid: null, cardId: null, robots: [], trace: []
+  };
+  it('briefly presents empty phases but preserves visible laser effects', () => {
+    expect(playbackFrameDurationMs(frame)).toBe(100);
+    expect(playbackFrameDurationMs({ ...frame, stage: 'lasers', laserBeams: [{ id: 'beam', sourceUid: 'a', targetUid: 'b', fromX: 0, fromY: 0, toX: 1, toY: 0, beamCount: 1 }] })).toBe(1000);
+  });
+  it('keeps meaningful actions and pending decisions readable', () => {
+    for (const kind of ['move', 'blocked-wall', 'option-decision-required', 'damage-choice-required'] as const) {
+      const trace = [{ id: 'event', register: 1 as const, actorUid: 'robot', cardId: null, priority: null, kind, text: 'Action' }];
+      expect(playbackFrameDurationMs({ ...frame, stage: 'program-card', trace })).toBe(2000);
+      expect(playbackFrameDurationMs({ ...frame, trace })).toBe(1000);
+    }
   });
 });

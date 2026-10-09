@@ -25,7 +25,7 @@ Two ordinary five-card programs cover every 2005 instruction class. A synchroniz
 **Verifications:**
 
 - [x] The synchronized countdown announces that all Programs are locked
-- [x] Each Program card gets two seconds and each ordered factory stage gets one
+- [x] Program cards remain readable while empty factory phases take only 100 ms
 - [x] Both robot tokens use the animated board layer during playback
 - [x] Register cards resolve from highest unique priority to lowest
 - [x] The wall between Dock 1 and Dock 2 stops eastward movement at (6,16)
