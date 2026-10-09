@@ -51,6 +51,7 @@
   } from '$lib/playback-clock';
   import {
     firstChangedPlaybackFrame,
+    playbackFrameDurationMs,
     robotsForPlaybackPresentation
   } from '$lib/playback-presentation';
   import {
@@ -152,7 +153,6 @@
   let playbackTimeScale = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' ? 0.1 : 1;
   let playbackTimers: PlaybackTimer[] = [];
   const PRODUCTION_PROGRAM_CARD_MS = 2_000;
-  const PRODUCTION_FACTORY_STAGE_MS = 1_000;
   const PRODUCTION_COUNTDOWN_STEP_MS = 1_000;
   const buildHash = (import.meta.env.VITE_GIT_HASH ?? 'local-development').slice(0, 8);
 
@@ -348,10 +348,6 @@
     playbackTimers.push(schedulePlaybackTimer(callback, delay));
   }
 
-  function productionDurationForFrame(frame: ProgramPlayback['frames'][number]) {
-    if (frame.stage === 'program-card') return PRODUCTION_PROGRAM_CARD_MS;
-    return PRODUCTION_FACTORY_STAGE_MS;
-  }
 
   function schedulePlaybackFrames(playback: ProgramPlayback, fromIndex: number, initialDelay: number) {
     let frameStart = initialDelay;
@@ -359,7 +355,7 @@
     scheduledPlayback = playback;
     for (const [index, frame] of playback.frames.entries()) {
       if (index < fromIndex) continue;
-      const productionDuration = productionDurationForFrame(frame);
+      const productionDuration = playbackFrameDurationMs(frame);
       schedulePlayback(() => {
         playbackPhase = 'register';
         playbackRegister = frame.register;
