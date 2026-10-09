@@ -98,7 +98,8 @@ test('phones program with square cards, inspect Options, and call time together'
     await expect(ada.getByRole('button', { name: `Register 3, ${secondCard}`, exact: true })).toBeVisible();
     await expect(ada.locator('.drag-card')).toHaveCount(0);
     await finishFlights(ada);
-    await touch.detach();
+    // Keep the input session alive for subsequent taps; closing the context below
+    // releases it after all touchscreen interactions are complete.
 
     await ada.emulateMedia({ reducedMotion: 'reduce' });
     await hand.getByRole('button').nth(2).tap();
