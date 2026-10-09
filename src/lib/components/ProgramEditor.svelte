@@ -73,7 +73,8 @@
   let selectedRegisterIndex: number | null = null;
   let pointerDrag:
     | {
-        cardId: ProgramCard['id'];
+        cardId: ProgramCard['id'] | null;
+        sourceRegisterIndex: number | null;
         pointerId: number;
         startX: number;
         startY: number;
@@ -83,7 +84,7 @@
         moved: boolean;
       }
     | undefined;
-  let suppressCardClick: ProgramCard['id'] | null = null;
+  let suppressCardClick = false;
   let choosingRecompile = false;
 
   $: openRegisterCount = player.registers.filter((register) => !register.locked).length;
@@ -149,9 +150,9 @@
   }
 
   function tapCard(cardId: ProgramCard['id'], event: MouseEvent) {
-    if (event.detail === 0) suppressCardClick = null;
-    if (suppressCardClick === cardId) {
-      suppressCardClick = null;
+    if (event.detail === 0) suppressCardClick = false;
+    if (suppressCardClick) {
+      suppressCardClick = false;
       return;
     }
     if (player.submitted) return;
@@ -172,8 +173,8 @@
   }
 
   function tapSlot(registerIndex: number, event: MouseEvent) {
-    if (event.detail === 0) suppressCardClick = null;
-    if (suppressCardClick) { suppressCardClick = null; return; }
+    if (event.detail === 0) suppressCardClick = false;
+    if (suppressCardClick) { suppressCardClick = false; return; }
     if (!editableRegister(registerIndex)) return;
     const nextSlots = [...draftSlots];
     const nextPairedSlots = [...pairedDraftSlots];
@@ -219,10 +220,12 @@
 
   function startPointerDrag(event: PointerEvent, cardId?: ProgramCard['id']) {
     // A fresh gesture (including a mouse click on an empty slot) ends suppression.
-    suppressCardClick = null;
-    if (!cardId || event.pointerType === 'mouse' || player.submitted) return;
+    suppressCardClick = false;
+    if (event.pointerType === 'mouse' || player.submitted) return;
     pointerDrag = {
-      cardId,
+      cardId: cardId ?? null,
+      sourceRegisterIndex: (event.currentTarget as HTMLElement).hasAttribute('data-register-slot')
+        ? Number((event.currentTarget as HTMLElement).dataset.registerSlot) - 1 : null,
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
@@ -248,7 +251,7 @@
       x: event.clientX,
       y: event.clientY,
       moved,
-      targetIndex: moved ? registerIndexAtPoint(event.clientX, event.clientY) : null
+      targetIndex: moved && pointerDrag.cardId ? registerIndexAtPoint(event.clientX, event.clientY) : null
     };
     if (moved) event.preventDefault();
   }
@@ -256,15 +259,19 @@
   function finishPointerDrag(event: PointerEvent) {
     if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
     const completedDrag = pointerDrag.moved;
-    const { cardId, targetIndex } = pointerDrag;
+    const { cardId, targetIndex, sourceRegisterIndex } = pointerDrag;
     pointerDrag = undefined;
     if (completedDrag) {
-      suppressCardClick = cardId;
-      // Keep this until the compatibility click or a fresh gesture, not one frame.
-      // Some browsers emit that click after the drop animation has already finished.
-      event.preventDefault();
-      if (targetIndex !== null) placeCard(cardId, targetIndex);
+      if (cardId && targetIndex !== null) placeCard(cardId, targetIndex);
+    } else if (sourceRegisterIndex !== null) {
+      tapSlot(sourceRegisterIndex, event);
+    } else if (cardId) {
+      tapCard(cardId, event);
     }
+    // Touch/pen taps act on release: some browsers omit the click after a drag.
+    // Consume any later compatibility click until a fresh gesture or keyboard use.
+    suppressCardClick = true;
+    event.preventDefault();
   }
 
   function cancelPointerDrag(event: PointerEvent) {
@@ -430,7 +437,7 @@
     {/if}
   {/if}
 </section>
-{#if viewportFit && pointerDrag?.moved}
+{#if viewportFit && pointerDrag?.moved && pointerDrag.cardId}
   {@const card = cardForId(pointerDrag.cardId)}
   <div bind:this={dragPreview} class="drag-card" aria-hidden="true" style:left={`${pointerDrag.x}px`} style:top={`${pointerDrag.y}px`}>
     {#if card}<ProgramCardFace {card} compact variant="square" />{/if}
