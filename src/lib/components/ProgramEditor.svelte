@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy, tick } from 'svelte';
   import OptionCardFace from '$lib/components/OptionCardFace.svelte';
   import ProgramCardFace from '$lib/components/ProgramCardFace.svelte';
   import { OPTION_CARDS_BY_ID, type OptionCardId } from '$lib/game/option-manifest';
@@ -33,6 +34,42 @@
   export let recompileUsed = false;
   export let onrecompile: (choiceId: string) => void | Promise<void> = () => {};
 
+  let editor: HTMLElement;
+  let dragPreview: HTMLDivElement;
+  const flights = new Set<HTMLElement>();
+  onDestroy(() => flights.forEach((flight) => flight.remove()));
+
+  async function flyToRegister(cardId: ProgramCard['id'], registerIndex: number) {
+    if (!viewportFit || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const source = dragPreview?.querySelector<HTMLElement>('.program-card')
+      ?? editor.querySelector<HTMLElement>(`.chosen-registers [data-card-id="${cardId}"]`)
+      ?? editor.querySelector<HTMLElement>(`[data-hand-card="${cardId}"] .program-card`);
+    if (!source) return;
+    const from = source.getBoundingClientRect();
+    const flight = source.cloneNode(true) as HTMLElement;
+    flight.setAttribute('aria-hidden', 'true');
+    flight.dataset.cardFlight = '';
+    Object.assign(flight.style, {
+      position: 'fixed', left: `${from.x}px`, top: `${from.y}px`,
+      width: `${from.width}px`, height: `${from.height}px`,
+      margin: '0', zIndex: '100', pointerEvents: 'none', transformOrigin: 'top left'
+    });
+    document.body.append(flight);
+    flights.add(flight);
+    await tick();
+    const target = editor.querySelector<HTMLElement>(`[data-register-slot="${registerIndex + 1}"] [data-card-id="${cardId}"]`);
+    if (target && flight.isConnected) {
+      const to = target.getBoundingClientRect();
+      const animation = flight.animate([
+        { transform: 'translate(0, 0) scale(1)' },
+        { transform: `translate(${to.x - from.x}px, ${to.y - from.y}px) scale(${to.width / from.width}, ${to.height / from.height})` }
+      ], { duration: 300, easing: 'cubic-bezier(.2,.7,.2,1)' });
+      await animation.finished.catch(() => {});
+    }
+    flight.remove();
+    flights.delete(flight);
+  }
+
   let selectedRegisterIndex: number | null = null;
   let pointerDrag:
     | {
@@ -40,6 +77,8 @@
         pointerId: number;
         startX: number;
         startY: number;
+        x: number;
+        y: number;
         targetIndex: number | null;
         moved: boolean;
       }
@@ -104,6 +143,7 @@
       nextSlots[targetIndex] = cardId;
       nextPairedSlots[targetIndex] = null;
     }
+    void flyToRegister(cardId, targetIndex);
     selectedRegisterIndex = null;
     updateDraft(nextSlots, nextPairedSlots);
   }
@@ -131,6 +171,7 @@
   }
 
   function tapSlot(registerIndex: number) {
+    if (suppressCardClick) { suppressCardClick = null; return; }
     if (!editableRegister(registerIndex)) return;
     const nextSlots = [...draftSlots];
     const nextPairedSlots = [...pairedDraftSlots];
@@ -181,6 +222,8 @@
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
       targetIndex: null,
       moved: false
     };
@@ -198,6 +241,8 @@
       Math.hypot(event.clientX - pointerDrag.startX, event.clientY - pointerDrag.startY) > 8;
     pointerDrag = {
       ...pointerDrag,
+      x: event.clientX,
+      y: event.clientY,
       moved,
       targetIndex: moved ? registerIndexAtPoint(event.clientX, event.clientY) : null
     };
@@ -233,6 +278,8 @@
 </script>
 
 <section
+  bind:this={editor}
+  style:--portrait-hand-rows={Math.ceil(player.hand.length / 3)}
   class:viewport-fit={viewportFit}
   class:submitted={player.submitted}
   class="program-editor"
@@ -286,6 +333,7 @@
           aria-pressed={selectedIndex >= 0}
           aria-label={`${card?.action} priority ${card?.priority}`}
           aria-describedby="register-order-help"
+          data-hand-card={cardId}
           data-register-index={selectedIndex >= 0 ? selectedIndex + 1 : ''}
           draggable="true"
           ondragstart={(event) => startCardDrag(event, cardId)}
@@ -295,7 +343,7 @@
           onpointercancel={cancelPointerDrag}
           onclick={() => tapCard(cardId)}
         >
-          {#if card}<ProgramCardFace {card} compact variant="adaptive" />{/if}
+          {#if card}<ProgramCardFace {card} compact variant={viewportFit ? 'square' : 'adaptive'} />{/if}
           {#if selectedIndex >= 0}<span class="register-badge">R{selectedIndex + 1}{paired ? '+' : ''}</span>{/if}
         </button>
       {/each}
@@ -318,6 +366,10 @@
             disabled={register.locked}
             draggable={!!card && !register.locked}
             ondragstart={(event) => card && startCardDrag(event, card.id)}
+            onpointerdown={(event) => card && !register.locked && startPointerDrag(event, card.id)}
+            onpointermove={movePointerDrag}
+            onpointerup={finishPointerDrag}
+            onpointercancel={cancelPointerDrag}
             ondragover={(event) => allowCardDrop(event, index)}
             ondrop={(event) => dropCard(event, index)}
             onclick={() => tapSlot(index)}
@@ -375,8 +427,16 @@
     {/if}
   {/if}
 </section>
+{#if viewportFit && pointerDrag?.moved}
+  {@const card = cardForId(pointerDrag.cardId)}
+  <div bind:this={dragPreview} class="drag-card" aria-hidden="true" style:left={`${pointerDrag.x}px`} style:top={`${pointerDrag.y}px`}>
+    {#if card}<ProgramCardFace {card} compact variant="square" />{/if}
+  </div>
+{/if}
 
 <style>
+  .drag-card { position: fixed; z-index: 101; width: 72px; pointer-events: none; transform: translate(-50%, -70%); }
+
   .program-editor { display: grid; min-width: 0; gap: 8px; }
   .recompile-choice {
     display: grid;
@@ -429,13 +489,6 @@
     grid-auto-rows: auto;
     align-content: stretch;
     overflow: hidden;
-  }
-  .viewport-fit .program-hand button {
-    width: auto;
-    height: 100%;
-    max-width: 100%;
-    justify-self: center;
-    aspect-ratio: 1014 / 1424;
   }
   .program-hand button.selected {
     border-color: #d2ff37;
@@ -585,13 +638,6 @@
       grid-auto-rows: auto;
       align-content: stretch;
     }
-    .viewport-fit .program-hand button {
-      width: auto;
-      height: 100%;
-      max-width: 100%;
-      justify-self: center;
-      aspect-ratio: 1014 / 1424;
-    }
     .chosen-registers { gap: 2px; }
     .chosen-registers li,
     .chosen-registers button,
@@ -631,13 +677,6 @@
       grid-auto-rows: auto;
       align-content: stretch;
       gap: 2px;
-    }
-    .viewport-fit .program-hand button {
-      width: auto;
-      height: 100%;
-      max-width: 100%;
-      justify-self: center;
-      aspect-ratio: 1014 / 1424;
     }
     .viewport-fit .chosen-registers {
       grid-column: 2;
@@ -682,4 +721,25 @@
   }
   .program-editor:not(.viewport-fit) .program-hand { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
   .program-editor:not(.viewport-fit) .register-badge { width: 24px; height: 24px; font-size: 11px; }
+  .viewport-fit.submitted .chosen-registers { align-self: start; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .viewport-fit.submitted .register-cards :global(.program-card) { max-width: 120px; }
+  .viewport-fit .program-hand {
+    container-type: size;
+    --hand-rows: var(--portrait-hand-rows);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(var(--hand-rows), minmax(0, 1fr));
+  }
+  .viewport-fit .program-hand button:last-child:nth-child(4n + 1) { grid-column: auto; }
+  .viewport-fit .program-hand button {
+    width: min(100%, calc((100cqh - 8px) / var(--hand-rows)));
+    height: auto;
+    max-width: 100%;
+    justify-self: center;
+    aspect-ratio: 1;
+    align-self: center;
+  }
+  @media (max-height: 720px) and (orientation: landscape) {
+    .viewport-fit.submitted .chosen-registers { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .viewport-fit .program-hand { --hand-rows: 2; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  }
 </style>

@@ -140,9 +140,8 @@ async function expectReadablePrivateProgramCards(page: import('@playwright/test'
   );
   for (const card of bounds) {
     expect(card.width).toBeGreaterThanOrEqual(75);
-    expect(card.width).toBeLessThanOrEqual(100);
-    expect(card.height).toBeGreaterThanOrEqual(105);
-    expect(card.height / card.width).toBeGreaterThan(1.35);
+    expect(card.width).toBeLessThanOrEqual(120);
+    expect(Math.abs(card.height - card.width)).toBeLessThan(1);
   }
 }
 
@@ -171,7 +170,7 @@ async function expectProportionalPrivateProgramCards(
   );
   for (const card of bounds) {
     expect(card.width).toBeGreaterThanOrEqual(minimumWidth);
-    expect(card.height / card.width).toBeGreaterThan(1.35);
+    expect(Math.abs(card.height - card.width)).toBeLessThan(1);
   }
   const actionHeights = await page
     .locator('.program-editor .editor-actions button')
@@ -504,7 +503,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
       status: 'skip',
       verifications: [
         {
-          spec: 'The wide short controller uses both axes while retaining portrait Program cards',
+          spec: 'The wide short controller uses both axes while retaining square Program cards',
           check: async () => {
             await expectFixedPrivateViewport(firstPhone);
             await expectProportionalPrivateProgramCards(firstPhone, 50);

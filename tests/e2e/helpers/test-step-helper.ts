@@ -199,9 +199,9 @@ export class TestStepHelper {
     await this.page.waitForTimeout(350);
     await this.page.evaluate(() => {
       const changes: { node: Text; original: string; snapshot: string }[] = [];
-      for (const timerText of document.querySelectorAll<HTMLElement>('[role="timer"] span')) {
+      for (const timerText of document.querySelectorAll<HTMLElement>('[role="timer"] span, [data-program-countdown]')) {
         const text = timerText.textContent ?? '';
-        if (!/ has \d+ seconds$/.test(text)) continue;
+        if (!/ (?:has|have) [1-9]\d* seconds$/.test(text)) continue;
         const walker = document.createTreeWalker(timerText, NodeFilter.SHOW_TEXT);
         let next = walker.nextNode();
         let first = true;

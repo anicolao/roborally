@@ -6,6 +6,7 @@
   import { base } from '$app/paths';
   import { onDestroy, onMount } from 'svelte';
   import { initializeFirebase, type FirebaseServices } from '$lib/firebase';
+  import OptionInventory from '$lib/components/OptionInventory.svelte';
   import OptionCardFace from '$lib/components/OptionCardFace.svelte';
   import ProgramEditor from '$lib/components/ProgramEditor.svelte';
   import ReentryPicker from '$lib/components/ReentryPicker.svelte';
@@ -63,6 +64,26 @@
   let pending = false;
   let serverAtHead = false;
   let unsubscribe: Unsubscribe | undefined;
+  let clockNow = Date.now();
+  let clockInterval: ReturnType<typeof setInterval> | undefined;
+  $: timedProgramming = state.nextProgramming ?? state.programming;
+  $: timedPlayer = state.players.find(({ uid }) => uid === timedProgramming?.deadlinePlayerUid);
+  $: deadlineSeconds = timedProgramming?.deadline
+    ? Math.max(0, Math.ceil((timedProgramming.deadline - clockNow) / 1000)) : null;
+  $: ownedOptionCardIds = state.resolution?.robots.find((robot) => robot.uid === uid)?.options.map(({ cardId }) => cardId)
+    ?? recompileOptionCardIds;
+
+  async function callTime() {
+    if (!services || !timedProgramming || !timedPlayer || timedPlayer.uid === uid || deadlineSeconds !== 0 || pending || !serverAtHead) return;
+    pending = true;
+    error = '';
+    try {
+      await RoomService.claimProgramTimeout(services.db, services.user, roomCode, timedPlayer.uid, timedProgramming.turnId);
+    } catch (nextError) {
+      console.error(nextError);
+      error = 'Unable to call time. Please try again.';
+    } finally { pending = false; }
+  }
 
   function isPoweredDownForTurn(snapshot: RoomState, turnNumber: number, playerUid: string) {
     const robot = snapshot.resolution?.robots.find(({ uid: robotUid }) => robotUid === playerUid);
@@ -175,6 +196,7 @@
     powerDownChoiceVisible;
 
   onMount(async () => {
+    clockInterval = setInterval(() => (clockNow = Date.now()), 250);
     const params = new URLSearchParams(location.search);
     roomCode = normalizeRoomCode(params.get('room') ?? '');
     requestedSeat = Number(params.get('seat') ?? 0);
@@ -264,7 +286,9 @@
         );
         status = programmingIsAhead
           ? nextProgrammingPlayer
-            ? `Choose five registers privately for turn ${nextActiveProgramming.turnNumber}.`
+            ? nextProgrammingPlayer.submitted
+              ? 'Your program is locked.'
+              : `Choose five registers privately for turn ${nextActiveProgramming.turnNumber}.`
             : isPoweredDownForTurn(next, nextActiveProgramming.turnNumber, uid)
               ? poweredDownStatus(next, nextActiveProgramming.turnNumber, uid)
               : `Watch the tabletop during turn ${nextActiveProgramming.turnNumber}.`
@@ -316,7 +340,7 @@
       });
     } catch (nextError) { console.error(nextError); error = 'Unable to connect to the race. Please try again.'; }
   });
-  onDestroy(() => unsubscribe?.());
+  onDestroy(() => { unsubscribe?.(); if (clockInterval) clearInterval(clockInterval); });
 
   function beginNextTurn() {
     if (!state.nextProgramming || !waitingForNextTurn) return;
@@ -621,6 +645,20 @@
     </section>
   {:else}
     <section class="identity"><span>PRIVATE CONTROLLER</span><h1>{player.name}</h1><strong>{ROBOTS.find((robot) => robot.id === player.robotId)?.name}</strong><p>{status}</p></section>
+    {#if ownedOptionCardIds.length}
+      <section class="phone-options" aria-label="Your Options">
+        <span>Your Options</span>
+        <OptionInventory playerName={player.name} cardIds={ownedOptionCardIds} />
+      </section>
+    {/if}
+    {#if timedPlayer && deadlineSeconds !== null}
+      <section class="phone-deadline" aria-label="Programming countdown">
+        <span role="timer" data-program-countdown>{timedPlayer.uid === uid ? 'You have' : `${timedPlayer.name} has`} {deadlineSeconds} seconds</span>
+        {#if timedPlayer.uid !== uid}
+          <button onclick={callTime} disabled={deadlineSeconds !== 0 || pending || !serverAtHead}>Call time on {timedPlayer.name}</button>
+        {/if}
+      </section>
+    {/if}
     {#if waitingForNextTurn}
       <section class="next-turn-control" aria-label="Next turn ready">
         <h2>Turn {state.resolution?.turnNumber} complete</h2>
@@ -787,6 +825,14 @@
   <footer><a href={`${base}/tt/?room=${roomCode}`}>View shared tabletop ↗</a><span>Keep this screen private.</span></footer>
 </main>
 <style>
+  .phone-options { display: flex; flex: none; align-items: center; gap: 8px; margin: 4px 0; min-width: 0; }
+  .phone-options > span { flex: none; color: #ffcf4b; font-size: 14px; }
+  .phone-options :global(.tabletop-option-shelf) { flex: 1; }
+  .phone-options :global(.option-icon) { width: 44px; height: 44px; }
+  .phone-deadline { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0; padding: 4px; border: 1px solid #ffcf4b; color: #ffcf4b; font-size: 14px; }
+  .phone-deadline > span { min-width: 0; overflow-wrap: anywhere; }
+  .phone-deadline button { min-width: 0; max-width: 60%; overflow-wrap: anywhere; min-height: 44px; padding: 4px; font-size: 12px; }
+
   :global(*) { box-sizing: border-box; }
   :global(html), :global(body) {
     width: 100%;

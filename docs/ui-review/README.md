@@ -1,5 +1,8 @@
 # Web and tabletop playability review
 
+For the private controller’s square cards, drag/tap animations, Options and shared
+countdown, see the [phone programming review](phone-programming.md).
+
 For the subsequent rotating mats, graphical reveal and per-player logs, see the
 [tabletop player-log review](tabletop-player-logs.md).
 
