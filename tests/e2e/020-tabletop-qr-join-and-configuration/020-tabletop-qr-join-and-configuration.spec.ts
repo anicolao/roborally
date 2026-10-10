@@ -644,8 +644,15 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     const initialEntries = await history.getByRole('listitem').count();
     expect(initialEntries).toBeGreaterThan(0);
     // Factory motion must finish before both R2 cards become visible together.
-    while (await table.getByTestId('tabletop-register-playback').getAttribute('data-register') === '1') {
-      await expect(table.locator('.program-card.revealed')).toHaveCount(2);
+    while (true) {
+      // Read both values in one browser task: presentation can advance between
+      // separate locator calls while its server acknowledgement arrives.
+      const shown = await table.evaluate(() => ({
+        register: document.querySelector('[data-testid="tabletop-register-playback"]')?.getAttribute('data-register'),
+        revealed: document.querySelectorAll('.program-card.revealed').length
+      }));
+      if (shown.register !== '1') break;
+      expect(shown.revealed).toBe(2);
       await advanceSyntheticPlayback([table]);
     }
     await expect(table.getByTestId('tabletop-register-playback')).toHaveAttribute('data-register', '2');

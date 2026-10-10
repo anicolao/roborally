@@ -726,7 +726,9 @@ function projectNextProgramming(state: RoomState) {
     refreshPowerDownPending(state);
     // A whole team can be sitting out in Toggle Boggle. No player can submit
     // or answer a power decision, so advance the empty turn to re-entry.
-    if (!state.pendingPowerDownUid) resolveReadyProgramming(state);
+    if (!state.pendingPowerDownUid && nextRobots.some(({ status }) => status === 'destroyed')) {
+      resolveReadyProgramming(state);
+    }
     return;
   }
   state.nextProgramming = nextProgramming;
