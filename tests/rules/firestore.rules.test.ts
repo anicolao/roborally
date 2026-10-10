@@ -13,6 +13,7 @@ import {
   updateDoc
 } from 'firebase/firestore';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
+import { PUBLISHED_COURSES } from '../../src/lib/game/course-catalog';
 import { readFile } from 'node:fs/promises';
 
 let environment: RulesTestEnvironment;
@@ -44,6 +45,28 @@ describe('append-only game stream rules', () => {
 
   afterAll(async () => {
     await environment.cleanup();
+  });
+
+  it.each(PUBLISHED_COURSES)('accepts the published $name configuration', async (course) => {
+    const db = environment.authenticatedContext('robot-a').firestore();
+    await assertSucceeds(setDoc(doc(db, 'games/room/events/robot-a-000001'), {
+      ...eventData('robot-a'), type: 'race/configured',
+      payload: { config: { editionId: 'avalon-hill-2005', courseId: course.id } }
+    }));
+  });
+
+  it('attributes Interference hands to their owner and accepts scenario setup choices', async () => {
+    const db = environment.authenticatedContext('robot-a').firestore();
+    const write = (sequence: number, type: string, payload: object) => setDoc(
+      doc(db, `games/room/events/robot-a-${String(sequence).padStart(6, '0')}`),
+      { ...eventData('robot-a'), clientSeq: sequence, type, payload }
+    );
+    await assertSucceeds(write(1, 'program/submitted', { uid: 'robot-a:blocker', turnId: 'turn-001', cardIds: [] }));
+    await assertFails(write(2, 'program/submitted', { uid: 'robot-b:blocker', turnId: 'turn-001', cardIds: [] }));
+    await assertSucceeds(write(3, 'scenario/option-selected', { cardId: 'brakes' }));
+    await assertSucceeds(write(4, 'scenario/capture-chosen', { choice: { kind: 'home-board', boardInstanceId: 'vault-1' } }));
+    await assertSucceeds(write(5, 'program/opened', { turnId: 'turn-001' }));
+    await assertFails(write(6, 'scenario/capture-chosen', { choice: { kind: 'teleport' } }));
   });
 
   it('allows attributed creates and authenticated reads', async () => {

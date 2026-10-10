@@ -305,16 +305,16 @@ describe('priority Program movement', () => {
     const riskyRobot = raceRobot({
       uid: 'risky',
       name: 'Risky',
-      x: 3,
-      y: 3,
-      facing: 'east'
+      x: 10,
+      y: 10,
+      facing: 'west'
     });
     const rejectRobot = raceRobot({
       uid: 'reject',
       name: 'Reject',
-      x: 3,
-      y: 3,
-      facing: 'east'
+      x: 10,
+      y: 10,
+      facing: 'west'
     });
     const riskyTrace: ResolutionTraceEntry[] = [];
     const rejectTrace: ResolutionTraceEntry[] = [];
@@ -330,7 +330,7 @@ describe('priority Program movement', () => {
       compilePlayableCourse('factory-rejects')
     );
 
-    expect(riskyRobot).toMatchObject({ x: 4, y: 3, status: 'active' });
+    expect(riskyRobot).toMatchObject({ x: 9, y: 10, status: 'active' });
     expect(rejectRobot).toMatchObject({ status: 'destroyed', lives: 2 });
     expect(rejectTrace).toContainEqual(expect.objectContaining({ kind: 'destroyed-pit' }));
   });
@@ -2767,8 +2767,9 @@ describe('priority Program movement', () => {
       damage: 4,
       archive: { x: 6, y: 16 }
     });
-    expect(optionRobot.options).toHaveLength(3);
-    expect(optionTrace.filter(({ kind }) => kind === 'option-drawn')).toHaveLength(2);
+    // Mechanical Arm reaches both the crossed repair site and Flag 1.
+    expect(optionRobot.options).toHaveLength(4);
+    expect(optionTrace.filter(({ kind }) => kind === 'option-drawn')).toHaveLength(3);
   });
 
   it('repairs once in cleanup, unlocks low registers first, and preserves Option draws', () => {

@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
 
-export async function rewindSubmissionDeadline(roomCode: string) {
+export async function rewindSubmissionDeadline(roomCode: string, durationMs = 31_000) {
   const collectionUrl =
     `http://127.0.0.1:8188/v1/projects/roborally-e2e/databases/(default)/documents/` +
     `games/${roomCode.toLowerCase()}/events`;
@@ -51,7 +51,7 @@ export async function rewindSubmissionDeadline(roomCode: string) {
           body: JSON.stringify({
             fields: {
               createdAt: {
-                timestampValue: new Date(Date.parse(timestamp) - 31_000).toISOString()
+                timestampValue: new Date(Date.parse(timestamp) - durationMs).toISOString()
               }
             }
           })

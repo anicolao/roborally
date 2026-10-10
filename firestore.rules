@@ -30,6 +30,9 @@ service cloud.firestore {
           'player/joined',
           'race/configured',
           'player/ready',
+          'scenario/capture-chosen',
+          'scenario/option-selected',
+          'program/opened',
           'program/submitted',
           'program/draft-updated',
           'program/timed-out',
@@ -62,10 +65,41 @@ service cloud.firestore {
             && request.resource.data.payload.config.editionId == 'avalon-hill-2005'
             && request.resource.data.payload.config.courseId in [
               'risky-exchange',
-              'risky-exchange-a',
-              'option-lab',
+              'checkmate',
+              'dizzy-dash',
+              'island-hop',
+              'chop-shop-challenge',
+              'twister',
+              'bloodbath-chess',
+              'around-the-world',
+              'death-trap',
+              'pilgrimage',
+              'vault-assault',
+              'whirlwind-tour',
+              'lost-bearings',
+              'robot-stew',
+              'oddest-sea',
+              'against-the-grain',
+              'island-king',
+              'tricksy',
+              'moving-targets',
+              'set-to-kill',
               'factory-rejects',
-              'option-world'
+              'option-world',
+              'ball-lightning',
+              'tight-collar',
+              'day-of-the-superbot',
+              'interference',
+              'flag-fry',
+              'frenetic-factory',
+              'marathon-madness',
+              'tandem-carnage',
+              'all-for-one-or-one-for-all',
+              'capture-the-flag',
+              'toggle-boggle',
+              'war-zone',
+              'risky-exchange-a',
+              'option-lab'
             ]
           )
           ||
@@ -76,15 +110,31 @@ service cloud.firestore {
           )
           ||
           (
+            request.resource.data.type == 'scenario/capture-chosen'
+            && request.resource.data.payload.choice is map
+            && request.resource.data.payload.choice.kind in ['home-board', 'deployment']
+          )
+          ||
+          (
+            request.resource.data.type == 'scenario/option-selected'
+            && request.resource.data.payload.cardId is string
+          )
+          ||
+          (
+            request.resource.data.type == 'program/opened'
+            && request.resource.data.payload.turnId.matches('turn-[0-9]+')
+          )
+          ||
+          (
             request.resource.data.type == 'program/submitted'
-            && request.resource.data.payload.uid == request.auth.uid
+            && (request.resource.data.payload.uid == request.auth.uid || request.resource.data.payload.uid == request.auth.uid + ':blocker')
             && request.resource.data.payload.turnId.matches('turn-[0-9]+')
             && request.resource.data.payload.cardIds is list
           )
           ||
           (
             request.resource.data.type == 'program/draft-updated'
-            && request.resource.data.payload.uid == request.auth.uid
+            && (request.resource.data.payload.uid == request.auth.uid || request.resource.data.payload.uid == request.auth.uid + ':blocker')
             && request.resource.data.payload.turnId.matches('turn-[0-9]+')
             && request.resource.data.payload.cardIds is list
           )
@@ -102,7 +152,7 @@ service cloud.firestore {
           ||
           (
             request.resource.data.type == 'effect/chosen'
-            && request.resource.data.payload.uid == request.auth.uid
+            && (request.resource.data.payload.uid == request.auth.uid || request.resource.data.payload.uid == request.auth.uid + ':blocker')
             && request.resource.data.payload.turnId.matches('turn-[0-9]+')
             && request.resource.data.payload.choice is map
             && (
@@ -131,7 +181,7 @@ service cloud.firestore {
               ||
               (
                 request.resource.data.payload.choice.kind == 'option-decision'
-                && request.resource.data.payload.choice.uid == request.auth.uid
+                && request.resource.data.payload.choice.uid == request.resource.data.payload.uid
                 && request.resource.data.payload.choice.decisionId is string
                 && request.resource.data.payload.choice.choiceId is string
               )
@@ -140,7 +190,7 @@ service cloud.firestore {
           ||
           (
             request.resource.data.type == 'effect/draft-updated'
-            && request.resource.data.payload.uid == request.auth.uid
+            && (request.resource.data.payload.uid == request.auth.uid || request.resource.data.payload.uid == request.auth.uid + ':blocker')
             && request.resource.data.payload.turnId.matches('turn-[0-9]+')
             && request.resource.data.payload.draft is map
             && request.resource.data.payload.draft.kind in ['reentry', 'option-plan']
@@ -202,7 +252,7 @@ service cloud.firestore {
           ||
           (
             request.resource.data.type == 'power-down/responded'
-            && request.resource.data.payload.uid == request.auth.uid
+            && (request.resource.data.payload.uid == request.auth.uid || request.resource.data.payload.uid == request.auth.uid + ':blocker')
             && request.resource.data.payload.turnId.matches('turn-[0-9]+')
             && request.resource.data.payload.powerDownNextTurn is bool
           )

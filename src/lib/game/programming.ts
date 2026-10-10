@@ -1,3 +1,4 @@
+import { playableCourse } from './playable-courses';
 import { PROGRAM_CARDS, type ProgramCard } from './program-manifest';
 import {
   RACE_REDUCER_VERSION,
@@ -24,6 +25,7 @@ export interface ProgramRegister {
 }
 
 export interface ProgrammingPlayer {
+  ownerUid?: string;
   uid: string;
   damage: number;
   hand: ProgramCard['id'][];
@@ -43,6 +45,8 @@ export interface ProgrammingPlayer {
 }
 
 export interface ProgrammingState {
+  courseTimeLimitMs?: number;
+  clockOwnerUid?: string;
   /** Governs rules whose behavior must remain deterministic for old room histories. */
   reducerVersion?: RaceReducerVersion;
   turnId: TurnId;
@@ -124,11 +128,12 @@ export function createProgrammingState(
     new Set([...lockedCardIds, ...storedCardIds]),
     turnNumber
   );
-  const players = setup.players.filter(({ uid }) => eligibleUids.has(uid)).map(({ uid }) => {
+  const players = setup.players.filter(({ uid }) => eligibleUids.has(uid)).map(({ uid, ownerUid }) => {
     const damage = damageByUid[uid] ?? setup.startingDamage;
     const locked = lockedRegistersByUid[uid] ?? {};
     return {
       uid,
+      ...(ownerUid ? { ownerUid } : {}),
       damage,
       hand: [] as ProgramCard['id'][],
       unusedCardIds: [] as ProgramCard['id'][],
@@ -181,6 +186,10 @@ export function createProgrammingState(
   }
 
   return {
+    ...(() => {
+      const rule = playableCourse(config.courseId).specialRules.find((rule) => rule.kind === 'programming-limit');
+      return rule?.kind === 'programming-limit' ? { courseTimeLimitMs: rule.seconds * 1000 } : {};
+    })(),
     reducerVersion: config.reducerVersion,
     turnId: `turn-${String(turnNumber).padStart(3, '0')}`,
     turnNumber,
@@ -447,7 +456,16 @@ export function submitProgram(
   if (!placeProgram(state, player, cardIds, false, pairedSlots)) return state;
 
   const remaining = state.players.filter(({ submitted }) => !submitted);
-  if (remaining.length === 1) {
+  if (state.courseTimeLimitMs) {
+    state.deadlinePlayerUid = remaining[0]?.uid ?? null;
+  } else if (player.ownerUid) {
+    const owners = new Set(remaining.map(({ ownerUid }) => ownerUid));
+    if (owners.size === 1) {
+      if (!state.clockOwnerUid) state.deadline = createdAt + PROGRAMMING_DURATION_MS;
+      state.clockOwnerUid = remaining[0].ownerUid;
+      state.deadlinePlayerUid = remaining[0].uid;
+    }
+  } else if (remaining.length === 1) {
     state.deadline = createdAt + PROGRAMMING_DURATION_MS;
     state.deadlinePlayerUid = remaining[0].uid;
   }
@@ -527,6 +545,7 @@ export function timeOutProgram(
     return [effectiveDraftSlots[registerIndex] ?? randomFill[fillIndex++]];
   });
   placeProgram(state, target, completedCardIds, true, persistedPairedDraftSlots);
+  if (state.courseTimeLimitMs || state.clockOwnerUid) state.deadlinePlayerUid = state.players.find(({ submitted }) => !submitted)?.uid ?? null;
   closeProgrammingIfComplete(state);
   return state;
 }
@@ -557,4 +576,13 @@ export function previewProgram(
     if (!card || !player.hand.includes(cardId)) return 'Unavailable card';
     return `${card.action} (${card.priority}); board elements and robots excluded`;
   });
+}
+
+/** Starts the published course clock once, from a canonical room event. */
+export function openCourseProgramming(current: ProgrammingState, createdAt: number): ProgrammingState {
+  if (!current.courseTimeLimitMs || current.phase !== 'programming' || (current.deadline !== null && current.deadline !== 0)) return current;
+  const state = cloneState(current);
+  state.deadline = createdAt + current.courseTimeLimitMs;
+  state.deadlinePlayerUid = state.players.find(({ submitted }) => !submitted)?.uid ?? null;
+  return state;
 }

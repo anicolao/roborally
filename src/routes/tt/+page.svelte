@@ -1,4 +1,9 @@
 <script lang="ts">
+  import CaptureDeployment from "$lib/components/CaptureDeployment.svelte";
+  import { raceRoster } from "$lib/room-model";
+  import ScenarioTeams from "$lib/components/ScenarioTeams.svelte";
+  import { scenarioTeamAssignments, validateScenarioTeams } from "$lib/game/setup";
+  import StartingOptionDraft from "$lib/components/StartingOptionDraft.svelte";
   import "@fontsource/atkinson-hyperlegible/400.css";
   import "@fontsource/atkinson-hyperlegible/700.css";
   import "@fontsource/space-mono/400.css";
@@ -80,6 +85,7 @@
       [seat]: ((seatRotations[seat] ?? defaultSeatRotation(seat, state.setup ? "side-seats" : tabletopLayout)) + 90),
     };
   }
+  let teamAssignments: Record<string, string> = {};
   let selectedCourseId: PlayableCourseId = "risky-exchange";
   let setupSeed = "";
   let setupLives: 3 | 4 = 3;
@@ -96,6 +102,7 @@
   let playbackStage: ProgramPlayback["frames"][number]["stage"] | null = null;
   let playbackActorUid: string | null = null;
   let playbackCardId: ProgramCard["id"] | null = null;
+  let playbackScenario: ProgramPlayback['frames'][number]['scenario'];
   let playbackRobots: RaceRobotPosition[] | undefined;
   let playbackHistory: ProgramPlayback["frames"][number]["trace"] = [];
   let playbackLaserBeams: ProgramPlayback["frames"][number]["laserBeams"] = [];
@@ -144,14 +151,14 @@
   $: playbackCard = PROGRAM_CARDS.find(({ id }) => id === playbackCardId);
   $: playbackStageLabel =
     playbackStage === "program-card"
-      ? `${state.players.find(({ uid }) => uid === playbackActorUid)?.name ?? "Robot"} · ${playbackCard?.action.replaceAll("-", " ") ?? "Program card"} · priority ${playbackCard?.priority ?? "—"}`
+      ? `${raceRoster(state).find(({ uid }) => uid === playbackActorUid)?.name ?? "Robot"} · ${playbackCard?.action.replaceAll("-", " ") ?? "Program card"} · priority ${playbackCard?.priority ?? "—"}`
       : playbackStage === "express-conveyors"
         ? "Express conveyors"
         : playbackStage === "conveyors"
           ? "All conveyors"
           : playbackStage === "pushers"
             ? "Pushers"
-            : playbackStage === "gears"
+            : playbackStage === "checkpoints" ? "Flags" : playbackStage === "gears"
               ? "Gears"
               : playbackStage === "lasers"
                 ? "Robot and board lasers"
@@ -201,7 +208,7 @@
       state.resolution?.nextReentryUid ??
       null)
     : waitingPowerDownUid;
-  $: waitingPlayer = state.players.find(({ uid }) => uid === waitingPlayerUid);
+  $: waitingPlayer = raceRoster(state).find(({ uid }) => uid === waitingPlayerUid);
   $: waitingPrompt = pendingOptionDecision?.tabletopPrompt ??
     (state.resolution?.nextOptionChoiceUid
       ? "Choose an Option to discard"
@@ -222,7 +229,7 @@
     : playbackPhase === "complete" ? "Turn complete. Choose your next action on your phone."
     : "Choose your Program on your phone.";
   $: finishWinners = (state.resolution?.summary?.winnerUids ?? [])
-    .map((uid) => state.players.find((player) => player.uid === uid))
+    .map((uid) => raceRoster(state).find((player) => player.uid === uid))
     .filter((player) => player !== undefined);
   $: finishOverlayVisible =
     !manualReplayActive &&
@@ -352,6 +359,7 @@
     playbackActorUid = null;
     playbackCardId = null;
     playbackRobots = undefined;
+    playbackScenario = undefined;
     playbackHistory = [];
     playbackLaserBeams = [];
     playbackFrameIndex = 0;
@@ -374,6 +382,7 @@
     resetProgramPlayback();
     playbackKey = key;
     playbackRobots = playback.initialRobots;
+    playbackScenario = state.resolution?.initialScenario;
   }
 
   function startPlaybackCountdown() {
@@ -401,6 +410,7 @@
     playbackActorUid = frame.actorUid;
     playbackCardId = frame.cardId;
     playbackRobots = frame.robots;
+    playbackScenario = frame.scenario;
     playbackHistory = state.resolution?.playback.frames
       .slice(0, frameIndex + 1).flatMap(({ trace }) => trace) ?? frame.trace;
     playbackLaserBeams = frame.laserBeams ?? [];
@@ -422,6 +432,7 @@
     playbackActorUid = null;
     playbackCardId = null;
     playbackRobots = playback.initialRobots;
+    playbackScenario = state.resolution?.initialScenario;
     playbackHistory = [];
     playbackLaserBeams = [];
     playbackFrameIndex = 0;
@@ -449,6 +460,7 @@
       playbackActorUid = null;
       playbackCardId = null;
       playbackRobots = undefined;
+    playbackScenario = undefined;
       playbackLaserBeams = [];
       manualReplayActive = false;
     }, frameStart);
@@ -619,6 +631,7 @@
     } else {
       playbackRegister = null;
       playbackRobots = undefined;
+    playbackScenario = undefined;
       playbackLaserBeams = [];
     }
   }
@@ -639,6 +652,7 @@
           selectedCourseId,
           setupSeed.trim() || roomCode,
           setupLives,
+          scenarioTeamAssignments(selectedCourseId, state.players, teamAssignments),
         ),
       });
     } catch (nextError) {
@@ -705,6 +719,7 @@
   data-presentation-server-head={serverAtHead}
   data-presentation-busy={presentationBusy}
 >
+  {#if services && state.setup && !state.programming}<div class="scenario-setup"><StartingOptionDraft {state} {services} {roomCode} /><CaptureDeployment state={state} {services} {roomCode} /></div>{/if}
   <p
     class="sr-only"
     role="status"
@@ -766,7 +781,7 @@
   >
     {#each Array(MAX_ROOM_PLAYERS) as _, index}
       {@const seat = index + 1}
-      {@const player = state.players.find(
+      {@const player = raceRoster(state).find(
         (candidate) => candidate.seat === seat,
       )}
       {@const robot = player
@@ -815,7 +830,7 @@
                 : "active"}
             {@const touchedFlags = raceRobot?.touchedFlags ?? []}
             {@const optionCardIds = optionCardIdsForPlayer(player.uid, raceRobot)}
-            <PlayerStatusCard uid={player.uid} playerName={player.name} robotName={robot?.name} showRobotName={false}
+            <PlayerStatusCard scenarioLabel={[raceRobot?.teamId?.replace('team-', 'Team ') ?? state.setup?.players.find(({ uid }) => uid === player.uid)?.teamId?.replace('team-', 'Team '), (raceRobot?.isSuperbot ?? state.setup?.players.find(({ uid }) => uid === player.uid)?.isSuperbot) ? 'SuperBot' : '', raceRobot?.carriedFlag ? 'Carrying enemy flag' : '', raceRobot?.reentryWaitTurns ? 'Sitting out next turn' : ''].filter(Boolean).join(' · ')} uid={player.uid} playerName={player.name} robotName={robot?.name} showRobotName={false}
               {startingLives} {lives} {damage} {powerMode} {touchedFlags}
               flags={layoutCourse.course.flags} {optionCardIds}
               registers={state.programming?.players.find(({ uid }) => uid === player.uid)?.registers ?? []}
@@ -843,7 +858,7 @@
     {/each}
 
     {#if state.setup}
-      {#each state.players as player, index (player.uid)}
+      {#each raceRoster(state) as player, index (player.uid)}
         {@const seat = player.seat ?? 1}
         <div class="gutter" data-log-seat={seat}
           data-testid={index === 0 ? (waitingPlayer ? 'tabletop-damage-prompt' : playbackPhase === 'countdown' ? 'tabletop-program-countdown' : playbackPhase === 'register' ? 'tabletop-register-playback' : undefined) : undefined}
@@ -866,6 +881,7 @@
       {#if state.setup}
         <CourseBoard
           setup={state.setup}
+          scenario={playbackScenario ?? (resolutionPlaybackKey !== playbackKey ? state.resolution?.initialScenario : state.resolution?.scenario)}
           robots={presentedRobots}
           animateRobots={playbackIsActive}
           transitionDurationMs={Math.max(0, playbackTransitionMs - robotCueMs)}
@@ -922,6 +938,7 @@
                 {/if}
               </select>
             </label>
+              <ScenarioTeams courseId={selectedCourseId} players={state.players} bind:assignments={teamAssignments} />
             <label>
               Starting lives
               <select bind:value={setupLives} aria-label="Starting Lives">
@@ -935,7 +952,7 @@
               type="submit"
               disabled={pending ||
                 state.players.length < 2 ||
-                !selectedCourseSupportsRoom}
+                (!selectedCourseSupportsRoom || !validateScenarioTeams(selectedCourseId, scenarioTeamAssignments(selectedCourseId, state.players, teamAssignments)))}
             >
               {pending
                 ? "CONFIGURING…"
@@ -957,6 +974,7 @@
 </main>
 
 <style>
+  .scenario-setup { position: absolute; right: 1rem; top: 35%; max-width: 20vw; z-index: 5; }
   :global(*) {
     box-sizing: border-box;
   }

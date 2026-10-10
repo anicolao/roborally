@@ -1,4 +1,8 @@
 <script lang="ts">
+  import CaptureDeployment from "$lib/components/CaptureDeployment.svelte";
+  import { raceRoster } from "$lib/room-model";
+  import StartingOptionDraft from "$lib/components/StartingOptionDraft.svelte";
+  import CourseProgrammingClock from "$lib/components/CourseProgrammingClock.svelte";
   import '@fontsource/atkinson-hyperlegible/400.css';
   import '@fontsource/atkinson-hyperlegible/700.css';
   import '@fontsource/space-mono/400.css';
@@ -67,7 +71,7 @@
   let clockNow = Date.now();
   let clockInterval: ReturnType<typeof setInterval> | undefined;
   $: timedProgramming = state.nextProgramming ?? state.programming;
-  $: timedPlayer = state.players.find(({ uid }) => uid === timedProgramming?.deadlinePlayerUid);
+  $: timedPlayer = raceRoster(state).find(({ uid }) => uid === timedProgramming?.deadlinePlayerUid);
   $: deadlineSeconds = timedProgramming?.deadline
     ? Math.max(0, Math.ceil((timedProgramming.deadline - clockNow) / 1000)) : null;
   $: ownedOptionCardIds = state.resolution?.robots.find((robot) => robot.uid === uid)?.options.map(({ cardId }) => cardId)
@@ -113,7 +117,7 @@
     return `Powered down for turn ${turnNumber}. Watch the tabletop while the other robots program.`;
   }
 
-  $: player = state.players.find((candidate) => candidate.uid === uid);
+  $: player = raceRoster(state).find((candidate) => candidate.uid === uid);
   $: seatPlayer = state.players.find((candidate) => candidate.seat === requestedSeat);
   $: unavailableRobots = new Set(state.players.map((candidate) => candidate.robotId));
   $: normalizedName = normalizePlayerName(playerName);
@@ -194,6 +198,18 @@
     optionLossRobot?.uid === player?.uid ||
     reentryChoices.length > 0 ||
     powerDownChoiceVisible;
+
+  async function switchRobot(robotUid: string) {
+    await draftWriteQueue;
+    uid = robotUid;
+    const next = activeProgramming?.players.find((player) => player.uid === uid);
+    draftSlots = next ? draftSlotsForPlayer(next) : Array(5).fill(null);
+    pairedDraftSlots = next ? pairedDraftSlotsForPlayer(next) : Array(5).fill(null);
+    draftDirty = false;
+    selectedReentryCell = '';
+    selectedReentryFacing = '';
+    effectDraftDirty = false;
+  }
 
   onMount(async () => {
     clockInterval = setInterval(() => (clockNow = Date.now()), 250);
@@ -310,6 +326,10 @@
             ? 'Watch the shared tabletop for execution.'
             : next.programming
               ? 'Choose five registers privately.'
+            : next.setup?.capture && !next.programming
+              ? 'Choose home turf and place your team’s robots.'
+            : next.setup && !next.programming
+              ? 'Choose your starting Option; programming begins when everyone is ready.'
             : next.configuration
               ? 'Confirm that you are ready to race.'
               : nextPlayer
@@ -377,7 +397,8 @@
           y: y ? Number(y) : null,
           facing: facing || null,
           poweredDown: reentryPoweredDown
-        }
+        },
+        uid
       );
     } catch (nextError) {
       console.error(nextError);
@@ -409,7 +430,8 @@
           facing: selectedReentryFacing,
           ...(reentryRobot?.powerDownNextTurn ? { poweredDown: reentryPoweredDown } : {})
         },
-        `turn-${String(state.resolution.turnNumber).padStart(3, '0')}`
+        `turn-${String(state.resolution.turnNumber).padStart(3, '0')}`,
+        uid
       );
       selectedReentryCell = '';
       selectedReentryFacing = '';
@@ -439,7 +461,8 @@
         services.user,
         roomCode,
         { kind: 'option-loss', cardId },
-        activeProgramming.turnId
+        activeProgramming.turnId,
+        uid
       );
     } catch (nextError) {
       console.error(nextError);
@@ -461,10 +484,11 @@
         {
           kind: 'option-decision',
           decisionId: pendingOptionDecision.decisionId,
-          uid: services.user.uid,
+          uid,
           choiceId
         },
-        activeProgramming.turnId
+        activeProgramming.turnId,
+        uid
       );
     } catch (nextError) {
       console.error(nextError);
@@ -514,7 +538,9 @@
       await RoomService.respondPowerDown(services.db, services.user, roomCode, {
         turnId: activeProgramming.turnId,
         powerDownNextTurn
-      });
+      },
+        uid
+      );
     } catch (nextError) {
       console.error(nextError);
       error = 'Your power-down choice could not be saved. Please try again.';
@@ -543,8 +569,9 @@
           cardIds,
           turnId,
           slots,
-          pairedSlots
-        );
+          pairedSlots,
+        uid
+      );
       } catch (nextError) {
         console.error(nextError);
         draftDirty = false;
@@ -563,8 +590,9 @@
       roomCode,
       cardIds,
       turnId,
-      [...pairedDraftSlots]
-    );
+      [...pairedDraftSlots],
+        uid
+      );
     draftDirty = false;
   }
 
@@ -584,7 +612,8 @@
           uid,
           choiceId
         },
-        activeProgramming.turnId
+        activeProgramming.turnId,
+        uid
       );
       draftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
       pairedDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
@@ -644,7 +673,17 @@
       {/if}
     </section>
   {:else}
+    {#if state.setup?.players.some(({ ownerUid }) => ownerUid === services?.user.uid)}
+      <label>Control robot<select aria-label="Control robot" value={uid} disabled={pending} onchange={(event) => switchRobot(event.currentTarget.value)}>
+        {#each state.setup.players.filter(({ ownerUid }) => ownerUid === services?.user.uid) as robot}<option value={robot.uid}>{robot.name}</option>{/each}
+      </select></label>
+    {/if}
     <section class="identity"><span>PRIVATE CONTROLLER</span><h1>{player.name}</h1><strong>{ROBOTS.find((robot) => robot.id === player.robotId)?.name}</strong><p>{status}</p></section>
+    {#if state.setup?.players.find((robot) => robot.uid === uid)?.teamId}<p>{state.setup.players.find((robot) => robot.uid === uid)?.teamId?.replace('team-', 'Team ')}</p>{/if}
+    {#if services && serverAtHead && activeProgramming?.courseTimeLimitMs && !waitingForNextTurn}
+      {#key activeProgramming.turnId}<CourseProgrammingClock {services} {roomCode} programming={activeProgramming} />{/key}
+    {/if}
+    {#if services}<StartingOptionDraft {state} {services} {roomCode} /><CaptureDeployment state={state} {services} {roomCode} />{/if}
     {#if ownedOptionCardIds.length}
       <section class="phone-options" aria-label="Your Options">
         <span>Your Options</span>
@@ -746,8 +785,11 @@
         {#if reentryRobot}
           <ReentryPicker
             choices={reentryChoices}
+            scenario={state.resolution?.scenario}
+            legacyFactoryLayout={state.setup?.legacyFactoryLayout ?? false}
             courseId={state.setup!.courseId}
             archive={reentryRobot.archive}
+            homeBoardId={reentryRobot.homeBoardId}
             archiveOccupantName={reentryArchiveOccupant?.name ?? ''}
             selectedCell={selectedReentryCell}
             selectedFacing={selectedReentryFacing}
