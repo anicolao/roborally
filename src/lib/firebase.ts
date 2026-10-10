@@ -35,17 +35,20 @@ export function shouldUseFetchStreams(browser: BrowserIdentity | undefined): boo
 }
 
 function firestoreSettings(): FirestoreSettings & { useFetchStreams: boolean } {
-  // WebKit in Safari 26.4 and 26.5 can hold the final Firestore Fetch Streams
-  // frame until a later keep-alive. Use XHR on WebKit until the upstream issue
-  // is fixed: https://github.com/firebase/firebase-js-sdk/issues/9789
+  // Safari can buffer streamed Firestore responses. Use non-streaming XHR
+  // long polling on WebKit: https://github.com/firebase/firebase-js-sdk/issues/9789
+  const useFetchStreams = shouldUseFetchStreams(
+    typeof navigator === 'undefined' ? undefined : navigator
+  );
   return {
-    useFetchStreams: shouldUseFetchStreams(
-      typeof navigator === 'undefined' ? undefined : navigator
-    )
+    useFetchStreams,
+    ...(!useFetchStreams ? { experimentalForceLongPolling: true } : {})
   };
 }
 
-export async function initializeFirebase(): Promise<FirebaseServices> {
+export async function initializeFirebase(
+  onProgress: (message: string) => void = () => {}
+): Promise<FirebaseServices> {
   if (services) return services;
 
   const config = readFirebaseConfig(import.meta.env);
@@ -69,8 +72,10 @@ export async function initializeFirebase(): Promise<FirebaseServices> {
     );
   }
 
+  onProgress('Connecting your account…');
   const credential = await signInAnonymously(auth);
   if (!usesEmulators) {
+    onProgress('Checking the game connection…');
     await getDoc(doc(db, 'games/shell-readiness/events/probe'));
   }
   services = { auth, db, user: credential.user };

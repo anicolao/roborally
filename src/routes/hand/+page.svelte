@@ -43,6 +43,7 @@
 
   const buildHash = (import.meta.env.VITE_GIT_HASH ?? 'local-development').slice(0, 8);
   let refreshingRoom = false;
+  let refreshProgress = 'Refreshing game…';
   let syncedEventCount: number | null = null;
   let services: FirebaseServices | undefined;
   let state: RoomState = emptyRoomState();
@@ -223,7 +224,8 @@
     try {
       refreshingRoom = params.get('refresh') === '1';
       if (refreshingRoom) RoomService.clearRoomEventCache(roomCode);
-      services = await initializeFirebase(); uid = services.user.uid;
+      services = await initializeFirebase((message) => { refreshProgress = message; }); uid = services.user.uid;
+      refreshProgress = 'Receiving game history…';
       unsubscribe = RoomService.subscribeRoom(services.db, roomCode, (next) => {
         state = next;
         const nextPlayer = next.players.find((candidate) => candidate.uid === uid);
@@ -646,7 +648,7 @@
   >
   {#if refreshingRoom}
     <p class="refresh-status" role="status">
-      {syncedEventCount === null ? "Refreshing game…" : `Game refreshed · ${syncedEventCount} updates · turn ${state.resolution?.turnNumber ?? state.programming?.turnNumber ?? 0}`}
+      {syncedEventCount === null ? refreshProgress : `Game refreshed · ${syncedEventCount} updates · turn ${state.resolution?.turnNumber ?? state.programming?.turnNumber ?? 0}`}
       <small>Build {buildHash}</small>
     </p>
   {/if}
