@@ -117,7 +117,7 @@ export function readRoomEventCache(
       !Array.isArray(cache.events) ||
       !cache.events.every(validCachedEvent)
     ) {
-      storage.removeItem(key);
+      clearRoomEventCache(roomCode, storage);
       return null;
     }
     const events = orderCachedEvents(cache.events);
@@ -130,7 +130,7 @@ export function readRoomEventCache(
       events
     };
   } catch {
-    storage.removeItem(key);
+    clearRoomEventCache(roomCode, storage);
     return null;
   }
 }
@@ -150,7 +150,9 @@ export function writeRoomEventCache(
     cursor: cursorForEvents(ordered),
     events: ordered
   };
-  storage.setItem(roomCacheKey(gameId), JSON.stringify(cache));
+  // A full or unavailable browser cache must not block server synchronization.
+  try { storage.setItem(roomCacheKey(gameId), JSON.stringify(cache)); }
+  catch { /* The next visit can replay the authoritative room history. */ }
   return cache;
 }
 
@@ -158,7 +160,8 @@ export function clearRoomEventCache(
   roomCode: string,
   storage: CacheStorage = localStorage
 ) {
-  storage.removeItem(roomCacheKey(gameIdForCode(roomCode)));
+  try { storage.removeItem(roomCacheKey(gameIdForCode(roomCode))); }
+  catch { /* Browser storage is optional. */ }
 }
 
 function orderCachedEvents(events: readonly RoomEvent[]) {
@@ -194,12 +197,21 @@ function sequenceKey(gameId: string, uid: string) {
   return `roborally.room-sequence.${gameId}.${uid}`;
 }
 
+const memorySequences = new Map<string, number>();
+
 function nextClientSequence(gameId: string, uid: string): number {
-  return Number(localStorage.getItem(sequenceKey(gameId, uid)) ?? '0') + 1;
+  const key = sequenceKey(gameId, uid);
+  let stored = 0;
+  try { stored = Number(localStorage.getItem(key) ?? '0'); }
+  catch { /* The server still enforces immutable sequence IDs. */ }
+  return Math.max(memorySequences.get(key) ?? 0, Number.isFinite(stored) ? stored : 0) + 1;
 }
 
 function rememberClientSequence(gameId: string, uid: string, sequence: number) {
-  localStorage.setItem(sequenceKey(gameId, uid), String(sequence));
+  const key = sequenceKey(gameId, uid);
+  memorySequences.set(key, sequence);
+  try { localStorage.setItem(key, String(sequence)); }
+  catch { /* Keep advancing in memory when browser storage is unavailable. */ }
 }
 
 function samePersistedEvent(
@@ -549,35 +561,39 @@ export function subscribeRoom(
     eventsQuery,
     { includeMetadataChanges: true },
     (snapshot) => {
-      for (const snapshotDocument of snapshot.docs) {
-        const data = snapshotDocument.data();
-        mergedEvents.set(snapshotDocument.id, {
-          id: snapshotDocument.id,
-          type: data.type,
-          payload: data.payload,
-          actorUid: data.actorUid,
-          clientSeq: data.clientSeq,
-          createdAt: data.createdAt?.toMillis?.() ?? null,
-          schemaVersion: data.schemaVersion,
-          reducerVersion: data.reducerVersion
-        } as RoomEvent);
+      try {
+        for (const snapshotDocument of snapshot.docs) {
+          const data = snapshotDocument.data();
+          mergedEvents.set(snapshotDocument.id, {
+            id: snapshotDocument.id,
+            type: data.type,
+            payload: data.payload,
+            actorUid: data.actorUid,
+            clientSeq: data.clientSeq,
+            createdAt: data.createdAt?.toMillis?.() ?? null,
+            schemaVersion: data.schemaVersion,
+            reducerVersion: data.reducerVersion
+          } as RoomEvent);
+        }
+        const events = mergeRoomEventPages([], [...mergedEvents.values()]);
+        onState(replayRoom(events));
+        const source = snapshot.metadata.fromCache ? 'firestore-cache' : 'server';
+        const hasPendingWrites = snapshot.metadata.hasPendingWrites;
+        const cache =
+          source === 'server' && !hasPendingWrites
+            ? writeRoomEventCache(roomCode, events, storage)
+            : {
+                cursor: cursorForEvents(events)
+              };
+        onSync({
+          source,
+          hasPendingWrites,
+          eventCount: events.length,
+          cursor: cache.cursor
+        });
+      } catch (error) {
+        onError(error instanceof Error ? error : new Error(String(error)));
       }
-      const events = mergeRoomEventPages([], [...mergedEvents.values()]);
-      onState(replayRoom(events));
-      const source = snapshot.metadata.fromCache ? 'firestore-cache' : 'server';
-      const hasPendingWrites = snapshot.metadata.hasPendingWrites;
-      const cache =
-        source === 'server' && !hasPendingWrites
-          ? writeRoomEventCache(roomCode, events, storage)
-          : {
-              cursor: cursorForEvents(events)
-            };
-      onSync({
-        source,
-        hasPendingWrites,
-        eventCount: events.length,
-        cursor: cache.cursor
-      });
     },
     onError
   );

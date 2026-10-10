@@ -64,6 +64,22 @@ const guestJoined = event('guest', 1, 102, 'player/joined', {
 });
 
 describe('room cache plus immutable cursor', () => {
+  it('returns confirmed events even when the browser cache is full', () => {
+    const storage = new MemoryStorage();
+    storage.setItem = () => { throw new DOMException('Storage full', 'QuotaExceededError'); };
+    const cache = writeRoomEventCache('R16TST', [created, hostJoined], storage);
+    expect(cache.events).toEqual([created, hostJoined]);
+    expect(cache.cursor).toEqual({ createdAt: 101, id: hostJoined.id });
+  });
+
+  it('can read from the server when browser storage is unavailable', () => {
+    const storage = new MemoryStorage();
+    storage.getItem = () => { throw new DOMException('Storage unavailable', 'SecurityError'); };
+    storage.removeItem = () => { throw new DOMException('Storage unavailable', 'SecurityError'); };
+    expect(readRoomEventCache('R16TST', storage)).toBeNull();
+    expect(() => clearRoomEventCache('R16TST', storage)).not.toThrow();
+  });
+
   it('round-trips an ordered prefix and records its last confirmed Firestore cursor', () => {
     const storage = new MemoryStorage();
     const cache = writeRoomEventCache('r16tst', [hostJoined, created], storage);
