@@ -66,6 +66,13 @@ Other browsers retain Fetch Streams. This changes the client transport only;
 it does not change saved games or Firestore rules. Existing tabs need a reload
 after the preview deploys to pick up the fix.
 
+If a phone still shows an old locked Program, adding `&refresh=1` to its
+controller URL discards only that room’s local event cache and reads the full
+history again. It preserves Firebase sign-in and seat ownership. The recovery
+view shows the build and the number of synchronized updates for troubleshooting;
+ordinary controller links keep their existing layout. This can recover an
+incomplete cache, but does not establish why a particular phone fell behind.
+
 ## Compatibility
 
 The corrected course catalog has a new manifest version. Existing Factory

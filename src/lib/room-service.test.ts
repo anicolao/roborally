@@ -118,7 +118,9 @@ describe('room cache plus immutable cursor', () => {
     expect(storage.values.size).toBe(0);
 
     writeRoomEventCache('R16TST', [created], storage);
+    storage.setItem('firebase:authUser:keep-this-seat', 'identity');
     clearRoomEventCache('R16TST', storage);
+    expect(storage.getItem('firebase:authUser:keep-this-seat')).toBe('identity');
     expect(readRoomEventCache('R16TST', storage)).toBeNull();
   });
 });

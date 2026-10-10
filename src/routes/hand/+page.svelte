@@ -41,6 +41,9 @@
   } from '$lib/room-model';
   import type { Unsubscribe } from 'firebase/firestore';
 
+  const buildHash = (import.meta.env.VITE_GIT_HASH ?? 'local-development').slice(0, 8);
+  let refreshingRoom = false;
+  let syncedEventCount: number | null = null;
   let services: FirebaseServices | undefined;
   let state: RoomState = emptyRoomState();
   let roomCode = '';
@@ -218,6 +221,8 @@
     requestedSeat = Number(params.get('seat') ?? 0);
     if (!roomCode) return;
     try {
+      refreshingRoom = params.get('refresh') === '1';
+      if (refreshingRoom) RoomService.clearRoomEventCache(roomCode);
       services = await initializeFirebase(); uid = services.user.uid;
       unsubscribe = RoomService.subscribeRoom(services.db, roomCode, (next) => {
         state = next;
@@ -336,7 +341,10 @@
                 ? 'The tabletop is choosing the course and settings.'
                 : `Claim position ${requestedSeat} from this phone.`;
       }, (nextError) => { console.error(nextError); error = 'Connection interrupted. Please reconnect.'; }, (sync) => {
-        if (sync.source === 'server' && !sync.hasPendingWrites) serverAtHead = true;
+        if (sync.source === 'server' && !sync.hasPendingWrites) {
+          serverAtHead = true;
+          syncedEventCount = sync.eventCount;
+        }
         if (!serverAtHead) return;
         const decision = state.resolution?.pendingOptionDecision;
         if (decision && presentationDecisionAvailable(state)) {
@@ -629,13 +637,19 @@
 </script>
 
 <svelte:head><title>Robo Rally · Private controller</title></svelte:head>
-<main class="phone" data-e2e-private-hand data-e2e-layout>
+<main class="phone" data-e2e-private-hand data-e2e-layout data-build={buildHash}>
   <header><a href={`${base}/`}><strong>ROBO</strong> RALLY</a><span>{roomCode || 'NO ROOM'}</span></header>
   <div
     class:focused={focusedController}
     class:programming={programEditorVisible}
     class="controller-content"
   >
+  {#if refreshingRoom}
+    <p class="refresh-status" role="status">
+      {syncedEventCount === null ? "Refreshing game…" : `Game refreshed · ${syncedEventCount} updates · turn ${state.resolution?.turnNumber ?? state.programming?.turnNumber ?? 0}`}
+      <small>Build {buildHash}</small>
+    </p>
+  {/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if !roomCode}
     <p class="empty">Scan a tabletop position to connect this private controller.</p>
@@ -867,6 +881,8 @@
   <footer><a href={`${base}/tt/?room=${roomCode}`}>View shared tabletop ↗</a><span>Keep this screen private.</span></footer>
 </main>
 <style>
+  .refresh-status { flex: none; margin: 4px 0; font-size: 12px; }
+  .refresh-status small { display: block; }
   .phone-options { display: flex; flex: none; align-items: center; gap: 8px; margin: 4px 0; min-width: 0; }
   .phone-options > span { flex: none; color: #ffcf4b; font-size: 14px; }
   .phone-options :global(.tabletop-option-shelf) { flex: 1; }
