@@ -326,6 +326,7 @@ test('the tabletop owns configuration and seat QR codes open private controllers
     await expect(table.getByRole('img', { name: /QR code to join position/ })).toHaveCount(8);
     await expectJoinQrsUseSeatSpace(table);
     await expect(table.getByLabel('Tabletop race configuration')).toBeVisible();
+    await expect(table.getByRole('button', { name: 'Add computer', exact: true })).toBeVisible();
     await expect(table.getByRole('button', { name: 'CONFIGURE RACE' })).toBeDisabled();
     await expect(table.getByLabel('Setup seed')).toHaveCount(0);
 
