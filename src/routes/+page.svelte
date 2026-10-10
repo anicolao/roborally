@@ -1,4 +1,6 @@
 <script lang="ts">
+  import AddComputer from "$lib/components/AddComputer.svelte";
+  import ComputerController from "$lib/components/ComputerController.svelte";
   import CaptureDeployment from "$lib/components/CaptureDeployment.svelte";
   import { raceRoster } from "$lib/room-model";
   import ScenarioTeams from "$lib/components/ScenarioTeams.svelte";
@@ -1078,6 +1080,7 @@
   <title>{mode === 'room' ? `Room ${roomCode} — Robo Rally` : 'Robo Rally — Program the factory'}</title>
 </svelte:head>
 
+<ComputerController state={roomState} {services} {roomCode} synced={connectionState === "synced"} />
 <main data-testid="build-marker" data-build={buildHash} class="shell" data-e2e-layout>
   <header class="masthead">
     <a class="brand" href={base || "/"} aria-label="Robo Rally home">
@@ -1589,6 +1592,7 @@
           Share the invite and choose a course. The race starts when everyone is ready.
         </p>
         <div class="room-actions">
+          <AddComputer state={roomState} {services} {roomCode} />
           <button type="button" onclick={copyInvite}>{copied ? 'Invite copied' : 'Copy invite link'}</button>
           <a class="text-link" href={inviteUrl()}>Open join link</a>
         </div>

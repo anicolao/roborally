@@ -344,7 +344,7 @@ export async function createTabletopRematch(
   await createTabletopRoom(db, user, normalizedDestination);
   const transfer: GameRosterTransferredPayload = {
     sourceRoomCode: normalizedSource,
-    players: players.map(({ uid, name, robotId, seat }) => ({ uid, name, robotId, seat }))
+    players: players.map((player) => ({ ...player }))
   };
   await appendRoomEvent(
     db,

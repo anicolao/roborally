@@ -38,6 +38,28 @@ const created = event('host', 1, 'game/created', {
 });
 
 describe('immutable room replay', () => {
+  it('retains computer ownership while computers act through their own player identity', () => {
+    const bot = event('computer', 1, 'player/joined', { uid: 'computer', name: 'Computer Bit', robotId: 'bit', computerOwnerUid: 'host' }, 2);
+    const room = replayRoom([created, bot]);
+    expect(room.players[0]).toMatchObject({ uid: 'computer', computerOwnerUid: 'host' });
+    expect(room.diagnostics).toEqual([]);
+    const invalid = { ...bot, payload: { ...bot.payload, computerOwnerUid: 'someone-else' } } as RoomEvent;
+    expect(replayRoom([created, invalid]).players).toHaveLength(0);
+  });
+
+  it('preserves computer ownership when the tabletop transfers a rematch roster', () => {
+    const transfer = event('host', 2, 'game/roster-transferred', {
+      sourceRoomCode: 'OLD123',
+      players: [
+        { uid: 'human', name: 'Ada', robotId: 'axle', seat: 1 },
+        { uid: 'computer', name: 'Computer Bit', robotId: 'bit', seat: 2, computerOwnerUid: 'host' }
+      ]
+    }, 2);
+    const room = replayRoom([created, transfer]);
+    expect(room.diagnostics).toEqual([]);
+    expect(room.players[1].computerOwnerUid).toBe('host');
+  });
+
   it('orders events by timestamp and ID and seats players deterministically', () => {
     const joinedHost = event(
       'host',
