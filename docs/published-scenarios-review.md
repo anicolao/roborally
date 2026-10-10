@@ -56,6 +56,16 @@ This is the 2005 edition, not the later editions' course collections.
 - **Option World:** flag rewards occur at turn end, including a flag already
   visited, rather than only upon first earning ordered flag credit.
 
+## Safari connection fix
+
+Firebase initialization now uses the same workaround as Jaipur: desktop Safari
+and iOS browsers disable Firestore Fetch Streams and use XHR. This addresses
+delayed reads and listener updates described in
+[Firebase issue #9789](https://github.com/firebase/firebase-js-sdk/issues/9789).
+Other browsers retain Fetch Streams. This changes the client transport only;
+it does not change saved games or Firestore rules. Existing tabs need a reload
+after the preview deploys to pick up the fix.
+
 ## Compatibility
 
 The corrected course catalog has a new manifest version. Existing Factory
