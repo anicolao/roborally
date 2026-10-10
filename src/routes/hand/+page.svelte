@@ -342,7 +342,11 @@
               : nextPlayer
                 ? 'The tabletop is choosing the course and settings.'
                 : `Claim position ${requestedSeat} from this phone.`;
-      }, (nextError) => { console.error(nextError); error = 'Connection interrupted. Please reconnect.'; }, (sync) => {
+      }, (nextError) => {
+        console.error(nextError);
+        error = refreshingRoom ? `Unable to refresh game: ${nextError.message}` : 'Connection interrupted. Please reconnect.';
+        refreshProgress = 'Game refresh failed.';
+      }, (sync) => {
         if (sync.source === 'server' && !sync.hasPendingWrites) {
           serverAtHead = true;
           syncedEventCount = sync.eventCount;

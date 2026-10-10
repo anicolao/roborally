@@ -125,3 +125,9 @@ add the published course IDs, starting-choice events, and owner-attributed
 Interference robot IDs. A backend still using the previous rules rejects those
 new actions; the rules must be deployed to the preview's Firebase project to
 play the new scenarios there. Local emulators load the new rules automatically.
+
+Browser-cache writes are now best-effort: quota exhaustion or unavailable
+storage cannot prevent an authoritative snapshot from being marked synchronized.
+Previously a cache exception happened before the synchronization callback and
+could hide an otherwise available phone decision. Snapshot-processing errors
+are now surfaced in the opt-in recovery view instead of leaving it waiting.
