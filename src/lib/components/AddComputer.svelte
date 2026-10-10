@@ -14,7 +14,7 @@
   }
 </script>
 {#if services?.user.uid === room.hostUid && !room.setup && room.players.length < 8}
-  <button type="button" onclick={add} disabled={pending}>{pending ? 'Adding computer…' : 'Add computer'}</button>
+  <button type="button" title="Computers play while this host browser stays open." onclick={add} disabled={pending}>{pending ? 'Adding computer…' : 'Add computer'}</button>
   {#if error}<p role="alert">{error}</p>{/if}
 {/if}
 <style>button { cursor: pointer; padding: .65rem .9rem; border: 1px solid #81927b; background: #17241b; color: #e8f6df; font: inherit; } button:disabled { opacity: .6; }</style>

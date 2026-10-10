@@ -46,3 +46,6 @@ Planner tests cover flag seeking, pit avoidance, locked registers, deterministic
 choices, conveyors, and input immutability. Controller tests cover the decision
 barrier and ownership. Browser scenario 031 covers real web/tabletop creation,
 automatic readiness/programming, reload, and a second turn using emulators.
+
+Browser walkthroughs: [web play](../tests/e2e/031-computer-player/WEB_PLAY.md)
+and [tabletop](../tests/e2e/031-computer-player/README.md).

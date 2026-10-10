@@ -23,7 +23,10 @@
           await action.run(computer, roomCode);
         } catch (cause) {
           attempted.delete(action.key);
-          error = cause instanceof Error ? cause.message : 'The computer could not finish its turn.';
+          console.error(cause);
+          error = cause instanceof Error && cause.message.startsWith('Keep the browser')
+            ? cause.message
+            : 'The computer could not finish its turn. Check the connection and retry.';
         } finally { working = false; }
         break;
       }
