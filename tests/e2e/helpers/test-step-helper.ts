@@ -260,7 +260,7 @@ export class TestStepHelper {
     });
   }
 
-  generateDocs() {
+  generateDocs(filename = 'README.md') {
     if (this.testInfo.project.name !== 'desktop') return;
 
     const testDirectory = path.dirname(this.testInfo.file);
@@ -274,6 +274,6 @@ export class TestStepHelper {
       content += '\n';
     }
 
-    fs.writeFileSync(path.join(testDirectory, 'README.md'), `${content.trimEnd()}\n`);
+    fs.writeFileSync(path.join(testDirectory, filename), `${content.trimEnd()}\n`);
   }
 }

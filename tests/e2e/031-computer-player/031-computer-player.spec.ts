@@ -39,7 +39,7 @@ test('a host adds a computer which readies and programs without a private contro
     await expect(page.locator('.race-robot')).toHaveCount(2);
     await expect(page.getByRole('button', { name: 'Open programming console' })).toBeEnabled();
   }}] });
-  steps.generateDocs();
+  steps.generateDocs('WEB_PLAY.md');
 });
 
 test('tabletop computers continue into another turn after the host reloads', async ({ page }, testInfo) => {

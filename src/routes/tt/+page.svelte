@@ -910,9 +910,9 @@
             >
             <small>
               {state.players.length < 2
-                ? "At least two racers must scan a position before setup."
+                ? "Add computers or invite racers to fill at least two positions."
                 : state.configuration
-                  ? `${state.readyPlayerUids.length}/${state.players.length} racers ready on their phones.`
+                  ? `${state.readyPlayerUids.length}/${state.players.length} racers ready.`
                   : "Choose the shared course and settings here on the table."}
             </small>
           </div>
