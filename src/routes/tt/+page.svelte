@@ -1,4 +1,6 @@
 <script lang="ts">
+  import AddComputer from "$lib/components/AddComputer.svelte";
+  import ComputerController from "$lib/components/ComputerController.svelte";
   import CaptureDeployment from "$lib/components/CaptureDeployment.svelte";
   import { raceRoster } from "$lib/room-model";
   import ScenarioTeams from "$lib/components/ScenarioTeams.svelte";
@@ -708,6 +710,7 @@
 
 <svelte:head><title>Robo Rally · Tabletop</title></svelte:head>
 
+<ComputerController {state} {services} {roomCode} synced={serverAtHead} />
 <main
   class="tabletop"
   data-e2e-tabletop
@@ -897,6 +900,7 @@
         {/if}
       {:else}
         <div class="course-control" aria-label="Tabletop race configuration">
+          <AddComputer {state} {services} {roomCode} />
           <div>
             <span>COURSE CONTROL</span>
             <strong

@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import { getApps, initializeApp } from 'firebase/app';
 import {
   connectAuthEmulator,
   getAuth,
@@ -80,4 +80,28 @@ export async function initializeFirebase(
   }
   services = { auth, db, user: credential.user };
   return services;
+}
+
+const computerServices = new Map<string, Promise<FirebaseServices>>();
+
+/** Separate persisted identities keep computers on the ordinary player permissions. */
+export function initializeComputerFirebase(ownerUid: string, robotId: string): Promise<FirebaseServices> {
+  const name = `computer-${ownerUid}-${robotId}`;
+  const existing = computerServices.get(name);
+  if (existing) return existing;
+  const promise = (async () => {
+    const previous = getApps().find((app) => app.name === name);
+    const app = previous ?? initializeApp(readFirebaseConfig(import.meta.env), name);
+    const auth = getAuth(app);
+    const db = initializeFirestore(app, firestoreSettings());
+    if (!previous && import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
+      connectAuthEmulator(auth, `http://${import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST ?? '127.0.0.1'}:${import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_PORT ?? '9202'}`, { disableWarnings: true });
+      connectFirestoreEmulator(db, import.meta.env.VITE_FIRESTORE_EMULATOR_HOST ?? '127.0.0.1', Number(import.meta.env.VITE_FIRESTORE_EMULATOR_PORT ?? '8188'));
+    }
+    const { user } = await signInAnonymously(auth);
+    return { auth, db, user };
+  })();
+  computerServices.set(name, promise);
+  void promise.catch(() => computerServices.delete(name));
+  return promise;
 }

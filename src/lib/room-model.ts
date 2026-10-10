@@ -97,6 +97,7 @@ export interface GameCreatedPayload {
 }
 
 export interface PlayerJoinedPayload {
+  computerOwnerUid?: string;
   uid: string;
   name: string;
   robotId: RobotId;
@@ -261,6 +262,7 @@ export interface RoomEvent {
 }
 
 export interface RoomPlayer {
+  computerOwnerUid?: string;
   uid: string;
   name: string;
   robotId: RobotId;
@@ -867,11 +869,13 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         uid: typeof player?.uid === 'string' ? player.uid : '',
         name: normalizePlayerName(player?.name ?? ''),
         robotId: player?.robotId,
-        seat: player?.seat
+        seat: player?.seat,
+        ...(player?.computerOwnerUid ? { computerOwnerUid: player.computerOwnerUid } : {})
       }));
       const validPlayers = normalizedPlayers.every(
         (player) =>
           !!player.uid &&
+          (!player.computerOwnerUid || player.computerOwnerUid === state.hostUid) &&
           !!player.name &&
           isRobotId(player.robotId) &&
           Number.isInteger(player.seat) &&
@@ -903,13 +907,14 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         continue;
       }
       state.players = normalizedPlayers
-        .map(({ uid, name, robotId, seat }) => ({ uid, name, robotId, seat }))
+        .map((player) => ({ ...player }))
         .sort((left, right) => left.seat - right.seat);
     } else if (event.type === 'player/joined') {
       const payload = event.payload as PlayerJoinedPayload;
       const name = normalizePlayerName(payload.name);
       const requestedSeat = payload?.seat;
-      if (!payload || payload.uid !== event.actorUid || !name || !isRobotId(payload.robotId)) {
+      if (!payload || payload.uid !== event.actorUid || !name || !isRobotId(payload.robotId) ||
+          (payload.computerOwnerUid !== undefined && payload.computerOwnerUid !== state.hostUid)) {
         diagnostic(state, event, 'invalid-event', `Event ${event.id} has invalid player data.`);
         continue;
       }
@@ -957,7 +962,8 @@ export function replayRoom(events: readonly RoomEvent[]): RoomState {
         uid: payload.uid,
         name,
         robotId: payload.robotId,
-        seat
+        seat,
+        ...(payload.computerOwnerUid ? { computerOwnerUid: payload.computerOwnerUid } : {})
       });
       state.players.sort((left, right) => left.seat - right.seat);
       state.readyPlayerUids = [];
