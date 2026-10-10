@@ -36,6 +36,8 @@ vi.mock('./firebase-config', () => ({
 
 describe('initializeFirebase', () => {
   beforeEach(() => {
+    vi.resetModules();
+    vi.restoreAllMocks();
     firebase.initializeApp.mockReturnValue(firebase.app);
     firebase.getAuth.mockReturnValue(firebase.auth);
     firebase.initializeFirestore.mockReturnValue(firebase.db);
@@ -50,8 +52,18 @@ describe('initializeFirebase', () => {
 
     expect(firebase.initializeFirestore).toHaveBeenCalledWith(
       firebase.app,
-      { useFetchStreams: shouldUseFetchStreams(navigator) }
+      { useFetchStreams: shouldUseFetchStreams(navigator), ...(!shouldUseFetchStreams(navigator) ? { experimentalForceLongPolling: true } : {}) }
     );
+  });
+
+  it('forces non-streaming long polling for Safari', async () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Version/26.5 Mobile/15E148 Safari/604.1');
+    const { initializeFirebase } = await import('./firebase');
+    await initializeFirebase();
+    expect(firebase.initializeFirestore).toHaveBeenLastCalledWith(firebase.app, {
+      useFetchStreams: false,
+      experimentalForceLongPolling: true
+    });
   });
 
   it('disables Fetch Streams in desktop Safari and iOS WebKit browsers', async () => {

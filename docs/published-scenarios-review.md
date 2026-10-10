@@ -59,7 +59,9 @@ This is the 2005 edition, not the later editions' course collections.
 ## Safari connection fix
 
 Firebase initialization now uses the same workaround as Jaipur: desktop Safari
-and iOS browsers disable Firestore Fetch Streams and use XHR. This addresses
+and iOS browsers disable Firestore Fetch Streams and use XHR. A follow-up also
+forces non-streaming long polling on these browsers after XHR alone did not
+restore reads on the affected phone. This addresses
 delayed reads and listener updates described in
 [Firebase issue #9789](https://github.com/firebase/firebase-js-sdk/issues/9789).
 Other browsers retain Fetch Streams. This changes the client transport only;
@@ -70,7 +72,8 @@ If a phone still shows an old locked Program, adding `&refresh=1` to its
 controller URL discards only that room’s local event cache and reads the full
 history again. It preserves Firebase sign-in and seat ownership. The recovery
 view shows the build and the number of synchronized updates for troubleshooting;
-ordinary controller links keep their existing layout. This can recover an
+ordinary controller links keep their existing layout. While connecting, the
+recovery view distinguishes account sign-in, the readiness read, and room history. This can recover an
 incomplete cache, but does not establish why a particular phone fell behind.
 
 ## Compatibility
