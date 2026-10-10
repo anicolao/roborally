@@ -21,6 +21,8 @@ This is the 2005 edition, not the later editions' course collections.
 
 ## What changes during play
 
+- **Joining:** a private phone enables its seat claim only after sign-in and
+  room synchronization, preventing a fast tap from silently doing nothing.
 - **Layouts:** board orientations and flags were compared with all 20 course
   manual diagram pages. Several catalog previews had incorrect orientations;
   Around the World also had two flag coordinates wrong. Docked robots now face

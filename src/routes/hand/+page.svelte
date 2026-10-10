@@ -121,7 +121,7 @@
   $: seatPlayer = state.players.find((candidate) => candidate.seat === requestedSeat);
   $: unavailableRobots = new Set(state.players.map((candidate) => candidate.robotId));
   $: normalizedName = normalizePlayerName(playerName);
-  $: canJoin = requestedSeat >= 1 && requestedSeat <= MAX_ROOM_PLAYERS &&
+  $: canJoin = !!services && serverAtHead && !!state.gameId && requestedSeat >= 1 && requestedSeat <= MAX_ROOM_PLAYERS &&
     !seatPlayer && !!normalizedName && !unavailableRobots.has(selectedRobot) && !pending;
   $: activeProgramming =
     state.nextProgramming?.turnNumber === requestedTurnNumber

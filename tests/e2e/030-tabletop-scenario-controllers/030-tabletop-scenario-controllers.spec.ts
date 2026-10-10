@@ -17,10 +17,24 @@ test('private controllers draft Options, switch Interference robots, and deploy 
       await table.goto(`/tt/?e2eIdentity=TABLE&e2eRoomCode=${room}&course=${course}&seed=PUBLISHED-PRIVATE`);
       for (const [seat, phone] of phones.entries()) {
         const url = await table.getByRole('link', { name: `Join tabletop ${room} at position ${seat + 1}` }).getAttribute('href');
+        let releaseSignIn: (() => void) | undefined;
+        if (index === 0 && seat === 0) {
+          const signInGate = new Promise<void>((resolve) => { releaseSignIn = resolve; });
+          await phone.route('**/accounts:signUp*', async (route) => {
+            await signInGate;
+            await route.continue();
+          });
+        }
         await phone.goto(`${url}&e2eIdentity=PRIVATE-${seat}`);
         await phone.getByLabel('Racer name').fill(`Player ${seat + 1}`);
         await phone.getByRole('button', { name: ROBOTS[seat].name }).click();
-        await phone.getByRole('button', { name: `CLAIM POSITION ${seat + 1}` }).click();
+        const claim = phone.getByRole('button', { name: `CLAIM POSITION ${seat + 1}` });
+        if (releaseSignIn) {
+          await expect(claim).toBeDisabled();
+          releaseSignIn();
+        }
+        await expect(claim).toBeEnabled();
+        await claim.click();
         await expect(table.locator(`[data-seat="${seat + 1}"]`)).toContainText(`Player ${seat + 1}`);
       }
       await table.getByRole('button', { name: 'CONFIGURE RACE' }).click();
