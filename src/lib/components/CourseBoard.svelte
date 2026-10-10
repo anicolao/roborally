@@ -2,7 +2,7 @@
   import { untrack } from 'svelte';
   import BoardTile from '$lib/components/BoardTile.svelte';
   import type { BoardElement, Direction, Wall } from '$lib/game/course-manifest';
-  import { PUBLISHED_COURSES_BY_ID } from '$lib/game/course-catalog';
+  import type { ScenarioState } from '$lib/game/scenario-state';
   import { compilePlayableCourse } from '$lib/game/playable-courses';
   import { ROBOTS } from '$lib/room-model';
   import type { RaceSetup } from '$lib/game/setup';
@@ -11,6 +11,7 @@
 
   let {
     setup,
+    scenario,
     robots,
     currentPlayerUid,
     animateRobots = false,
@@ -22,6 +23,7 @@
     rotatePortrait = false
   }: {
     setup: RaceSetup;
+    scenario?: ScenarioState;
     robots?: RaceRobotPosition[];
     currentPlayerUid?: string;
     animateRobots?: boolean;
@@ -50,8 +52,8 @@
       })) ?? setup.players
   );
 
-  const course = $derived(PUBLISHED_COURSES_BY_ID.get(setup.courseId)!);
-  const compiledCourse = $derived(compilePlayableCourse(setup.courseId));
+  const compiledCourse = $derived(compilePlayableCourse(setup.courseId, scenario, setup.legacyFactoryLayout));
+  const course = $derived(compiledCourse.course);
   const boardIsRotated = $derived(
     presentationOnly && rotatePortrait && compiledCourse.height > compiledCourse.width
   );
@@ -190,7 +192,7 @@
             x={position.x}
             y={position.y}
           />
-          {#if flag}<span class="course-flag">{flag}</span>{/if}
+          {#if flag}{@const team = scenario?.flagControl[flag] ?? scenario?.flags.find(({ number }) => number === flag)?.teamId ?? Object.entries(setup.capture?.homeBoards ?? {}).find(([, board]) => board === manifestCell?.boardInstanceId)?.[0]}<span class="course-flag" data-flag-team={team} title={team ? `Flag ${flag} · ${team.replace('team-', 'Team ')}` : `Flag ${flag}`}>{flag}</span>{/if}
           {#each displayedRobots.filter((player) => player.position.x === position.x && player.position.y === position.y) as player}
             {@const robot = ROBOTS.find((entry) => entry.id === player.robotId)}
             <span
@@ -223,7 +225,7 @@
       {#each laserBeams as beam (beam.id)}
         <span
           aria-hidden="true"
-          class:double={beam.beamCount === 2}
+          class:double={beam.beamCount >= 2}
           class="robot-laser-beam"
           data-laser-source={beam.sourceUid}
           data-laser-target={beam.targetUid}
@@ -368,6 +370,8 @@
   .board-cell:nth-child(-n + 12) { border-top: 1px solid #344346; }
   .board-cell.dock-bay { background: #222a2b; }
   .course-board:focus .board-cell.active-cell { box-shadow: inset 0 0 0 2px #d2ff37; }
+  .course-flag[data-flag-team="team-1"] { background: #73dfed; }
+  .course-flag[data-flag-team="team-2"] { background: #f395df; }
   .course-flag {
     position: absolute; z-index: 3; top: 50%; left: 50%;
     display: grid; width: 18px; height: 18px; place-items: center;

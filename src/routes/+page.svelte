@@ -1,4 +1,10 @@
 <script lang="ts">
+  import CaptureDeployment from "$lib/components/CaptureDeployment.svelte";
+  import { raceRoster } from "$lib/room-model";
+  import ScenarioTeams from "$lib/components/ScenarioTeams.svelte";
+  import { scenarioTeamAssignments, validateScenarioTeams } from "$lib/game/setup";
+  import StartingOptionDraft from "$lib/components/StartingOptionDraft.svelte";
+  import CourseProgrammingClock from "$lib/components/CourseProgrammingClock.svelte";
   import '@fontsource/atkinson-hyperlegible/400.css';
   import '@fontsource/atkinson-hyperlegible/700.css';
   import '@fontsource/space-mono/400.css';
@@ -13,6 +19,7 @@
   import CourseCatalog from '$lib/components/CourseCatalog.svelte';
   import PlayerStatusCard from '$lib/components/PlayerStatusCard.svelte';
   import OptionCardFace from '$lib/components/OptionCardFace.svelte';
+  import OptionInventory from '$lib/components/OptionInventory.svelte';
   import ProgramEditor from '$lib/components/ProgramEditor.svelte';
   import ReentryPicker from '$lib/components/ReentryPicker.svelte';
   import type { Direction } from '$lib/game/course-manifest';
@@ -88,6 +95,8 @@
   let formError = '';
   let pending = false;
   let copied = false;
+  let teamAssignments: Record<string, string> = {};
+  let controlledRobotUid = '';
   let selectedCourseId: PlayableCourseId = 'risky-exchange';
   let e2eCourseOverride = '';
   let setupSeed = 'RALLY-2005';
@@ -138,6 +147,7 @@
   let playbackStage: ProgramPlayback['frames'][number]['stage'] | null = null;
   let playbackActorUid: string | null = null;
   let playbackCardId: ProgramCard['id'] | null = null;
+  let playbackScenario: ProgramPlayback['frames'][number]['scenario'];
   let playbackRobots: RaceRobotPosition[] | undefined;
   let playbackTrace: ProgramPlayback['frames'][number]['trace'] = [];
   let playbackHistory: ProgramPlayback['frames'][number]['trace'] = [];
@@ -157,7 +167,7 @@
   const buildHash = (import.meta.env.VITE_GIT_HASH ?? 'local-development').slice(0, 8);
 
   $: currentPlayer = services
-    ? roomState.players.find((player) => player.uid === services?.user.uid)
+    ? raceRoster(roomState).find((player) => player.uid === (controlledRobotUid || services?.user.uid))
     : undefined;
   $: unavailableRobots = new Set(roomState.players.map((player) => player.robotId));
   $: roomIsFull = roomState.players.length >= MAX_ROOM_PLAYERS;
@@ -249,14 +259,14 @@
   $: countdownStepMs = Math.round(PRODUCTION_COUNTDOWN_STEP_MS * playbackTimeScale);
   $: playbackCard = PROGRAM_CARDS.find(({ id }) => id === playbackCardId);
   $: playbackStageLabel = playbackStage === 'program-card'
-    ? `${roomState.players.find(({ uid }) => uid === playbackActorUid)?.name ?? 'Robot'} · ${playbackCard?.action.replaceAll('-', ' ') ?? 'Program card'} · priority ${playbackCard?.priority ?? '—'}`
+    ? `${raceRoster(roomState).find(({ uid }) => uid === playbackActorUid)?.name ?? 'Robot'} · ${playbackCard?.action.replaceAll('-', ' ') ?? 'Program card'} · priority ${playbackCard?.priority ?? '—'}`
     : playbackStage === 'express-conveyors'
       ? 'Express conveyors'
     : playbackStage === 'conveyors'
         ? 'All conveyors'
         : playbackStage === 'pushers'
           ? 'Pushers'
-          : playbackStage === 'gears'
+          : playbackStage === 'checkpoints' ? 'Flags' : playbackStage === 'gears'
             ? 'Gears'
             : playbackStage === 'lasers'
               ? 'Robot and board lasers'
@@ -334,6 +344,7 @@
     playbackActorUid = null;
     playbackCardId = null;
     playbackRobots = undefined;
+    playbackScenario = undefined;
     playbackTrace = [];
     playbackHistory = [];
     playbackLaserBeams = [];
@@ -363,6 +374,7 @@
         playbackActorUid = frame.actorUid;
         playbackCardId = frame.cardId;
         playbackRobots = frame.robots;
+    playbackScenario = frame.scenario;
         playbackTrace = frame.trace;
         playbackHistory = playback.frames.slice(0, index + 1).flatMap(({ trace }) => trace);
         playbackLaserBeams = frame.laserBeams ?? [];
@@ -386,6 +398,7 @@
       playbackCardId = null;
       if (!roomState.resolution?.pendingOptionDecision) {
         playbackRobots = undefined;
+    playbackScenario = undefined;
         playbackLaserBeams = [];
       }
       playbackTrace = [];
@@ -398,6 +411,7 @@
     playbackPhase = 'countdown';
     playbackCountdown = 3;
     playbackRobots = playback.initialRobots;
+    playbackScenario = roomState.resolution?.initialScenario;
 
     schedulePlayback(() => (playbackCountdown = 2), countdownStepMs);
     schedulePlayback(() => (playbackCountdown = 1), countdownStepMs * 2);
@@ -484,7 +498,7 @@
             ? nextState.nextProgramming
             : nextState.programming;
         const draftPlayer = draftProgramming?.players.find(
-          (player) => player.uid === services?.user.uid
+          (player) => player.uid === (controlledRobotUid || services?.user.uid)
         );
         const currentDraft = draftPlayer
           ? draftSlotsForPlayer(draftPlayer)
@@ -503,7 +517,7 @@
         }
         const effectDraft = nextState.effectDrafts.find(
           ({ uid, turnId }) =>
-            uid === services?.user.uid &&
+            uid === (controlledRobotUid || services?.user.uid) &&
             (turnId === nextState.programming?.turnId ||
               turnId === `turn-${String(nextState.resolution?.turnNumber ?? 0).padStart(3, '0')}`)
         );
@@ -709,7 +723,7 @@
           ? e2eCourseOverride
           : selectedCourseId;
       await roomService.configureRace(services.db, services.user, roomCode, {
-        config: raceConfig(courseId, setupSeed.trim() || 'RALLY-2005', setupLives)
+        config: raceConfig(courseId, setupSeed.trim() || 'RALLY-2005', setupLives, scenarioTeamAssignments(courseId, roomState.players, teamAssignments))
       });
     } catch (error) {
       console.error(error);
@@ -752,6 +766,18 @@
     );
   }
 
+  async function switchRobot(robotUid: string) {
+    await programDraftWriteQueue;
+    controlledRobotUid = robotUid;
+    const next = activeProgramming?.players.find((player) => player.uid === robotUid);
+    programDraftSlots = next ? draftSlotsForPlayer(next) : Array(5).fill(null);
+    programPairedDraftSlots = next ? pairedDraftSlotsForPlayer(next) : Array(5).fill(null);
+    programDraftDirty = false;
+    selectedReentryCell = '';
+    selectedReentryFacing = '';
+    effectDraftDirty = false;
+  }
+
   async function openProgrammingConsole() {
     showProgramming = true;
     await tick();
@@ -774,7 +800,8 @@
         cardIds,
         activeProgramming.turnId,
         [...slots],
-        [...pairedSlots]
+        [...pairedSlots],
+        currentPlayer?.uid
       );
     } catch (error) {
       console.error(error);
@@ -798,7 +825,8 @@
         roomCode,
         selectedProgramCardIds,
         activeProgramming?.turnId,
-        [...programPairedDraftSlots]
+        [...programPairedDraftSlots],
+        currentPlayer?.uid
       );
       programDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
       programPairedDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
@@ -828,7 +856,8 @@
           uid: currentPlayer.uid,
           choiceId
         },
-        activeProgramming.turnId
+        activeProgramming.turnId,
+        currentPlayer?.uid
       );
       programDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
       programPairedDraftSlots = Array.from({ length: REGISTER_COUNT }, () => null);
@@ -885,7 +914,8 @@
             ? { poweredDown: reentryPoweredDown }
             : {})
         },
-        `turn-${String(roomState.resolution?.turnNumber ?? 1).padStart(3, '0')}`
+        `turn-${String(roomState.resolution?.turnNumber ?? 1).padStart(3, '0')}`,
+        currentPlayer?.uid
       );
       selectedReentryCell = '';
       selectedReentryFacing = '';
@@ -908,7 +938,8 @@
         services.user,
         roomCode,
         { kind: 'option-loss', cardId },
-        activeProgramming.turnId
+        activeProgramming.turnId,
+        currentPlayer?.uid
       );
     } catch (error) {
       console.error(error);
@@ -937,7 +968,8 @@
           y: y ? Number(y) : null,
           facing: facing || null,
           poweredDown: reentryPoweredDown
-        }
+        },
+        currentPlayer?.uid
       );
     } catch (error) {
       console.error(error);
@@ -962,10 +994,11 @@
         {
           kind: 'option-decision',
           decisionId: pendingOptionDecision.decisionId,
-          uid: services.user.uid,
+          uid: currentPlayer!.uid,
           choiceId
         },
-        activeProgramming.turnId
+        activeProgramming.turnId,
+        currentPlayer?.uid
       );
     } catch (error) {
       console.error(error);
@@ -1017,7 +1050,9 @@
       await roomService.respondPowerDown(services.db, services.user, roomCode, {
         turnId: activeProgramming.turnId,
         powerDownNextTurn
-      });
+      },
+        currentPlayer?.uid
+      );
     } catch (error) {
       console.error(error);
       formError = 'Unable to save your power choice. Please try again.';
@@ -1077,6 +1112,7 @@
     <section class="configured-race" aria-labelledby="race-heading">
       <CourseBoard
         setup={roomState.setup}
+          scenario={playbackScenario ?? (resolutionPlaybackKey !== playbackKey ? roomState.resolution?.initialScenario : roomState.resolution?.scenario)}
         robots={presentedResolutionRobots}
         currentPlayerUid={currentPlayer.uid}
         animateRobots={playbackIsActive}
@@ -1121,7 +1157,7 @@
 
             <div class="execution-history">
               {#if !playbackIsActive}
-                <strong class="execution-idle">Turn {roomState.resolution.turnNumber} · {roomState.resolution.phase === 'turn-complete' ? 'Complete' : roomState.resolution.phase === 'race-finished' ? 'Finished' : `Waiting for ${pendingOptionRobot?.name ?? roomState.players.find(({ uid }) => uid === roomState.resolution?.nextReentryUid)?.name ?? 'a decision'}`}</strong>
+                <strong class="execution-idle">Turn {roomState.resolution.turnNumber} · {roomState.resolution.phase === 'turn-complete' ? 'Complete' : roomState.resolution.phase === 'race-finished' ? 'Finished' : `Waiting for ${pendingOptionRobot?.name ?? raceRoster(roomState).find(({ uid }) => uid === roomState.resolution?.nextReentryUid)?.name ?? 'a decision'}`}</strong>
               {/if}
               <ExecutionHistory trace={playbackPhase === 'countdown' || playbackPhase === 'register' ? playbackHistory : roomState.resolution.trace} />
             </div>
@@ -1143,6 +1179,12 @@
         onscroll={measureControls}
         class="setup-summary"
       >
+        {#if roomState.setup.players.some(({ ownerUid }) => ownerUid === services?.user.uid)}
+          <label>Control robot<select aria-label="Control robot" value={currentPlayer?.uid} disabled={pending} onchange={(event) => switchRobot(event.currentTarget.value)}>
+            {#each roomState.setup.players.filter(({ ownerUid }) => ownerUid === services?.user.uid) as robot}<option value={robot.uid}>{robot.name}</option>{/each}
+          </select></label>
+        {/if}
+        {#if services}<StartingOptionDraft state={roomState} {services} {roomCode} /><CaptureDeployment state={roomState} {services} {roomCode} />{/if}
         <p class="eyebrow">
           <span>{roomState.resolution ? '05' : showProgramming ? '04' : '03'}</span>
           {roomState.resolution
@@ -1214,7 +1256,7 @@
                   </button>
                 </div>
               {:else}
-                {@const pendingPowerPlayer = roomState.players.find(
+                {@const pendingPowerPlayer = raceRoster(roomState).find(
                   ({ uid }) => uid === (roomState.pendingPowerDownUid ?? firstNextPowerUid)
                 )}
                 <span>
@@ -1229,8 +1271,14 @@
                 Factory Rejects rule · power down unavailable
               </p>
             {/if}
+            {#if services && activeProgramming.courseTimeLimitMs}
+              {#key activeProgramming.turnId}<CourseProgrammingClock {services} {roomCode} programming={activeProgramming} />{/key}
+            {/if}
             {#key activeProgramming.turnId}
               <div class="shared-program-editor">
+                {#if !roomState.resolution}
+                  <OptionInventory column playerName={currentPlayer?.name ?? 'Your robot'} cardIds={recompileOptionCardIds} />
+                {/if}
                 <ProgramEditor
                   player={programmingPlayer}
                   bind:draftSlots={programDraftSlots}
@@ -1251,7 +1299,7 @@
             <ul class="opponent-programs" aria-label="Program submission status">
               {#each activeProgramming.players as player}
                 {#if player.uid !== currentPlayer.uid}
-                  {@const roomPlayer = roomState.players.find(({ uid }) => uid === player.uid)}
+                  {@const roomPlayer = raceRoster(roomState).find(({ uid }) => uid === player.uid)}
                   <li>
                     <strong>{roomPlayer?.name}</strong>
                     {#if activeProgramming.phase === 'programmed'}
@@ -1268,7 +1316,7 @@
               {/each}
             </ul>
             {#if activeProgramming.deadlinePlayerUid}
-              {@const timedPlayer = roomState.players.find(({ uid }) => uid === activeProgramming.deadlinePlayerUid)}
+              {@const timedPlayer = raceRoster(roomState).find(({ uid }) => uid === activeProgramming.deadlinePlayerUid)}
               <div class="deadline" role="timer">
                 <span>{timedPlayer?.name} has {deadlineSeconds} seconds</span>
                 <button type="button" onclick={claimTimeout} disabled={deadlineSeconds !== 0 || pending}>
@@ -1296,7 +1344,7 @@
                 <ul class="robot-state" aria-label="Robot Life and damage state">
                   {#each presentedResolutionRobots ?? [] as robot}
                     <li>
-                      <PlayerStatusCard compact uid={robot.uid} playerName={robot.name}
+                      <PlayerStatusCard scenarioLabel={[robot.teamId?.replace('team-', 'Team '), robot.isSuperbot ? 'SuperBot' : '', robot.carriedFlag ? 'Carrying enemy flag' : '', robot.reentryWaitTurns ? 'Sitting out next turn' : ''].filter(Boolean).join(' · ')} compact uid={robot.uid} playerName={robot.name}
                         robotName={ROBOTS.find(({ id }) => id === robot.robotId)?.name}
                         startingLives={roomState.setup.players.find(({ uid }) => uid === robot.uid)?.lives ?? roomState.configuration.lives}
                         lives={robot.lives} damage={robot.damage}
@@ -1405,8 +1453,11 @@
                     {#if reentryRobot}
                       <ReentryPicker
                         choices={reentryChoices}
+            scenario={roomState.resolution?.scenario}
+            legacyFactoryLayout={roomState.setup?.legacyFactoryLayout ?? false}
                         courseId={roomState.setup.courseId}
                         archive={reentryRobot.archive}
+                        homeBoardId={reentryRobot.homeBoardId}
                         archiveOccupantName={reentryArchiveOccupant?.name ?? ''}
                         selectedCell={selectedReentryCell}
                         selectedFacing={selectedReentryFacing}
@@ -1431,7 +1482,7 @@
                     >Confirm re-entry</button>
                   </div>
                 {:else if !playbackIsActive && roomState.resolution.nextReentryUid}
-                  {@const nextReentryPlayer = roomState.players.find(({ uid }) => uid === roomState.resolution?.nextReentryUid)}
+                  {@const nextReentryPlayer = raceRoster(roomState).find(({ uid }) => uid === roomState.resolution?.nextReentryUid)}
                   <p class="reentry-wait">Waiting for {nextReentryPlayer?.name} to choose re-entry.</p>
                 {/if}
                 {#if !playbackIsActive && roomState.nextProgramming && requestedTurnNumber < roomState.nextProgramming.turnNumber}
@@ -1453,7 +1504,7 @@
                 {/if}
                 {#if !playbackIsActive && roomState.resolution.summary}
                   {@const winners = roomState.resolution.summary.winnerUids
-                    .map((uid) => roomState.players.find((player) => player.uid === uid))
+                    .map((uid) => raceRoster(roomState).find((player) => player.uid === uid))
                     .filter((player) => player !== undefined)}
                   <section class="race-summary" aria-label="Race results">
                     <strong>
@@ -1472,8 +1523,12 @@
                 <details class="race-details">
                   <summary>Race rules</summary>
                 <p class="reentry-policy">
-                  Re-entry position: return to the current archive marker when it is clear. If it
-                  is occupied, choose the nearest legal surrounding square and then a facing.
+                  {#if roomState.setup.capture}
+                    Re-enter in your home board’s back six rows, without an enemy in sight within three spaces.
+                  {:else}
+                    Re-entry position: return to the current archive marker when it is clear. If it
+                    is occupied, choose the nearest legal surrounding square and then a facing.
+                  {/if}
                 </p>
                 <p class="board-phase">
                   Board phase: express conveyors → all conveyors → pushers → gears → lasers.
@@ -1500,7 +1555,7 @@
             <li>
               <span>D{player.dock}</span>
               <strong>{player.name}</strong>
-              <small>{robot?.name} · row {player.position.y}, column {player.position.x} · facing north</small>
+              <small>{robot?.name} · row {player.position.y}, column {player.position.x} · facing {player.facing}</small>
               {#if player.uid === roomState.setup.firstPlayerUid}<em>first player</em>{/if}
             </li>
           {/each}
@@ -1510,7 +1565,7 @@
           <p class="archive-note">Choose five cards. Programs stay hidden until everyone is ready.</p>
         {:else}
           <p class="archive-note">
-            Every robot’s archive begins on its Dock cell.
+            {roomState.setup.capture ? 'Robots deploy on their home board.' : 'Every robot’s archive begins on its Dock cell.'}
             {#if roomState.setup.startingDamage > 0}
               Factory Rejects begins each robot at {roomState.setup.startingDamage} damage.
             {:else}
@@ -1518,7 +1573,7 @@
             {/if}
             {#if !roomState.setup.powerDownAllowed} Power down is unavailable for this race.{/if}
           </p>
-          <button class="open-programming" type="button" onclick={openProgrammingConsole}>
+          <button class="open-programming" type="button" onclick={openProgrammingConsole} disabled={!roomState.programming}>
             Open programming console
           </button>
         {/if}
@@ -1555,6 +1610,7 @@
                   {/each}
                 </select>
               </label>
+              <ScenarioTeams courseId={selectedCourseId} players={roomState.players} bind:assignments={teamAssignments} />
               <label>
                 Lives
                 <select bind:value={setupLives} aria-label="Starting Lives">
@@ -1565,7 +1621,7 @@
               <button
                 type="button"
                 onclick={configureCourse}
-                disabled={pending || !selectedCourseSupportsRoom}
+                disabled={pending || (!selectedCourseSupportsRoom || !validateScenarioTeams(selectedCourseId, scenarioTeamAssignments(selectedCourseId, roomState.players, teamAssignments)))}
               >
                 {roomState.configuration ? 'Replace configuration' : `Configure ${selectedCourse.name}`}
               </button>

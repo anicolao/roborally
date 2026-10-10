@@ -24,6 +24,7 @@
   export let optionCardIds: OptionCardId[];
   export let compact = false;
   export let optionsDisabled = false;
+  export let scenarioLabel = '';
   export let status = 'active';
   export let lockedRegisters: LockedRegisterState[] = [];
   export let archive: { x: number; y: number } | undefined = undefined;
@@ -33,6 +34,7 @@
     <span class="sr-only">{playerName} {status} · {lives} Lives · {damage} Damage{powerMode === 'down' ? ' · Powered down' : powerMode === 'announced' ? ' · Shutdown announced' : ''}{lockedRegisters.length ? ` · Locked ${lockedRegisters.map(({ register }) => `R${register}`).join('/')}` : ''} · Flags {touchedFlags.length ? touchedFlags.join('→') : 'none'}</span>
   {/if}
           <strong class="player-name">{playerName}</strong>
+          {#if scenarioLabel}<small class="scenario-label">{scenarioLabel}</small>{/if}
           {#if showRobotName}<small class="robot-name">{robotName}</small>{/if}
           <div
             class="robot-vitals"
@@ -143,6 +145,7 @@
   {#if archive}<small class="archive">Archive ({archive.x},{archive.y})</small>{/if}
 </div>
 <style>
+  .scenario-label { color: #ffcf4b; font-size: 11px; font-weight: bold; }
   .player-status { display: contents; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
   .player-name {

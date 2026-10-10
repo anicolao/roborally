@@ -1,6 +1,8 @@
+import { captureDeploymentCells } from './capture-deployment';
+import { cloneScenario, type ScenarioState } from './scenario-state';
 import type { BoardCell, BoardElement, Direction } from './course-manifest';
 import type { CompiledCourse } from './course-geometry';
-import { compilePlayableCourse } from './playable-courses';
+import { compilePlayableCourse, playableCourse } from './playable-courses';
 import { PROGRAM_CARDS, type ProgramAction, type ProgramCard } from './program-manifest';
 import { OPTION_CARDS_BY_ID, type OptionCardId } from './option-manifest';
 import {
@@ -14,7 +16,7 @@ import {
   type OwnedOption
 } from './options';
 import { recompileDecisionId, type ProgrammingState } from './programming';
-import { RACE_REDUCER_VERSION, type PlayableCourseId, type RaceSetup } from './setup';
+import { createPrng, RACE_REDUCER_VERSION, type PlayableCourseId, type RaceSetup } from './setup';
 import { applyOptionEffect } from './option-effects';
 import { scenarioResolutionRules, type ScenarioResolutionRules } from './course-rules';
 
@@ -29,12 +31,25 @@ export interface LockedRegisterState {
 
 export interface RaceRobotPosition {
   uid: string;
+  ownerUid?: string;
+  role?: 'racer' | 'blocker';
+  homeBoardId?: string;
+  carriedFlag?: number;
+  droppedFlag?: { number: number; x: number; y: number };
+  captured?: boolean;
+  capturePushedByUid?: string;
+  teamId?: string;
+  reentryDelay?: boolean;
+  reentryWaitTurns?: number;
+  isSuperbot?: boolean;
+  lastAggressorUid?: string;
   name: string;
   robotId: string;
   x: number;
   y: number;
   facing: Direction;
   archive: { x: number; y: number };
+  archiveFlag?: number;
   lives: number;
   damage: number;
   lockedRegisters: LockedRegisterState[];
@@ -105,7 +120,7 @@ export interface RobotLaserBeam {
   fromY: number;
   toX: number;
   toY: number;
-  beamCount: 1 | 2;
+  beamCount: 1 | 2 | 4;
 }
 
 export interface OptionDecision {
@@ -139,6 +154,7 @@ export interface PendingOptionDecision {
 }
 
 export interface ProgramPlaybackFrame {
+  scenario?: ScenarioState;
   register: RegisterNumber;
   stage:
     | 'program-card'
@@ -147,7 +163,8 @@ export interface ProgramPlaybackFrame {
     | 'pushers'
     | 'gears'
     | 'lasers'
-    | 'laser-damage';
+    | 'laser-damage'
+    | 'checkpoints';
   actorUid: string | null;
   cardId: ProgramCard['id'] | null;
   robots: RaceRobotPosition[];
@@ -168,6 +185,9 @@ export interface ReentryChoice {
 }
 
 export interface ProgramResolution {
+  legacyFactoryLayout?: boolean;
+  scenario?: ScenarioState;
+  initialScenario?: ScenarioState;
   courseId?: PlayableCourseId;
   turnNumber: number;
   phase:
@@ -226,8 +246,8 @@ function rotate(facing: Direction, quarterTurns: number): Direction {
 const defaultCourse = compilePlayableCourse('risky-exchange');
 const defaultCourseCells: BoardCell[] = [...defaultCourse.cells.values()];
 
-function resolutionCourse(resolution: Pick<ProgramResolution, 'courseId'>): CompiledCourse {
-  return compilePlayableCourse(resolution.courseId ?? 'risky-exchange');
+function resolutionCourse(resolution: Pick<ProgramResolution, 'courseId' | 'scenario' | 'legacyFactoryLayout'>): CompiledCourse {
+  return compilePlayableCourse(resolution.courseId ?? 'risky-exchange', resolution.scenario, resolution.legacyFactoryLayout);
 }
 
 export function movementBlockedByWall(
@@ -327,7 +347,20 @@ function destroyRobot(
   robot.superiorArchivePending =
     robot.superiorArchivePending ||
     robot.options.some(({ cardId }) => cardId === 'superior-archive-copy');
+  if (robot.carriedFlag) {
+    robot.droppedFlag = { number: robot.carriedFlag, x: robot.x, y: robot.y };
+    delete robot.carriedFlag;
+  }
   robot.status = robot.lives > 0 ? 'destroyed' : 'eliminated';
+  if (robot.reentryDelay) robot.reentryWaitTurns = 1;
+  if (robot.isSuperbot && robot.lastAggressorUid) {
+    const successor = robots.find(({ uid }) => uid === robot.lastAggressorUid);
+    if (successor) {
+      robot.isSuperbot = false;
+      successor.isSuperbot = true;
+      addTrace(trace, register, successor.uid, card, 'option-effect', `${successor.name} became the SuperBot.`);
+    }
+  }
   addTrace(
     trace,
     register,
@@ -454,6 +487,19 @@ function translateOneCell(
   }
 
   const [dx, dy] = steps[direction];
+  for (let index = 1; index < chain.length; index += 1) {
+    const pushed = chain[index];
+    const pusher = chain[index - 1];
+    if (pushed.homeBoardId) {
+      if (pusher.teamId !== pushed.teamId && course.cells.get(`${pusher.x},${pusher.y}`)?.boardInstanceId === pusher.homeBoardId) pushed.capturePushedByUid = pusher.uid;
+      if (pushed.carriedFlag && course.cells.get(`${pushed.x},${pushed.y}`)?.boardInstanceId !== pushed.homeBoardId) {
+        pushed.droppedFlag = { number: pushed.carriedFlag, x: pushed.x, y: pushed.y };
+        delete pushed.carriedFlag;
+        addTrace(trace, register, pushed.uid, card, 'flag-touched', `${pushed.name} dropped the flag when pushed on enemy turf.`);
+      }
+    }
+    if (chain[index].isSuperbot !== undefined) chain[index].lastAggressorUid = chain[index - 1].uid;
+  }
   for (const moving of [...chain].reverse()) {
     const nextX = moving.x + dx;
     const nextY = moving.y + dy;
@@ -1241,7 +1287,7 @@ interface LaserHit {
   sourceUid: string | null;
   targetUid: string;
   kind: 'board-laser' | 'robot-laser';
-  damage: 1 | 2 | 3;
+  damage: 1 | 2 | 3 | 4;
   direction: Direction;
   pushDirection?: Direction;
   beam?: RobotLaserBeam;
@@ -2283,6 +2329,7 @@ export function resolveLaserSnapshot(
           ? robots.find(({ uid }) => uid === snapshotTarget.uid)
           : undefined;
         if (snapshotTarget && target?.status === 'active') {
+          if (target.isSuperbot !== undefined) target.lastAggressorUid = shooter.uid;
           weaponBeams.push({
             id: `r${register}-${shooter.uid}-${target.uid}-tractor-beam`,
             sourceUid: shooter.uid,
@@ -2326,6 +2373,7 @@ export function resolveLaserSnapshot(
           ? robots.find(({ uid }) => uid === snapshotTarget.uid)
           : undefined;
         if (snapshotTarget && target?.status === 'active') {
+          if (target.isSuperbot !== undefined) target.lastAggressorUid = shooter.uid;
           weaponBeams.push({
             id: `r${register}-${shooter.uid}-${target.uid}-pressor-beam`,
             sourceUid: shooter.uid,
@@ -2367,11 +2415,15 @@ export function resolveLaserSnapshot(
           ?.choiceId === 'use'
           ? 1
           : 0;
-      const beamDamage = shooter.options.some(
+      const baseBeamDamage = shooter.options.some(
         ({ cardId }) => cardId === 'double-barrel-laser'
       )
         ? 2
         : 1;
+      const laserMultiplier = course.course.specialRules.some(
+        (rule) => rule.kind === 'robot-laser-multiplier' && rule.multiplier === 2
+      ) || shooter.isSuperbot ? 2 : 1;
+      const beamDamage = (baseBeamDamage * laserMultiplier) as 1 | 2 | 4;
       while (courseContains(cursorX, cursorY, course)) {
         if (movementBlockedByWall(cursorX, cursorY, firingDirection, course)) {
           if (passBudget === 0) break;
@@ -2403,6 +2455,17 @@ export function resolveLaserSnapshot(
         passBudget -= 1;
       }
     }
+  }
+
+  for (const target of robots.filter(({ isSuperbot }) => isSuperbot !== undefined)) {
+    const shots = hits.filter((hit) => hit.targetUid === target.uid && hit.sourceUid && hit.kind === 'robot-laser');
+    shots.sort((left, right) => {
+      const priority = (uid: string | null) => PROGRAM_CARDS.find(({ id }) =>
+        id === programming.players.find((player) => player.uid === uid)?.registers[register - 1]?.cardId
+      )?.priority ?? 0;
+      return priority(left.sourceUid) - priority(right.sourceUid);
+    });
+    if (shots[0]?.sourceUid) target.lastAggressorUid = shots[0].sourceUid;
   }
 
   const orderedHits = hits
@@ -2556,6 +2619,10 @@ export function resolveFlagsAndArchives(
     // occupy that feature's square. Archive movement requires occupation.
     if (occupiedFlag || repair) {
       robot.archive = { x: robot.x, y: robot.y };
+      if (course.course.specialRules.some(({ kind }) => kind === 'moving-flags')) {
+        if (occupiedFlag) robot.archiveFlag = occupiedFlag.number;
+        else delete robot.archiveFlag;
+      }
       addTrace(
         trace,
         register,
@@ -2565,10 +2632,17 @@ export function resolveFlagsAndArchives(
         `${robot.name} moved its Archive marker to (${robot.x},${robot.y}).`
       );
     }
-    if (!touchedFlag || touchedFlag.number !== robot.nextFlag) continue;
+    if (course.course.specialRules.some(({ kind }) => kind === 'toggle-flag-control' || kind === 'capture-the-flag')) continue;
+    if (!touchedFlag || touchedFlag.number !== robot.nextFlag || robot.isSuperbot === false || robot.role === 'blocker') continue;
     robot.touchedFlags.push(touchedFlag.number);
-    const finalFlag = Math.max(...flags.map(({ number }) => number));
+    const finalFlag = Math.max(...(course.course.specialRules.some(({ kind }) => kind === 'moving-flags') ? playableCourse(course.course.id).flags : flags).map(({ number }) => number));
     robot.nextFlag = touchedFlag.number === finalFlag ? null : touchedFlag.number + 1;
+    if (robot.teamId && course.course.specialRules.some(({ kind }) => kind === 'team-shared-flag-progress')) {
+      for (const teammate of robots.filter(({ teamId }) => teamId === robot.teamId)) {
+        teammate.touchedFlags = [...robot.touchedFlags];
+        teammate.nextFlag = robot.nextFlag;
+      }
+    }
     addTrace(
       trace,
       register,
@@ -2626,6 +2700,17 @@ export function resolveRepairCleanup(
     const repair = repairCell?.elements.find(({ kind }) => kind === 'repair') as
       | Extract<BoardElement, { kind: 'repair' }>
       | undefined;
+    const flag = course.course.flags.find(({ x, y }) => x === robot.x && y === robot.y ||
+      hasMechanicalArm(robot) && mechanicalArmReaches(robot, x, y, course));
+    if (flag) {
+      for (let draw = 0; draw < rules.flag.awardOptions; draw += 1) {
+        const option = optionDeck ? drawOption(optionDeck) : null;
+        if (!option) continue;
+        robot.options.push(option);
+        addTrace(trace, 6, robot.uid, null, 'option-drawn',
+          `${robot.name} drew ${option.cardId.replaceAll('-', ' ')} for ending the turn at Flag ${flag.number}.`);
+      }
+    }
     if (!repair) continue;
     if (!rules.repair.awardOptions) {
       const priorDamage = robot.damage;
@@ -2725,7 +2810,7 @@ export function createRaceSummary(
 
 function nextDestroyedRobot(robots: readonly RaceRobotPosition[]) {
   return [...robots]
-    .filter(({ status }) => status === 'destroyed')
+    .filter(({ status, reentryWaitTurns }) => status === 'destroyed' && !reentryWaitTurns)
     .sort(
       (left, right) =>
         (left.destructionOrder ?? Number.MAX_SAFE_INTEGER) -
@@ -2825,6 +2910,21 @@ export function legalReentryChoices(
   const robot = resolution.robots.find((candidate) => candidate.uid === uid);
   if (!robot || robot.status !== 'destroyed') return [];
   const course = resolutionCourse(resolution);
+  if (robot.homeBoardId) {
+    return captureDeploymentCells(robot.homeBoardId)
+      .filter(({ x, y }) => !activeRobotAt(resolution.robots, x, y))
+      .flatMap(({ x, y }) => directionOrder.filter((facing) => {
+        const [dx, dy] = steps[facing];
+        let cx = x, cy = y;
+        for (let distance = 1; distance <= 3; distance++) {
+          if (movementBlockedByWall(cx, cy, facing, course)) return true;
+          cx += dx; cy += dy;
+          const visible = activeRobotAt(resolution.robots, cx, cy);
+          if (visible) return visible.teamId === robot.teamId;
+        }
+        return true;
+      }).map((facing) => ({ x, y, facing })));
+  }
   const archiveOpen =
     courseContains(robot.archive.x, robot.archive.y, course) &&
     !courseHasPit(robot.archive.x, robot.archive.y, course) &&
@@ -2874,7 +2974,8 @@ export function applyReentryChoice(
   robot.x = choice.x;
   robot.y = choice.y;
   robot.facing = choice.facing;
-  const reentryDamage = robot.superiorArchivePending ? 0 : 2;
+  const reentryDamage = robot.captured || robot.superiorArchivePending ? 0 : 2;
+  delete robot.captured;
   robot.damage += reentryDamage;
   robot.superiorArchivePending = false;
   robot.powerDownNextTurn = Boolean(choice.poweredDown && robot.powerDownNextTurn);
@@ -2946,8 +3047,13 @@ export function applyOptionLossChoice(
 export function createRaceRobotPositions(setup: RaceSetup): RaceRobotPosition[] {
   return setup.players.map((player) => ({
     uid: player.uid,
+    ...(playableCourse(setup.courseId).specialRules.some(({ kind }) => kind === 'toggle-flag-control') ? { reentryDelay: true } : {}),
     name: player.name,
     robotId: player.robotId,
+    ...(player.ownerUid ? { ownerUid: player.ownerUid, role: player.role } : {}),
+    ...(setup.capture && player.teamId ? { homeBoardId: setup.capture.homeBoards[player.teamId] } : {}),
+    ...(player.teamId ? { teamId: player.teamId } : {}),
+    ...(player.isSuperbot !== undefined ? { isSuperbot: player.isSuperbot } : {}),
     x: player.position.x,
     y: player.position.y,
     facing: player.facing,
@@ -2979,6 +3085,7 @@ export function beginNextTurnPowerDowns(
       lockedRegisters: robot.lockedRegisters.map((locked) => ({ ...locked })),
       touchedFlags: [...robot.touchedFlags]
     };
+    if (next.reentryWaitTurns) next.reentryWaitTurns -= 1;
     if (next.status !== 'active') return next;
     if (next.powerDownNextTurn) {
       next.poweredDown = true;
@@ -2998,13 +3105,23 @@ export function resolveProgrammedTurn(
   initialRobots = createRaceRobotPositions(setup),
   initialOptionDeck?: OptionDeckState,
   optionPlans: Readonly<Record<string, OptionTurnPlan>> = {},
-  optionDecisions: Readonly<Record<string, OptionDecision>> = {}
+  optionDecisions: Readonly<Record<string, OptionDecision>> = {},
+  priorScenario?: ScenarioState
 ): ProgramResolution | null {
   if (programming.phase !== 'programmed') return null;
-  const course = compilePlayableCourse(setup.courseId);
+  const baseCourse = compilePlayableCourse(setup.courseId, undefined, setup.legacyFactoryLayout);
+  const hasWorldState = baseCourse.course.specialRules.some(({ kind }) =>
+    ['moving-flags', 'rotate-board-on-flag', 'capture-the-flag', 'toggle-flag-control'].includes(kind)
+  );
+  const initialScenario = priorScenario ?? (hasWorldState ? {
+    flags: baseCourse.course.flags.map((flag) => ({ ...flag,
+      ...(setup.capture ? { teamId: Object.entries(setup.capture.homeBoards).find(([, board]) => board === baseCourse.cells.get(`${flag.x},${flag.y}`)?.boardInstanceId)?.[0] } : {}) })), boardRotations: {}, flagControl: {}
+  } : undefined);
+  const scenario = initialScenario ? cloneScenario(initialScenario) : undefined;
+  let course = compilePlayableCourse(setup.courseId, scenario, setup.legacyFactoryLayout);
   const scenarioRules = scenarioResolutionRules(course.course);
-  const courseCells: BoardCell[] = [...course.cells.values()];
-  const flags = course.course.flags;
+  let courseCells: BoardCell[] = [...course.cells.values()];
+  let flags = course.course.flags;
   const robots = initialRobots.map((robot) => ({
     ...robot,
     archive: { ...robot.archive },
@@ -3044,6 +3161,8 @@ export function resolveProgrammedTurn(
     if (pendingOptionDecision) {
       return {
         courseId: setup.courseId,
+          ...(setup.legacyFactoryLayout ? { legacyFactoryLayout: true } : {}),
+          ...(scenario && initialScenario ? { scenario: cloneScenario(scenario), initialScenario: cloneScenario(initialScenario) } : {}),
         turnNumber: programming.turnNumber,
         phase: 'awaiting-option-decision',
         robots,
@@ -3119,6 +3238,8 @@ export function resolveProgrammedTurn(
       );
       return {
         courseId: setup.courseId,
+          ...(setup.legacyFactoryLayout ? { legacyFactoryLayout: true } : {}),
+          ...(scenario && initialScenario ? { scenario: cloneScenario(scenario), initialScenario: cloneScenario(initialScenario) } : {}),
         turnNumber: programming.turnNumber,
         phase: 'awaiting-option-decision',
         robots,
@@ -3226,6 +3347,8 @@ export function resolveProgrammedTurn(
       );
       return {
         courseId: setup.courseId,
+          ...(setup.legacyFactoryLayout ? { legacyFactoryLayout: true } : {}),
+          ...(scenario && initialScenario ? { scenario: cloneScenario(scenario), initialScenario: cloneScenario(initialScenario) } : {}),
         turnNumber: programming.turnNumber,
         phase: 'awaiting-option-decision',
         robots,
@@ -3309,6 +3432,8 @@ export function resolveProgrammedTurn(
       );
       return {
         courseId: setup.courseId,
+          ...(setup.legacyFactoryLayout ? { legacyFactoryLayout: true } : {}),
+          ...(scenario && initialScenario ? { scenario: cloneScenario(scenario), initialScenario: cloneScenario(initialScenario) } : {}),
         turnNumber: programming.turnNumber,
         phase: 'awaiting-option-decision',
         robots,
@@ -3370,7 +3495,67 @@ export function resolveProgrammedTurn(
   }
 
   const abortSwitchUsed = new Set<string>();
+  function syncCaptureFlags() {
+    if (!scenario || !setup.capture) return;
+    for (const robot of robots) {
+      if (robot.droppedFlag) {
+        const flag = scenario.flags.find(({ number }) => number === robot.droppedFlag!.number)!;
+        flag.x = robot.droppedFlag.x; flag.y = robot.droppedFlag.y;
+        delete flag.carrierUid;
+        delete robot.droppedFlag;
+      }
+    }
+    for (const flag of scenario.flags) {
+      const carrier = robots.find(({ carriedFlag, status }) => carriedFlag === flag.number && status === 'active');
+      if (carrier) { flag.carrierUid = carrier.uid; flag.x = carrier.x; flag.y = carrier.y; }
+      else delete flag.carrierUid;
+    }
+    refreshScenarioCourse();
+  }
+
+  function refreshScenarioCourse() {
+    course = compilePlayableCourse(setup.courseId, scenario, setup.legacyFactoryLayout);
+    courseCells = [...course.cells.values()];
+    flags = course.course.flags;
+    for (const robot of robots) {
+      const flag = scenario?.flags.find(({ number, offBoard }) => number === robot.archiveFlag && !offBoard);
+      if (flag) robot.archive = { x: flag.x, y: flag.y };
+    }
+  }
+
+  function moveScenarioFlags(register: number, express: boolean) {
+    if (!scenario || !course.course.specialRules.some(({ kind }) => kind === 'moving-flags')) return;
+    const activeFlags = scenario.flags.filter(({ offBoard }) => !offBoard);
+    const flagRobots = activeFlags.map((flag): RaceRobotPosition => ({
+      ...robots[0], uid: `flag-${flag.number}`, name: `Flag ${flag.number}`,
+      x: flag.x, y: flag.y, facing: 'north', damage: 0, lives: 1, status: 'active',
+      options: [], lockedRegisters: [], touchedFlags: [], archive: { x: flag.x, y: flag.y },
+      isSuperbot: undefined, lastAggressorUid: undefined
+    }));
+    resolveConveyorSubstep(flagRobots, register, [], express, courseCells, {}, course);
+    activeFlags.forEach((flag, index) => {
+      const moved = flagRobots[index];
+      if (moved.status !== 'active') {
+        flag.offBoard = true;
+        addTrace(trace, register, moved.uid, null, 'option-effect', `Flag ${flag.number} fell off the course and will return next register.`);
+      } else if (moved.x !== flag.x || moved.y !== flag.y) {
+        flag.x = moved.x; flag.y = moved.y;
+        addTrace(trace, register, moved.uid, null, express ? 'express-conveyor' : 'conveyor', `Flag ${flag.number} moved to (${flag.x},${flag.y}).`);
+      }
+    });
+    refreshScenarioCourse();
+  }
+
   for (let register = 1; register <= 5; register += 1) {
+    if (scenario && course.course.specialRules.some(({ kind }) => kind === 'moving-flags')) {
+      for (const flag of scenario.flags.filter(({ offBoard }) => offBoard)) {
+        const home = baseCourse.course.flags.find(({ number }) => number === flag.number)!;
+        Object.assign(flag, home); delete flag.offBoard;
+        addTrace(trace, register, `flag-${flag.number}`, null, 'option-effect', `Flag ${flag.number} returned to its starting space.`);
+      }
+      refreshScenarioCourse();
+    }
+
     for (const robot of robots.filter(
       ({ uid, status, options }) =>
         status === 'active' &&
@@ -3394,6 +3579,8 @@ export function resolveProgrammedTurn(
         );
         return {
           courseId: setup.courseId,
+          ...(setup.legacyFactoryLayout ? { legacyFactoryLayout: true } : {}),
+          ...(scenario && initialScenario ? { scenario: cloneScenario(scenario), initialScenario: cloneScenario(initialScenario) } : {}),
           turnNumber: programming.turnNumber,
           phase: 'awaiting-option-decision',
           robots,
@@ -3490,6 +3677,8 @@ export function resolveProgrammedTurn(
         );
         return {
           courseId: setup.courseId,
+          ...(setup.legacyFactoryLayout ? { legacyFactoryLayout: true } : {}),
+          ...(scenario && initialScenario ? { scenario: cloneScenario(scenario), initialScenario: cloneScenario(initialScenario) } : {}),
           turnNumber: programming.turnNumber,
           phase: 'awaiting-option-decision',
           robots,
@@ -3591,7 +3780,9 @@ export function resolveProgrammedTurn(
         optionDeck
       );
       if (trace.length === cardTraceStart) continue;
+      syncCaptureFlags();
       playback.frames.push({
+      ...(scenario ? { scenario: cloneScenario(scenario) } : {}),
         register: register as RegisterNumber,
         stage: 'program-card',
         actorUid: entry.uid,
@@ -3602,6 +3793,8 @@ export function resolveProgrammedTurn(
       if (pendingOptionDecision) {
         return {
           courseId: setup.courseId,
+          ...(setup.legacyFactoryLayout ? { legacyFactoryLayout: true } : {}),
+          ...(scenario && initialScenario ? { scenario: cloneScenario(scenario), initialScenario: cloneScenario(initialScenario) } : {}),
           turnNumber: programming.turnNumber,
           phase: 'awaiting-option-decision',
           robots,
@@ -3623,7 +3816,10 @@ export function resolveProgrammedTurn(
 
     const expressTraceStart = trace.length;
     resolveExpressConveyors(robots, register, trace, courseCells, effectiveOptionPlans, course);
-    playback.frames.push({
+    moveScenarioFlags(register, true);
+    syncCaptureFlags();
+      playback.frames.push({
+      ...(scenario ? { scenario: cloneScenario(scenario) } : {}),
       register: register as RegisterNumber,
       stage: 'express-conveyors',
       actorUid: null,
@@ -3634,7 +3830,10 @@ export function resolveProgrammedTurn(
 
     const conveyorTraceStart = trace.length;
     resolveNormalConveyors(robots, register, trace, courseCells, effectiveOptionPlans, course);
-    playback.frames.push({
+    moveScenarioFlags(register, false);
+    syncCaptureFlags();
+      playback.frames.push({
+      ...(scenario ? { scenario: cloneScenario(scenario) } : {}),
       register: register as RegisterNumber,
       stage: 'conveyors',
       actorUid: null,
@@ -3645,7 +3844,9 @@ export function resolveProgrammedTurn(
 
     const pusherTraceStart = trace.length;
     resolvePushers(robots, register, trace, courseCells, effectiveOptionPlans, course);
-    playback.frames.push({
+    syncCaptureFlags();
+      playback.frames.push({
+      ...(scenario ? { scenario: cloneScenario(scenario) } : {}),
       register: register as RegisterNumber,
       stage: 'pushers',
       actorUid: null,
@@ -3656,7 +3857,9 @@ export function resolveProgrammedTurn(
 
     const gearTraceStart = trace.length;
     resolveGears(robots, register, trace, courseCells, effectiveOptionPlans);
-    playback.frames.push({
+    syncCaptureFlags();
+      playback.frames.push({
+      ...(scenario ? { scenario: cloneScenario(scenario) } : {}),
       register: register as RegisterNumber,
       stage: 'gears',
       actorUid: null,
@@ -3686,7 +3889,9 @@ export function resolveProgrammedTurn(
     }
     resolutionProgramDrawPile.splice(0, laserResult.programCardsConsumed ?? 0);
     if (laserResult.laserTrace.length > 0) {
+      syncCaptureFlags();
       playback.frames.push({
+      ...(scenario ? { scenario: cloneScenario(scenario) } : {}),
         register: register as RegisterNumber,
         stage: 'lasers',
         actorUid: null,
@@ -3697,7 +3902,9 @@ export function resolveProgrammedTurn(
       });
     }
     for (const step of laserResult.damageSteps) {
+      syncCaptureFlags();
       playback.frames.push({
+      ...(scenario ? { scenario: cloneScenario(scenario) } : {}),
         register: register as RegisterNumber,
         stage: 'laser-damage',
         actorUid: step.trace.at(-1)?.actorUid ?? null,
@@ -3710,6 +3917,8 @@ export function resolveProgrammedTurn(
     if (laserResult.pendingOptionDecision) {
       return {
         courseId: setup.courseId,
+          ...(setup.legacyFactoryLayout ? { legacyFactoryLayout: true } : {}),
+          ...(scenario && initialScenario ? { scenario: cloneScenario(scenario), initialScenario: cloneScenario(initialScenario) } : {}),
         turnNumber: programming.turnNumber,
         phase: 'awaiting-option-decision',
         robots,
@@ -3727,6 +3936,20 @@ export function resolveProgrammedTurn(
         )
       };
     }
+    const checkpointTraceStart = trace.length;
+    if (setup.capture) {
+      for (const robot of robots) {
+        if (robot.capturePushedByUid && robot.status === 'active' && robots.some(({ uid, status }) => uid === robot.capturePushedByUid && status === 'active')) {
+          robot.status = 'destroyed';
+          robot.captured = true;
+          robot.destructionOrder = Math.max(0, ...robots.map(({ destructionOrder }) => destructionOrder ?? 0)) + 1;
+          addTrace(trace, register, robot.uid, null, 'option-effect', `${robot.name} was sent home without losing a Life and will return at turn end.`);
+        }
+        delete robot.capturePushedByUid;
+      }
+      syncCaptureFlags();
+    }
+
     const finishers = resolveFlagsAndArchives(
       robots,
       register,
@@ -3734,11 +3957,75 @@ export function resolveProgrammedTurn(
       courseCells,
       flags,
       course,
-      scenarioRules,
+      setup.legacyOptionFlagAwards ? scenarioRules : { ...scenarioRules, flag: { ...scenarioRules.flag, awardOptions: 0 } },
       optionDeck
     );
+    if (scenario && setup.capture) {
+      for (const robot of robots.filter(({ status }) => status === 'active')) {
+        for (const flag of scenario.flags.filter(({ x, y, carrierUid }) => !carrierUid && x === robot.x && y === robot.y)) {
+          if (flag.teamId !== robot.teamId && !robot.carriedFlag) {
+            robot.carriedFlag = flag.number;
+            flag.carrierUid = robot.uid;
+            addTrace(trace, register, robot.uid, null, 'flag-touched', `${robot.name} picked up the enemy flag.`);
+          } else if (flag.teamId === robot.teamId && course.cells.get(`${robot.x},${robot.y}`)?.boardInstanceId === robot.homeBoardId) {
+            const home = baseCourse.course.flags.find(({ number }) => number === flag.number)!;
+            if (flag.x !== home.x || flag.y !== home.y) addTrace(trace, register, robot.uid, null, 'flag-touched', `${robot.name} returned the team's flag to its starting space.`);
+            flag.x = home.x; flag.y = home.y;
+          }
+        }
+        if (register === 5 && robot.carriedFlag && course.cells.get(`${robot.x},${robot.y}`)?.boardInstanceId === robot.homeBoardId) finishers.push(robot.uid);
+      }
+      syncCaptureFlags();
+    }
+    if (scenario && course.course.specialRules.some(({ kind }) => kind === 'toggle-flag-control')) {
+      for (const robot of robots.filter(({ status, teamId }) => status === 'active' && teamId)) {
+        for (const flag of flags.filter(({ x, y }) => x === robot.x && y === robot.y || hasMechanicalArm(robot) && mechanicalArmReaches(robot, x, y, course))) {
+          if (scenario.flagControl[flag.number] !== robot.teamId) {
+            scenario.flagControl[flag.number] = robot.teamId!;
+            addTrace(trace, register, robot.uid, null, 'flag-touched', `${robot.name} claimed Flag ${flag.number} for ${robot.teamId!.replace('team-', 'Team ')}.`);
+          }
+        }
+      }
+      for (const robot of robots) {
+        robot.touchedFlags = flags.filter(({ number }) => scenario.flagControl[number] === robot.teamId).map(({ number }) => number);
+        robot.nextFlag = null;
+        if (robot.touchedFlags.length === flags.length) finishers.push(robot.uid);
+      }
+    }
+    if (course.course.specialRules.some(({ kind }) => kind === 'two-controlled-robots')) {
+      const racers = robots.filter(({ role }) => role === 'racer');
+      const survivors = racers.filter(({ lives }) => lives > 0);
+      if (survivors.length <= 1) finishers.push(...(survivors.length ? survivors : racers).map(({ uid }) => uid));
+    }
+    if (course.course.specialRules.some(({ kind }) => kind === 'team-elimination')) {
+      const survivingTeams = new Set(robots.filter(({ lives }) => lives > 0).map(({ teamId }) => teamId));
+      if (survivingTeams.size === 0) finishers.push(...robots.map(({ uid }) => uid));
+      if (survivingTeams.size === 1) finishers.push(...robots.filter(({ teamId }) => survivingTeams.has(teamId)).map(({ uid }) => uid));
+    }
+    if (scenario && finishers.length === 0 && course.course.specialRules.some(({ kind }) => kind === 'rotate-board-on-flag')) {
+      for (const robot of robots.filter(({ status }) => status === 'active')) {
+        const flag = flags.find(({ x, y }) => x === robot.x && y === robot.y || hasMechanicalArm(robot) && mechanicalArmReaches(robot, x, y, course));
+        if (!flag) continue;
+        const instanceId = course.cells.get(`${robot.x},${robot.y}`)!.boardInstanceId;
+        const heads = createPrng(`${setup.scenarioSeed}:turn-${programming.turnNumber}:r${register}:dock-${setup.players.findIndex(({ uid }) => uid === robot.uid)}:flag-${flag.number}`)() < 0.5;
+        addTrace(trace, register, robot.uid, null, 'option-effect', `${robot.name} flipped ${heads ? 'heads: the board rotates clockwise' : 'tails: the board stays in place'}.`);
+        if (heads) scenario.boardRotations[instanceId] = (((scenario.boardRotations[instanceId] ?? 0) + 1) % 4) as 0 | 1 | 2 | 3;
+      }
+      refreshScenarioCourse();
+      for (const robot of robots.filter(({ status }) => status === 'active')) {
+        if (courseHasPit(robot.x, robot.y, course)) destroyRobot(robots, robot, 'pit', register, null, trace);
+      }
+    }
+    if (scenario && trace.length > checkpointTraceStart) {
+      syncCaptureFlags();
+      playback.frames.push({ register: register as RegisterNumber, stage: 'checkpoints', actorUid: null, cardId: null,
+        robots: cloneRaceRobots(robots), trace: trace.slice(checkpointTraceStart), scenario: cloneScenario(scenario) });
+    }
     if (finishers.length > 0) {
-      const winnerUids = finishers;
+      const winningTeams = new Set(finishers.map((uid) => robots.find((robot) => robot.uid === uid)?.teamId).filter(Boolean));
+      const winnerUids = winningTeams.size
+        ? robots.filter(({ teamId }) => teamId && winningTeams.has(teamId)).map(({ uid }) => uid)
+        : finishers;
       const runnersUpUids: string[] = [];
       const winnerNames = winnerUids.map(
         (uid) => robots.find((robot) => robot.uid === uid)!.name
@@ -3749,12 +4036,16 @@ export function resolveProgrammedTurn(
         winnerUids[0],
         null,
         'winner',
-        winnerNames.length === 1
+        winningTeams.size > 0
+          ? `${winnerNames.join(' and ')} won for ${[...winningTeams].map((id) => id!.replace('team-', 'Team ')).join(' and ')}.`
+          : winnerNames.length === 1
           ? `${winnerNames[0]} touched the final Flag in order and won the race.`
           : `${winnerNames.join(' and ')} touched the final Flag simultaneously and tied for the win.`
       );
       return {
         courseId: setup.courseId,
+          ...(setup.legacyFactoryLayout ? { legacyFactoryLayout: true } : {}),
+          ...(scenario && initialScenario ? { scenario: cloneScenario(scenario), initialScenario: cloneScenario(initialScenario) } : {}),
         turnNumber: programming.turnNumber,
         phase: 'race-finished',
         robots,
@@ -3781,11 +4072,20 @@ export function resolveProgrammedTurn(
     optionDeck,
     setup.powerDownAllowed,
     course,
-    scenarioRules
+    setup.legacyOptionFlagAwards ? { ...scenarioRules, flag: { ...scenarioRules.flag, awardOptions: 0 } } : scenarioRules
   );
+
+  for (const robot of robots.filter(({ isSuperbot, status }) => isSuperbot && status === 'active')) {
+    const priorDamage = robot.damage;
+    robot.damage = 0;
+    robot.lockedRegisters = [];
+    if (priorDamage) addTrace(trace, 6, robot.uid, null, 'repair', `${robot.name} discarded all damage as the SuperBot.`);
+  }
 
   const resolution: ProgramResolution = {
     courseId: setup.courseId,
+          ...(setup.legacyFactoryLayout ? { legacyFactoryLayout: true } : {}),
+          ...(scenario && initialScenario ? { scenario: cloneScenario(scenario), initialScenario: cloneScenario(initialScenario) } : {}),
     turnNumber: programming.turnNumber,
     phase: 'turn-complete',
     robots,

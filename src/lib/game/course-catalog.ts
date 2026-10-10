@@ -1,4 +1,5 @@
-export const COMPLETE_COURSE_MANIFEST_VERSION = 'courses-avalon-hill-2005-complete-v1';
+export const LEGACY_COMPLETE_COURSE_MANIFEST_VERSION = 'courses-avalon-hill-2005-complete-v1';
+export const COMPLETE_COURSE_MANIFEST_VERSION = 'courses-avalon-hill-2005-complete-v2';
 
 export type CourseCategory = 'beginner' | 'expert' | 'team';
 export type CourseLength = 'short' | 'medium' | 'long';
@@ -84,7 +85,7 @@ function horizontalBoards(
       instanceId: `docking-bay-${dockingBay}-1`,
       boardId: `docking-bay-${dockingBay}`,
       origin: [boardIds.length * 12 + 1, 1] as const,
-      rotation: 1 as const
+      rotation: 3 as const
     }
   ];
 }
@@ -129,6 +130,7 @@ interface CourseInput
     | 'boardPlacements'
     | 'flags'
   > {
+  boardRotations?: Readonly<Record<string, CourseRotation>>;
   boardIds: readonly string[];
   dockingBay?: 'a' | 'b';
   boardPlacements?: readonly PublishedBoardPlacement[];
@@ -153,7 +155,7 @@ function course(input: CourseInput): PublishedCourseManifest {
     length: input.length,
     difficulty: input.difficulty,
     description: input.description,
-    boardPlacements: placements,
+    boardPlacements: placements.map((placement) => ({ ...placement, rotation: input.boardRotations?.[placement.boardId] ?? placement.rotation })),
     flags: input.flags,
     specialRules: input.specialRules,
     provenance: [
@@ -235,6 +237,7 @@ export const BEGINNER_COURSES = Object.freeze([
   }),
   course({
     id: 'chop-shop-challenge',
+    boardRotations: { 'chop-shop': 2 },
     name: 'Chop Shop Challenge',
     category: 'beginner',
     manualPage: 15,
@@ -253,6 +256,7 @@ export const BEGINNER_COURSES = Object.freeze([
   }),
   course({
     id: 'twister',
+    boardRotations: { 'spin-zone': 2 },
     name: 'Twister',
     category: 'beginner',
     manualPage: 15,
@@ -290,6 +294,7 @@ export const BEGINNER_COURSES = Object.freeze([
   }),
   course({
     id: 'around-the-world',
+    boardRotations: { 'island': 1 },
     name: 'Around the World',
     category: 'beginner',
     manualPage: 16,
@@ -300,8 +305,8 @@ export const BEGINNER_COURSES = Object.freeze([
     boardIds: ['island', 'spin-zone'],
     flags: [
       { number: 1, x: 13, y: 3 },
-      { number: 2, x: 2, y: 5 },
-      { number: 3, x: 23, y: 6 }
+      { number: 2, x: 2, y: 6 },
+      { number: 3, x: 23, y: 7 }
     ],
     specialRules: []
   }),
@@ -324,6 +329,7 @@ export const BEGINNER_COURSES = Object.freeze([
   }),
   course({
     id: 'pilgrimage',
+    boardRotations: { 'cross': 3, 'exchange': 1 },
     name: 'Pilgrimage',
     category: 'beginner',
     manualPage: 17,
@@ -344,6 +350,7 @@ export const BEGINNER_COURSES = Object.freeze([
 export const EXPERT_COURSES = Object.freeze([
   course({
     id: 'vault-assault',
+    boardRotations: { 'vault': 3 },
     name: 'Vault Assault',
     category: 'expert',
     manualPage: 18,
@@ -379,6 +386,7 @@ export const EXPERT_COURSES = Object.freeze([
   }),
   course({
     id: 'lost-bearings',
+    boardRotations: { 'cross': 2 },
     name: 'Lost Bearings',
     category: 'expert',
     manualPage: 19,
@@ -414,6 +422,7 @@ export const EXPERT_COURSES = Object.freeze([
   }),
   course({
     id: 'oddest-sea',
+    boardRotations: { 'vault': 2, 'maelstrom': 2 },
     name: 'Oddest Sea',
     category: 'expert',
     manualPage: 20,
@@ -433,6 +442,7 @@ export const EXPERT_COURSES = Object.freeze([
   }),
   course({
     id: 'against-the-grain',
+    boardRotations: { 'chess': 1 },
     name: 'Against the Grain',
     category: 'expert',
     manualPage: 20,
@@ -451,6 +461,7 @@ export const EXPERT_COURSES = Object.freeze([
   }),
   course({
     id: 'island-king',
+    boardRotations: { 'island': 2 },
     name: 'Island King',
     category: 'expert',
     manualPage: 21,
@@ -505,6 +516,7 @@ export const EXPERT_COURSES = Object.freeze([
   }),
   course({
     id: 'set-to-kill',
+    boardRotations: { 'exchange': 2 },
     name: 'Set to Kill',
     category: 'expert',
     manualPage: 22,
@@ -524,6 +536,7 @@ export const EXPERT_COURSES = Object.freeze([
   }),
   course({
     id: 'factory-rejects',
+    boardRotations: { 'chop-shop': 2 },
     name: 'Factory Rejects',
     category: 'expert',
     manualPage: 23,
@@ -561,6 +574,7 @@ export const EXPERT_COURSES = Object.freeze([
   }),
   course({
     id: 'ball-lightning',
+    boardRotations: { 'spin-zone': 1 },
     name: 'Ball Lightning',
     category: 'expert',
     manualPage: 24,
@@ -579,6 +593,7 @@ export const EXPERT_COURSES = Object.freeze([
   }),
   course({
     id: 'tight-collar',
+    boardRotations: { 'chop-shop': 2, 'cross': 3 },
     name: 'Tight Collar',
     category: 'expert',
     manualPage: 24,
@@ -588,7 +603,7 @@ export const EXPERT_COURSES = Object.freeze([
     description: 'Every player has one minute to program.',
     boardIds: ['chop-shop', 'cross'],
     boardPlacements: [
-      placed('docking-bay-a-1', 'docking-bay-a', 1, 1, 3),
+      placed('docking-bay-a-1', 'docking-bay-a', 1, 1, 1),
       placed('chop-shop-1', 'chop-shop', 5, 1),
       placed('cross-1', 'cross', 17, 1)
     ],
@@ -600,6 +615,7 @@ export const EXPERT_COURSES = Object.freeze([
   }),
   course({
     id: 'day-of-the-superbot',
+    boardRotations: { 'maelstrom': 2 },
     name: 'Day of the SuperBot',
     category: 'expert',
     manualPage: 25,
@@ -635,6 +651,7 @@ export const EXPERT_COURSES = Object.freeze([
   }),
   course({
     id: 'flag-fry',
+    boardRotations: { 'cross': 2 },
     name: 'Flag Fry',
     category: 'expert',
     manualPage: 26,
@@ -653,6 +670,7 @@ export const EXPERT_COURSES = Object.freeze([
   }),
   course({
     id: 'frenetic-factory',
+    boardRotations: { 'chess': 1, 'chop-shop': 3, 'island': 1, 'cross': 3 },
     name: 'Frenetic Factory',
     category: 'expert',
     manualPage: 27,
@@ -678,6 +696,7 @@ export const EXPERT_COURSES = Object.freeze([
   }),
   course({
     id: 'marathon-madness',
+    boardRotations: { 'spin-zone': 1, 'vault': 2, 'exchange': 2 },
     name: 'Marathon Madness',
     category: 'expert',
     manualPage: 28,
@@ -691,7 +710,7 @@ export const EXPERT_COURSES = Object.freeze([
       placed('vault-1', 'vault', 13, 1),
       placed('exchange-1', 'exchange', 13, 13),
       placed('maelstrom-1', 'maelstrom', 13, 25),
-      placed('docking-bay-a-1', 'docking-bay-a', 25, 13, 1)
+      placed('docking-bay-a-1', 'docking-bay-a', 25, 13, 3)
     ],
     flags: [
       { number: 1, x: 24, y: 31 },
@@ -706,6 +725,7 @@ export const EXPERT_COURSES = Object.freeze([
 export const TEAM_COURSES = Object.freeze([
   course({
     id: 'tandem-carnage',
+    boardRotations: { 'maelstrom': 2 },
     name: 'Tandem Carnage',
     category: 'team',
     manualPage: 29,
@@ -725,6 +745,7 @@ export const TEAM_COURSES = Object.freeze([
   }),
   course({
     id: 'all-for-one-or-one-for-all',
+    boardRotations: { 'spin-zone': 1 },
     name: 'All for One or One for All?',
     category: 'team',
     manualPage: 30,
@@ -745,6 +766,7 @@ export const TEAM_COURSES = Object.freeze([
   }),
   course({
     id: 'capture-the-flag',
+    boardRotations: { 'vault': 1 },
     name: 'Capture the Flag',
     category: 'team',
     manualPage: 31,
@@ -765,6 +787,7 @@ export const TEAM_COURSES = Object.freeze([
   }),
   course({
     id: 'toggle-boggle',
+    boardRotations: { 'exchange': 1 },
     name: 'Toggle Boggle',
     category: 'team',
     manualPage: 32,
@@ -782,6 +805,7 @@ export const TEAM_COURSES = Object.freeze([
   }),
   course({
     id: 'war-zone',
+    boardRotations: { 'island': 2 },
     name: 'War Zone',
     category: 'team',
     manualPage: 32,

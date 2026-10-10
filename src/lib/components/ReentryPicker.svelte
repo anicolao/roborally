@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { captureDeploymentCells } from '$lib/game/capture-deployment';
+  import type { ScenarioState } from '$lib/game/scenario-state';
   import BoardTile from '$lib/components/BoardTile.svelte';
   import type { Direction, Wall } from '$lib/game/course-manifest';
   import type { ReentryChoice } from '$lib/game/movement';
@@ -9,6 +11,9 @@
 
   export let choices: readonly ReentryChoice[];
   export let courseId: PlayableCourseId;
+  export let scenario: ScenarioState | undefined = undefined;
+  export let legacyFactoryLayout = false;
+  export let homeBoardId: string | undefined = undefined;
   export let archive: { x: number; y: number };
   export let archiveOccupantName = '';
   export let selectedCell = '';
@@ -34,7 +39,7 @@
   $: archiveOpen = cellChoices.some(({ key }) => key === archiveCell);
   $: effectiveCell = selectedCell || (cellChoices.length === 1 ? cellChoices[0].key : '');
   $: selectedCellChoice = cellChoices.find(({ key }) => key === effectiveCell);
-  $: compiledCourse = compilePlayableCourse(courseId);
+  $: compiledCourse = compilePlayableCourse(courseId, scenario, legacyFactoryLayout);
   $: wallsByCell = [...compiledCourse.walls].reduce<Map<string, Wall[]>>((byCell, wallKey) => {
     const [x, y, edge] = wallKey.split(',');
     const key = `${x},${y}`;
@@ -49,11 +54,14 @@
     ...cellChoices.map(({ x, y }) => Math.max(Math.abs(x - archive.x), Math.abs(y - archive.y)))
   );
   $: diameter = radius * 2 + 1;
-  $: placementCells = Array.from({ length: diameter * diameter }, (_, index) => {
-    const dx = index % diameter - radius;
-    const dy = Math.floor(index / diameter) - radius;
-    const x = archive.x + dx;
-    const y = archive.y + dy;
+  $: homeCells = homeBoardId ? captureDeploymentCells(homeBoardId) : [];
+  $: gridLeft = homeCells.length ? Math.min(...homeCells.map(({ x }) => x)) : archive.x - radius;
+  $: gridTop = homeCells.length ? 1 : archive.y - radius;
+  $: gridColumns = homeCells.length ? 6 : diameter;
+  $: gridRows = homeCells.length ? 12 : diameter;
+  $: placementCells = Array.from({ length: gridColumns * gridRows }, (_, index) => {
+    const x = gridLeft + index % gridColumns;
+    const y = gridTop + Math.floor(index / gridColumns);
     const key = `${x},${y}`;
     return {
       key,
@@ -77,7 +85,9 @@
 </script>
 
 <div class:compact class="reentry-picker">
-  {#if archiveOpen}
+  {#if homeBoardId}
+    <p class="placement-explanation">Choose a safe space in your home board’s back six rows and a facing without a nearby enemy in sight.</p>
+  {:else if archiveOpen}
     <p class="placement-explanation">
       Archive <strong>({archive.x},{archive.y})</strong> is clear. Choose your facing.
     </p>
@@ -99,7 +109,7 @@
     <legend>Re-entry square</legend>
     <div
       class="placement-grid"
-      style={`--reentry-grid-size: ${diameter}`}
+      style={`--reentry-grid-size: ${gridColumns}`}
       aria-label="Legal re-entry squares"
     >
       {#each placementCells as cell (cell.key)}
@@ -121,7 +131,7 @@
             />
             <span class="tile-coordinate">{cell.x},{cell.y}</span>
           </button>
-        {:else if cell.key === archiveCell}
+        {:else if !homeBoardId && cell.key === archiveCell}
           <span
             class="archive-cell"
             aria-label={`Occupied archive (${archive.x},${archive.y})${archiveOccupantName

@@ -390,10 +390,11 @@ export async function submitProgram(
   roomCode: string,
   cardIds: ProgramSubmittedPayload['cardIds'],
   turnId: ProgramSubmittedPayload['turnId'] = 'turn-001',
-  pairedSlots?: ProgramSubmittedPayload['pairedSlots']
+  pairedSlots?: ProgramSubmittedPayload['pairedSlots'],
+  robotUid: string = user.uid
 ) {
   await appendRoomEvent(db, user, roomCode, 'program/submitted', {
-    uid: user.uid,
+    uid: robotUid,
     turnId,
     cardIds,
     ...(pairedSlots ? { pairedSlots } : {})
@@ -407,10 +408,11 @@ export async function updateProgramDraft(
   cardIds: ProgramDraftUpdatedPayload['cardIds'],
   turnId: ProgramDraftUpdatedPayload['turnId'] = 'turn-001',
   slots?: ProgramDraftUpdatedPayload['slots'],
-  pairedSlots?: ProgramDraftUpdatedPayload['pairedSlots']
+  pairedSlots?: ProgramDraftUpdatedPayload['pairedSlots'],
+  robotUid: string = user.uid
 ) {
   await appendRoomEvent(db, user, roomCode, 'program/draft-updated', {
-    uid: user.uid,
+    uid: robotUid,
     turnId,
     cardIds,
     ...(slots ? { slots } : {}),
@@ -438,10 +440,11 @@ export async function chooseEffect(
   user: User,
   roomCode: string,
   choice: EffectChosenPayload['choice'],
-  turnId: EffectChosenPayload['turnId'] = 'turn-001'
+  turnId: EffectChosenPayload['turnId'] = 'turn-001',
+  robotUid: string = user.uid
 ) {
   await appendRoomEvent(db, user, roomCode, 'effect/chosen', {
-    uid: user.uid,
+    uid: robotUid,
     turnId,
     choice
   });
@@ -479,10 +482,11 @@ export async function updateEffectDraft(
   user: User,
   roomCode: string,
   turnId: EffectDraftUpdatedPayload['turnId'],
-  draft: EffectDraft
+  draft: EffectDraft,
+  robotUid: string = user.uid
 ) {
   await appendRoomEvent(db, user, roomCode, 'effect/draft-updated', {
-    uid: user.uid,
+    uid: robotUid,
     turnId,
     draft
   });
@@ -501,10 +505,11 @@ export async function respondPowerDown(
   db: Firestore,
   user: User,
   roomCode: string,
-  payload: Omit<PowerDownRespondedPayload, 'uid'>
+  payload: Omit<PowerDownRespondedPayload, 'uid'>,
+  robotUid: string = user.uid
 ) {
   await appendRoomEvent(db, user, roomCode, 'power-down/responded', {
-    uid: user.uid,
+    uid: robotUid,
     ...payload
   });
 }
@@ -576,4 +581,16 @@ export function subscribeRoom(
     },
     onError
   );
+}
+
+export async function openCourseProgramming(db: Firestore, user: User, roomCode: string, turnId: ProgramSubmittedPayload['turnId']) {
+  await appendRoomEvent(db, user, roomCode, 'program/opened', { turnId });
+}
+
+export async function selectScenarioOption(db: Firestore, user: User, roomCode: string, cardId: import('./game/option-manifest').OptionCardId) {
+  await appendRoomEvent(db, user, roomCode, 'scenario/option-selected', { cardId });
+}
+
+export async function chooseCaptureSetup(db: Firestore, user: User, roomCode: string, choice: import('./game/capture-deployment').CaptureSetupChoice) {
+  await appendRoomEvent(db, user, roomCode, 'scenario/capture-chosen', { choice });
 }

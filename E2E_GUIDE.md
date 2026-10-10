@@ -119,6 +119,13 @@ dragging, tap flight and reduced motion, owned Option inspection, and a shared
 countdown whose expired timeout is claimed by another phone without replacing
 already chosen registers.
 
+Scenario 029 configures all 34 published courses through real room events, checks
+robot and flag counts in two clients, chooses Tricksy Options, deploys Capture
+the Flag teams, switches Interference hands, expires both published course
+clocks, and follows Moving Targets flags through a programmed turn. Scenario
+030 uses the actual tabletop and private phones for the new Option draft,
+two-robot controls, and home-board deployment.
+
 ## Scenario layout
 
 Use the next three-digit sequence and a short kebab-case capability name:

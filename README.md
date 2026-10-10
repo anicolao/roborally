@@ -170,6 +170,14 @@ and the same immutable winner. The post-MVP
 then proves a five-player room on Chop Shop with Docking Bay B, two starting
 damage, seven-card hands, and power down unavailable.
 
+All 34 published 2005 courses are now playable. The
+[published-scenario walkthrough](tests/e2e/029-published-scenario-play/README.md)
+configures every course, including timed, expert, and team variants. The
+[tabletop and phone walkthrough](tests/e2e/030-tabletop-scenario-controllers/README.md)
+covers private Option drafting, separate Interference hands, and Capture the
+Flag deployment. See the [review guide](docs/published-scenarios-review.md) for
+rule coverage, compatibility, and suggested playtests.
+
 All eight factory faces and both Docking Bay faces are pinned by golden
 semantic hashes. All 34 printed course diagrams are pinned as one transform and
 flag-coordinate fixture. The in-product catalog previews the same manifests

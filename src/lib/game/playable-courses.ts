@@ -1,12 +1,8 @@
-import { PUBLISHED_COURSES_BY_ID, type PublishedCourseManifest } from './course-catalog';
+import type { ScenarioState } from './scenario-state';
+import { PUBLISHED_COURSES, PUBLISHED_COURSES_BY_ID, type PublishedCourseManifest } from './course-catalog';
 import { compilePublishedCourse, type CompiledCourse } from './course-geometry';
 
-export type PlayableCourseId =
-  | 'risky-exchange'
-  | 'risky-exchange-a'
-  | 'option-lab'
-  | 'factory-rejects'
-  | 'option-world';
+export type PlayableCourseId = PublishedCourseManifest['id'];
 
 function requireCatalogCourse(courseId: PlayableCourseId): PublishedCourseManifest {
   const course = PUBLISHED_COURSES_BY_ID.get(courseId);
@@ -76,8 +72,9 @@ export const PLAYABLE_COURSES_BY_ID = new Map<PlayableCourseId, PublishedCourseM
   ['risky-exchange', legacyRiskyExchange],
   ['risky-exchange-a', testRiskyExchangeDockA],
   ['option-lab', optionLab],
-  ['factory-rejects', requireCatalogCourse('factory-rejects')],
-  ['option-world', requireCatalogCourse('option-world')]
+  ...PUBLISHED_COURSES.filter(({ id }) => id !== 'risky-exchange').map(
+    (course): [PlayableCourseId, PublishedCourseManifest] => [course.id, course]
+  )
 ]);
 
 export function playableCourse(courseId: PlayableCourseId): PublishedCourseManifest {
@@ -86,6 +83,16 @@ export function playableCourse(courseId: PlayableCourseId): PublishedCourseManif
   return course;
 }
 
-export function compilePlayableCourse(courseId: PlayableCourseId): CompiledCourse {
-  return compilePublishedCourse(playableCourse(courseId));
+export function compilePlayableCourse(courseId: PlayableCourseId, scenario?: ScenarioState, legacyFactoryLayout = false): CompiledCourse {
+  const manifest = playableCourse(courseId);
+  const course = legacyFactoryLayout && courseId === 'factory-rejects' ? { ...manifest, boardPlacements: manifest.boardPlacements.map((placement) => ({ ...placement, rotation: 0 as const })) } : manifest;
+  if (!scenario) return compilePublishedCourse(course);
+  return compilePublishedCourse({
+    ...course,
+    flags: scenario.flags.filter(({ offBoard }) => !offBoard),
+    boardPlacements: course.boardPlacements.map((placement) => ({
+      ...placement,
+      rotation: ((placement.rotation + (scenario.boardRotations[placement.instanceId] ?? 0)) % 4) as 0 | 1 | 2 | 3
+    }))
+  });
 }

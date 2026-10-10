@@ -202,7 +202,7 @@ describe('all 34 published course diagrams', () => {
       flags
     }));
     expect(createHash('sha256').update(JSON.stringify(geometry)).digest('hex')).toBe(
-      'bc44440b4c68baa13cb4e201c4b250650ffaaa2d2505642237567cf34743c46b'
+      '96ef493a6980eb9413cfe20b15d248c20710af9629ef00cf4b085eb2532a651b'
     );
     expect(PUBLISHED_COURSES.find(({ id }) => id === 'factory-rejects')?.flags).toHaveLength(3);
     expect(PUBLISHED_COURSES.find(({ id }) => id === 'option-world')?.flags).toHaveLength(4);
@@ -224,8 +224,8 @@ describe('all 34 published course diagrams', () => {
       ],
       'around-the-world': [
         { number: 1, x: 13, y: 3 },
-        { number: 2, x: 2, y: 5 },
-        { number: 3, x: 23, y: 6 }
+        { number: 2, x: 2, y: 6 },
+        { number: 3, x: 23, y: 7 }
       ],
       pilgrimage: [
         { number: 1, x: 9, y: 8 },
@@ -238,7 +238,7 @@ describe('all 34 published course diagrams', () => {
       expect(course.boardPlacements).toHaveLength(3);
       expect(course.boardPlacements.at(-1)).toMatchObject({
         origin: [25, 1],
-        rotation: 1
+        rotation: 3
       });
     }
   });
@@ -272,14 +272,14 @@ describe('all 34 published course diagrams', () => {
     });
 
     const race = completeRepresentativeRace();
-    expect(race.start).toEqual([26, 6]);
+    expect(race.start).toEqual([27, 7]);
     expect(race.touchedFlags).toEqual([1, 2, 3]);
     expect(race.crossedBoardInstances).toEqual([
       'docking-bay-a-1',
       'spin-zone-2',
       'island-1'
     ]);
-    expect(race.route.at(-1)).toEqual([23, 6]);
+    expect(race.route.at(-1)).toEqual([23, 7]);
     expect(race.winner).toBe('geometry-auditor');
   });
 
