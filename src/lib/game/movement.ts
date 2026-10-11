@@ -2711,7 +2711,7 @@ export function resolveRepairCleanup(
           `${robot.name} drew ${option.cardId.replaceAll('-', ' ')} for ending the turn at Flag ${flag.number}.`);
       }
     }
-    if (!repair) continue;
+    if (!repair && !flag) continue;
     if (!rules.repair.awardOptions) {
       const priorDamage = robot.damage;
       robot.damage = Math.max(0, robot.damage - 1);
@@ -2722,8 +2722,9 @@ export function resolveRepairCleanup(
         null,
         'repair',
         `${robot.name} repaired from ${priorDamage} to ${robot.damage} damage at ` +
-          `(${repairCell!.x},${repairCell!.y})${
-            occupiedRepairCell ? '' : ' using Mechanical Arm'
+          `${repairCell ? '' : `Flag ${flag!.number} `}(${repairCell?.x ?? flag!.x},${repairCell?.y ?? flag!.y})${
+            occupiedRepairCell || (flag?.x === robot.x && flag?.y === robot.y)
+              ? '' : ' using Mechanical Arm'
           }.`
       );
       const retainedRegisters = new Set(lockedRegisterNumbersForDamage(robot.damage));
@@ -2744,7 +2745,7 @@ export function resolveRepairCleanup(
         );
       }
     }
-    const optionDraws = rules.repair.awardOptions
+    const optionDraws = !repair ? 0 : rules.repair.awardOptions
       ? (repair.option ? rules.repair.crossedOptions : rules.repair.singleOptions)
       : repair.option
         ? 1

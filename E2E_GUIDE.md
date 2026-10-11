@@ -78,7 +78,8 @@ the complete-race browser history supplies multiple live turns.
 
 Scenario 009 is the first production-size history: two clients submit ten
 consecutive Programs, including an owner-authored re-entry between turns. It
-proves repair cleanup, ordered flags, moving Archives, the terminal summary,
+proves repair cleanup (including once-per-round flag repair in both clients),
+ordered flags, moving Archives, the terminal summary,
 and rematch epoch retention entirely through append-only browser actions.
 
 Scenario 010 plays eight turns through two clients. It proves that only eligible
@@ -125,6 +126,11 @@ the Flag teams, switches Interference hands, expires both published course
 clocks, and follows Moving Targets flags through a programmed turn. Scenario
 030 uses the actual tabletop and private phones for the new Option draft,
 two-robot controls, and home-board deployment.
+
+Scenario 032 checks all eight graphical robot choices and numbered flag assets
+in real phone and desktop races, including successful image loads and readable
+robot buttons. Scenario 029 also checks that robots fit their cells on every
+published course.
 
 ## Scenario layout
 

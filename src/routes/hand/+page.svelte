@@ -1,4 +1,5 @@
 <script lang="ts">
+  import RobotMarker from "$lib/components/RobotMarker.svelte";
   import CaptureDeployment from "$lib/components/CaptureDeployment.svelte";
   import { raceRoster } from "$lib/room-model";
   import StartingOptionDraft from "$lib/components/StartingOptionDraft.svelte";
@@ -684,7 +685,7 @@
                   aria-pressed={selectedRobot === robot.id}
                   disabled={unavailableRobots.has(robot.id)}
                   onclick={() => (selectedRobot = robot.id)}
-                ><span>{robot.mark}</span>{robot.name}</button>
+                ><RobotMarker robotId={robot.id} decorative />{robot.name}</button>
               {/each}
             </div>
           </fieldset>
@@ -1029,9 +1030,7 @@
   .join-position fieldset { margin: 0; padding: 14px; border: 1px solid #465356; }
   .robot-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; margin-top: 10px; }
   .robot-options button { display: flex; align-items: center; gap: 8px; color: #d2ff37; background: #202b2d; text-align: left; }
-  .robot-options button span { color: #ffcf4b; }
   .robot-options button.selected { color: #111; background: #d2ff37; }
-  .robot-options button.selected span { color: #111; }
   .ready-control p { margin: 0 0 16px; }
   .ready-control button, .next-turn-control button { width: 100%; }
   .next-turn-control p { margin: 0 0 16px; }

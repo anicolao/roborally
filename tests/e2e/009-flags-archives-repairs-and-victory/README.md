@@ -18,6 +18,7 @@ Two real clients play ten deterministic turns. Ada archives on a repair site, to
 **Verifications:**
 
 - [x] Ada has Flags 1 and 2 and archives on Flag 2
+- [x] Ending the round on Flag 2 repairs once in both clients
 - [x] Grace re-enters with two damage and both clients converge
 
 ## Flag 3 ends the race with a shared immutable summary

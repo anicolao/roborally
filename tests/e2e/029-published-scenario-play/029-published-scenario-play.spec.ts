@@ -73,6 +73,9 @@ test('all published scenarios can be selected, set up, and dealt through ordinar
           for (const page of [host, guests[0]]) {
             await expect(page.getByRole('heading', { name: course.name, exact: true })).toBeVisible();
             await expect(page.locator('.race-robot')).toHaveCount(count);
+            await expect.poll(() => page.locator('.race-robot').evaluateAll(robots =>
+              robots.every(robot => robot.getBoundingClientRect().width <= robot.parentElement!.getBoundingClientRect().width)
+            )).toBe(true);
             await expect(page.locator('.course-flag')).toHaveCount(course.flags.length);
           }
         }}

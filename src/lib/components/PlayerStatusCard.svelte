@@ -1,5 +1,7 @@
 <script lang="ts">
   import { base } from "$app/paths";
+  import RobotMarker from './RobotMarker.svelte';
+  export let robotId: string | undefined = undefined;
   import ProgramCardFace from './ProgramCardFace.svelte';
   import { PROGRAM_CARDS, type ProgramCard } from '$lib/game/program-manifest';
   import type { ProgramPlaybackFrame, LockedRegisterState } from '$lib/game/movement';
@@ -35,7 +37,7 @@
   {/if}
           <strong class="player-name">{playerName}</strong>
           {#if scenarioLabel}<small class="scenario-label">{scenarioLabel}</small>{/if}
-          {#if showRobotName}<small class="robot-name">{robotName}</small>{/if}
+          {#if showRobotName}<small class="robot-name">{#if robotId}<RobotMarker {robotId} decorative />{/if}{robotName}</small>{/if}
           <div
             class="robot-vitals"
             aria-hidden={compact ? true : undefined}
@@ -145,6 +147,7 @@
   {#if archive}<small class="archive">Archive ({archive.x},{archive.y})</small>{/if}
 </div>
 <style>
+  .robot-name { display: flex; align-items: center; gap: 6px; --robot-art-size: 24px; }
   .scenario-label { color: #ffcf4b; font-size: 11px; font-weight: bold; }
   .player-status { display: contents; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
