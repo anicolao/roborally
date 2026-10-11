@@ -1,0 +1,17 @@
+{
+  "name": "Robo Rally",
+  "short_name": "Robo Rally",
+  "description": "Program robots through the 2005 Robo Rally factory.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0b0f10",
+  "theme_color": "#111719",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
