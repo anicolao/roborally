@@ -23,6 +23,24 @@ The flag has a wrench emblem on its base. Its number stays live text for crisp
 rendering, and team colors remain on the number badge. Accessible robot names,
 board-cell descriptions, and facing descriptions remain available.
 
+## Existing art for comparison
+
+These are the existing board and card assets, unchanged by this PR. Compare
+their darker, weathered metal, flatter lighting, and restrained color accents
+with the brighter enamel and rounded robot shapes proposed above.
+
+| Repair tile | Conveyor tile | Program card frame |
+| --- | --- | --- |
+| <img src="../static/assets/board-tiles/repair.webp" alt="Existing repair tile" width="200"> | <img src="../static/assets/board-tiles/conveyor.webp" alt="Existing conveyor tile" width="200"> | <img src="../static/assets/cards/program-card-background-square-v1.webp" alt="Existing program card frame" width="200"> |
+
+| Brakes Option art | Mechanical Arm Option art | Ablative Coat Option art |
+| --- | --- | --- |
+| <img src="../static/assets/options/brakes-poc.webp" alt="Existing Brakes art" width="200"> | <img src="../static/assets/options/mechanical-arm-poc.webp" alt="Existing Mechanical Arm art" width="200"> | <img src="../static/assets/options/ablative-coat-poc.webp" alt="Existing Ablative Coat art" width="200"> |
+
+The new robot designs are a first proposal for visual review. A closer match
+would use darker worn metal, less glossy enamel, and smaller colored panels
+while retaining the silhouettes and north-facing barrels.
+
 ## Repair correction
 
 Cleanup previously found flags for Option World awards but required a printed
