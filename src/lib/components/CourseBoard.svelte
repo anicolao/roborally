@@ -223,7 +223,7 @@
             style={`left:${((player.position.x - compiledCourse.minX + 0.5) / compiledCourse.width) * 100}%;top:${((player.position.y - compiledCourse.minY + 0.5) / compiledCourse.height) * 100}%;--playback-duration:${transitionDurationMs}ms;--movement-delay:${movementDelayMs}ms;transform:translate(-50%, -50%) rotate(${playbackRotation(player)}deg)`}
           >
             <RobotHeadingOutline />
-              <RobotMarker robotId={player.robotId} decorative />
+            <RobotMarker robotId={player.robotId} decorative />
           </span>
         {/each}
       {/if}
