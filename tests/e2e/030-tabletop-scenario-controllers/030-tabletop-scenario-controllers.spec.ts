@@ -55,13 +55,14 @@ test('private controllers draft Options, switch Interference robots, and deploy 
           return captain;
         }).toBeGreaterThanOrEqual(0);
         await phones[captain].getByRole('button', { name: 'Choose Vault', exact: true }).click();
+        // Both teammates may deploy at once. Choose a fixed seat order instead
+        // of letting network delivery decide which robot gets the first cell.
+        const firstTeamSeat = captain % 2;
+        const deploymentOrder = [firstTeamSeat, firstTeamSeat + 2, 1 - firstTeamSeat, 3 - firstTeamSeat];
         for (let placed = 0; placed < phones.length; placed++) {
-          let current = -1;
-          await expect.poll(async () => {
-            current = (await Promise.all(phones.map((phone) => phone.getByRole('button', { name: 'Place my robot', exact: true }).isVisible()))).findIndex(Boolean);
-            return current;
-          }).toBeGreaterThanOrEqual(0);
+          const current = deploymentOrder[placed];
           const phone = phones[current];
+          await expect(phone.getByRole('button', { name: 'Place my robot', exact: true })).toBeVisible();
           await phone.getByRole('button', { name: /^Start at / }).first().click();
           if (placed === 0) {
             steps.setPage(phone);

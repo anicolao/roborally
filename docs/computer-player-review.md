@@ -55,6 +55,6 @@ and [tabletop](../tests/e2e/031-computer-player/README.md).
 Web play now releases computer decisions when its local playback finishes;
 tabletop play continues to require its shared frame acknowledgements. This fixes
 computers waiting indefinitely on damage, Option, or re-entry choices in web
-rooms that never emit tabletop checkpoints. The web decision regression covers
+rooms that never emit tabletop checkpoints. The [web decision regression](../tests/e2e/031-computer-player/WEB_DECISIONS.md) covers
 waiting during playback, automatically taking laser damage, and finishing the
 turn. Existing games resume after reloading the host browser.
