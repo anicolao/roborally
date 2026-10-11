@@ -9,6 +9,7 @@ test('robot selection and the course share complete graphical robot and flag ass
   await page.goto(`/?e2eIdentity=HOST&e2eRoomCode=${room}&e2eSeed=ART-1`);
   await expect(page.getByRole('status')).toHaveText('Connected');
   await page.getByRole('button', { name: 'Create race' }).click();
+  await page.getByRole('button', { name: 'Create and claim seat' }).scrollIntoViewIfNeeded();
   await steps.step('eight-robot-designs', {
     description: 'All eight robots have readable names and distinct artwork',
     verifications: [{ spec: 'Every robot image loads and every named robot can be selected', check: async () => {
