@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { base } from '$app/paths';
+  import RobotHeadingOutline from '$lib/components/RobotHeadingOutline.svelte';
   import RobotMarker from '$lib/components/RobotMarker.svelte';
   import BoardTile from '$lib/components/BoardTile.svelte';
   import type { BoardElement, Direction, Wall } from '$lib/game/course-manifest';
@@ -203,6 +204,7 @@
               class={`race-robot robot-${player.robotId} facing-${player.facing}`}
               title={`${player.name}, ${robot?.name}, facing ${player.facing}`}
             >
+              <RobotHeadingOutline />
               <RobotMarker robotId={player.robotId} decorative />
             </span>
           {/each}
@@ -220,7 +222,8 @@
             data-facing={player.facing}
             style={`left:${((player.position.x - compiledCourse.minX + 0.5) / compiledCourse.width) * 100}%;top:${((player.position.y - compiledCourse.minY + 0.5) / compiledCourse.height) * 100}%;--playback-duration:${transitionDurationMs}ms;--movement-delay:${movementDelayMs}ms;transform:translate(-50%, -50%) rotate(${playbackRotation(player)}deg)`}
           >
-            <RobotMarker robotId={player.robotId} decorative />
+            <RobotHeadingOutline />
+              <RobotMarker robotId={player.robotId} decorative />
           </span>
         {/each}
       {/if}
@@ -333,7 +336,8 @@
   }
   .course-board {
     container-type: size;
-    --board-piece-size: min(32px, calc(85cqw / var(--course-columns)));
+    --board-piece-size: min(32px, calc(72cqw / var(--course-columns)));
+    --board-flag-size: calc(96cqw / var(--course-columns));
     position: relative;
     display: grid;
     width: 100%;
@@ -378,18 +382,20 @@
   .course-flag[data-flag-team="team-2"] { --flag-color: #f395df; }
   .course-flag {
     position: absolute; z-index: 3; top: 50%; left: 50%;
-    width: var(--board-piece-size); height: var(--board-piece-size); transform: translate(-50%, -50%);
+    width: var(--board-flag-size); height: var(--board-flag-size); transform: translate(-50%, -50%);
   }
   .course-flag img { width: 100%; height: 100%; object-fit: contain; }
-  .course-flag b { position: absolute; top: 1px; right: 0; min-width: min(16px, calc(var(--board-piece-size) * .55));
-    border-radius: 4px; text-align: center; color: #101510;
-    background: var(--flag-color, #ffcf4b); font: 700 clamp(8px, calc(var(--board-piece-size) * .45), 14px) 'Space Mono', monospace;
-    box-shadow: 0 0 0 1px #151b1b; }
+  .course-flag b {
+    position: absolute; top: 25%; left: 49%; width: 28%; text-align: center;
+    color: var(--flag-color, #eadab3);
+    font: 700 clamp(8px, calc(var(--board-flag-size) * .21), 15px) 'Space Mono', monospace;
+    text-shadow: 0 1px 2px #000;
+  }
   .race-robot, .animated-race-robot { --robot-art-size: var(--board-piece-size); }
   .race-robot {
     position: absolute; z-index: 4; top: 50%; left: 50%;
     display: grid; width: var(--board-piece-size); height: var(--board-piece-size); place-items: center;
-    border: 0; border-radius: 6px;
+    border: 0;
     background: transparent;
     font: 700 14px 'Space Mono', monospace;
     transform: translate(-50%, -50%);
@@ -403,7 +409,6 @@
     height: var(--board-piece-size);
     place-items: center;
     border: 0;
-    border-radius: 6px;
     background: transparent;
     font: 700 14px 'Space Mono', monospace;
     transform: translate(-50%, -50%);
@@ -413,8 +418,7 @@
       transform var(--playback-duration) ease-in-out;
   }
   .animated-race-robot { transition-delay: var(--movement-delay, 0ms); }
-  .active-robot { outline: 3px solid #ffe493; z-index: 8;
-    box-shadow: 0 0 12px 6px #ffce45e6, 0 0 28px 10px #ffb90099; }
+  .active-robot { z-index: 8; }
   .robot-axle { --robot-color: #65d8ff; }
   .robot-bit { --robot-color: #ffb454; }
   .robot-cog { --robot-color: #ff79c6; }
@@ -425,7 +429,14 @@
   .robot-rivet { --robot-color: #9ad1ff; }
   .race-robot.current-player, .animated-race-robot.current-player {
     --robot-color: #d2ff37;
-    box-shadow: 0 0 0 2px #d2ff37, 0 0 12px rgba(210, 255, 55, .9);
+    --heading-color: var(--robot-color);
+    --heading-glow: drop-shadow(0 0 4px var(--robot-color));
+    --heading-stroke: 2;
+  }
+  .race-robot.active-robot, .animated-race-robot.active-robot {
+    --heading-color: var(--robot-color);
+    --heading-glow: drop-shadow(0 0 3px var(--robot-color)) drop-shadow(0 0 8px var(--robot-color));
+    --heading-stroke: 3;
   }
   .facing-east { transform: translate(-50%, -50%) rotate(90deg); }
   .facing-south { transform: translate(-50%, -50%) rotate(180deg); }

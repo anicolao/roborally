@@ -8,8 +8,10 @@ identity. The same robot asset appears on the board, in the robot picker, on
 tabletop mats, and on web player cards. The forward
 barrel points north in the source asset; existing facing rotations and playback
 movement rotate the whole robot. Board pieces shrink with their cells on dense
-courses so adjacent robots do not overlap. Existing active-player and execution
-highlights remain in place.
+courses so adjacent robots do not overlap. Teardrop outlines point in the direction of travel. Your robot keeps a lime
+outline at rest and during execution; other robots use their individual colors.
+Execution thickens the outline and adds a bright neon glow without changing
+its color.
 
 | Axle | Bit | Cog | Dash |
 | --- | --- | --- | --- |
@@ -23,7 +25,8 @@ highlights remain in place.
 
 The flag uses the same brushed steel and amber edge lighting as the repair tiles,
 with a wrench incorporated into its base. Its number stays live text for crisp
-rendering, and team colors remain on the number badge. Accessible robot names,
+rendering, with a small number on the pennant instead of a large badge. Flags
+fill almost the entire tile, and team colors remain on the number. Accessible robot names,
 board-cell descriptions, and facing descriptions remain available.
 
 ## Existing art for comparison
