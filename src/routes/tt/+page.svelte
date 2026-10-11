@@ -1,4 +1,6 @@
 <script lang="ts">
+  import AddComputer from "$lib/components/AddComputer.svelte";
+  import ComputerController from "$lib/components/ComputerController.svelte";
   import CaptureDeployment from "$lib/components/CaptureDeployment.svelte";
   import { raceRoster } from "$lib/room-model";
   import ScenarioTeams from "$lib/components/ScenarioTeams.svelte";
@@ -111,6 +113,7 @@
   let playbackProductionDurationMs = 2_000;
   let playbackKey = "";
   let serverAtHead = false;
+  let computerStateConfirmed = false;
   let presentationTimelineIndex = 0;
   let presentationBusy = false;
   let presentationCountdownComplete = false;
@@ -317,10 +320,12 @@
               : "Waiting for race configuration";
         },
         (error) => {
+          computerStateConfirmed = false;
           console.error(error);
           status = "Connection interrupted. Reconnecting…";
         },
         (sync) => {
+          computerStateConfirmed = sync.source === "server" && !sync.hasPendingWrites;
           if (sync.source === "server" && !sync.hasPendingWrites) serverAtHead = true;
         },
       );
@@ -708,6 +713,7 @@
 
 <svelte:head><title>Robo Rally · Tabletop</title></svelte:head>
 
+<ComputerController {state} {services} {roomCode} synced={computerStateConfirmed} />
 <main
   class="tabletop"
   data-e2e-tabletop
@@ -897,6 +903,7 @@
         {/if}
       {:else}
         <div class="course-control" aria-label="Tabletop race configuration">
+          <AddComputer {state} {services} {roomCode} />
           <div>
             <span>COURSE CONTROL</span>
             <strong
@@ -906,9 +913,9 @@
             >
             <small>
               {state.players.length < 2
-                ? "At least two racers must scan a position before setup."
+                ? "Add computers or invite racers to fill at least two positions."
                 : state.configuration
-                  ? `${state.readyPlayerUids.length}/${state.players.length} racers ready on their phones.`
+                  ? `${state.readyPlayerUids.length}/${state.players.length} racers ready.`
                   : "Choose the shared course and settings here on the table."}
             </small>
           </div>

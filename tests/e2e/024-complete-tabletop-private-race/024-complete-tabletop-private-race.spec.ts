@@ -443,6 +443,7 @@ test('two private phone controllers complete a fully documented tabletop race', 
       'The complete tabletop configuration and all position QR codes fit the shared display',
       async () => {
         await expect(table.getByLabel('Tabletop race configuration')).toBeVisible();
+        await expect(table.getByRole('button', { name: 'Add computer', exact: true })).toBeVisible();
         await expect(table.getByRole('img', { name: /QR code to join position/ })).toHaveCount(8);
       }
     );
