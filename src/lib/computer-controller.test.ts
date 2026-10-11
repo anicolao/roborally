@@ -23,6 +23,8 @@ describe('computer turn control', () => {
     const state = fixture();
     state.resolution = { robots: createRaceRobotPositions(state.setup!), turnNumber: 1, phase: 'awaiting-option-decision', pendingOptionDecision: { uid: 'bot', decisionId: 'damage', choices: [{ id: 'discard:shield' }, { id: 'take-damage' }] } } as ProgramResolution;
     expect(nextComputerAction(state, player)).toBeNull();
+    expect(nextComputerAction(state, player, false)).toBeNull();
+    expect(nextComputerAction(state, player, true)?.key).toContain('damage');
     state.revealedDecisionKey = 'option-decision:damage';
     const choose = vi.spyOn(service, 'chooseEffect').mockResolvedValue();
     const services = { db: {}, user: { uid: 'bot' } } as FirebaseServices;
@@ -31,6 +33,14 @@ describe('computer turn control', () => {
     const firstKey = nextComputerAction(state, player)!.key;
     state.programming!.turnId = 'turn-002';
     expect(nextComputerAction(state, player)!.key).not.toBe(firstKey);
+  });
+  it('does not bypass tabletop frame acknowledgements with a local playback signal', () => {
+    const state = fixture();
+    state.resolution = { robots: createRaceRobotPositions(state.setup!), turnNumber: 1, phase: 'awaiting-option-decision', playback: { frames: [{}, {}] }, pendingOptionDecision: { uid: 'bot', decisionId: 'damage', choices: [{ id: 'take-damage' }] } } as ProgramResolution;
+    state.presentationTurn = { turnNumber: 1, turnId: 'turn-001', frameCursor: 1, segment: 0, timeline: [] };
+    expect(nextComputerAction(state, player, true)).toBeNull();
+    state.presentationTurn.frameCursor = 2;
+    expect(nextComputerAction(state, player, true)?.key).toContain('damage');
   });
   it('chooses an available re-entry without taking over a human decision', async () => {
     const state = fixture();

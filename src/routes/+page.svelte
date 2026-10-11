@@ -1080,7 +1080,11 @@
   <title>{mode === 'room' ? `Room ${roomCode} — Robo Rally` : 'Robo Rally — Program the factory'}</title>
 </svelte:head>
 
-<ComputerController state={roomState} {services} {roomCode} synced={connectionState === "synced"} />
+<ComputerController state={roomState} {services} {roomCode} synced={connectionState === "synced"}
+  playbackComplete={!roomState.resolution?.playback.frames.length || (
+    playbackPhase === 'complete' && resolutionPlaybackKey === playbackKey && !queuedPlayback &&
+    !!scheduledPlayback && firstChangedPlaybackFrame(scheduledPlayback.frames, roomState.resolution.playback.frames) === null
+  )} />
 <main data-testid="build-marker" data-build={buildHash} class="shell" data-e2e-layout>
   <header class="masthead">
     <a class="brand" href={base || "/"} aria-label="Robo Rally home">
