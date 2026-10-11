@@ -78,6 +78,10 @@ test('face-up Options remain available for execution-time decisions', async (
   const guest = await guestContext.newPage();
 
   try {
+    // Review decisions at rest; scenario 008 covers the growing laser animation.
+    // Keep laser tips fixed while inspecting the pending decision.
+    await host.emulateMedia({ reducedMotion: 'reduce' });
+    await guest.emulateMedia({ reducedMotion: 'reduce' });
     await host.goto(`/?e2eIdentity=HOST&e2eRoomCode=${roomCode}&e2eCourse=risky-exchange-a&e2eSeed=OPTION-11`);
     await expect(host.getByRole('status')).toHaveText('Connected');
     await host.getByRole('button', { name: 'Create race' }).click();
@@ -153,6 +157,7 @@ test('face-up Options remain available for execution-time decisions', async (
     await guest.getByRole('button', { name: 'Begin Turn 5' }).click();
     await stayActiveInDockOrder([host, guest]);
     const table = await host.context().newPage();
+    await table.emulateMedia({ reducedMotion: 'reduce' });
     await enableSyntheticPlaybackClock(table);
     await table.goto(`/tt/?room=${roomCode}`);
     await chooseFirstProgram(host);
