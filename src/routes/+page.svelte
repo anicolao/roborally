@@ -84,6 +84,7 @@
   let cacheHydrated = false;
   let roomWatchGeneration = 0;
   let synchronizedEventCount = 0;
+  let computerStateConfirmed = false;
   let synchronizedCursor = '';
   let mode: ViewMode = 'landing';
   let services: FirebaseServices | undefined;
@@ -478,6 +479,7 @@
     roomState = emptyRoomState();
     cacheHydrated = false;
     synchronizedEventCount = 0;
+    computerStateConfirmed = false;
     synchronizedCursor = '';
     formError = '';
     requestedTurnNumber = 1;
@@ -563,6 +565,7 @@
       },
       (status) => {
         if (generation !== roomWatchGeneration) return;
+        computerStateConfirmed = status.source === 'server' && !status.hasPendingWrites;
         synchronizedEventCount = status.eventCount;
         synchronizedCursor = status.cursor
           ? `${status.cursor.createdAt}:${status.cursor.id}`
@@ -1080,7 +1083,7 @@
   <title>{mode === 'room' ? `Room ${roomCode} — Robo Rally` : 'Robo Rally — Program the factory'}</title>
 </svelte:head>
 
-<ComputerController state={roomState} {services} {roomCode} synced={connectionState === "synced"}
+<ComputerController state={roomState} {services} {roomCode} synced={connectionState === "synced" && computerStateConfirmed}
   playbackComplete={!roomState.resolution?.playback.frames.length || (
     playbackPhase === 'complete' && resolutionPlaybackKey === playbackKey && !queuedPlayback &&
     !!scheduledPlayback && firstChangedPlaybackFrame(scheduledPlayback.frames, roomState.resolution.playback.frames) === null

@@ -19,6 +19,24 @@ export async function addComputerPlayer(state: RoomState, host: FirebaseServices
 }
 
 type Action = { key: string; run: (computer: FirebaseServices, room: string) => Promise<void> };
+
+/** Wait for the host to observe our write before retrying a rejected intent. */
+export class ComputerActionAttempts {
+  private attempts = new Map<string, { sequence: number; count: number }>();
+  clear() { this.attempts.clear(); }
+  cancel(key: string) { this.attempts.delete(key); }
+  begin(key: string, state: RoomState, uid: string): boolean {
+    const sequence = [...state.acceptedEventIds, ...state.diagnostics.map(({ eventId }) => eventId)]
+      .filter((id) => id.startsWith(`${uid}-`))
+      .reduce((latest, id) => Math.max(latest, Number(id.slice(uid.length + 1))), 0);
+    const previous = this.attempts.get(key);
+    if (previous?.sequence === sequence) return false;
+    if (previous && previous.count >= 3) throw new Error('The computer decision was repeatedly rejected.');
+    this.attempts.set(key, { sequence, count: (previous?.count ?? 0) + 1 });
+    return true;
+  }
+}
+
 export function nextComputerAction(state: RoomState, player: RoomPlayer, playbackComplete = presentationDecisionAvailable(state)): Action | null {
   const decisionAvailable = playbackComplete && (!presentationUsesEventStream(state) || presentationDecisionAvailable(state));
   const uid = player.uid;

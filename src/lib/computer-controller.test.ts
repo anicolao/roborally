@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { nextComputerAction } from './computer-controller';
+import { ComputerActionAttempts, nextComputerAction } from './computer-controller';
 import { emptyRoomState, type RoomPlayer } from './room-model';
 import { deriveRaceSetup, riskyExchangeConfig } from './game/setup';
 import { createProgrammingState } from './game/programming';
@@ -19,6 +19,23 @@ function fixture() {
 }
 afterEach(() => vi.restoreAllMocks());
 describe('computer turn control', () => {
+  it('waits for acknowledgement and retries a rejected decision without flooding writes', () => {
+    const state = fixture();
+    const attempts = new ComputerActionAttempts();
+    expect(attempts.begin('power:2', state, 'bot')).toBe(true);
+    expect(attempts.begin('power:2', state, 'bot')).toBe(false);
+    state.acceptedEventIds.push('host-000001');
+    expect(attempts.begin('power:2', state, 'bot')).toBe(false);
+    state.diagnostics.push({ eventId: 'bot-000001', code: 'invalid-power-down', message: 'Out of order' });
+    expect(attempts.begin('power:2', state, 'bot')).toBe(true);
+    expect(attempts.begin('power:2', state, 'bot')).toBe(false);
+    state.diagnostics.push({ eventId: 'bot-000002', code: 'invalid-power-down', message: 'Out of order' });
+    expect(attempts.begin('power:2', state, 'bot')).toBe(true);
+    state.diagnostics.push({ eventId: 'bot-000003', code: 'invalid-power-down', message: 'Out of order' });
+    expect(() => attempts.begin('power:2', state, 'bot')).toThrow('repeatedly rejected');
+    attempts.clear();
+    expect(attempts.begin('power:2', state, 'bot')).toBe(true);
+  });
   it('waits for the presentation barrier, then takes damage rather than hanging on an Option', async () => {
     const state = fixture();
     state.resolution = { robots: createRaceRobotPositions(state.setup!), turnNumber: 1, phase: 'awaiting-option-decision', pendingOptionDecision: { uid: 'bot', decisionId: 'damage', choices: [{ id: 'discard:shield' }, { id: 'take-damage' }] } } as ProgramResolution;

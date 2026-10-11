@@ -58,3 +58,11 @@ computers waiting indefinitely on damage, Option, or re-entry choices in web
 rooms that never emit tabletop checkpoints. The [web decision regression](../tests/e2e/031-computer-player/WEB_DECISIONS.md) covers
 waiting during playback, automatically taking laser damage, and finishing the
 turn. Existing games resume after reloading the host browser.
+
+Computers also wait for server-confirmed room snapshots, including when their
+host has a pending local write. This prevents a following computer's power
+response from reaching the server before the human response it depends on.
+A persisted but rejected action can retry after its acknowledgement appears;
+three rejected attempts stop with a visible retry message. The browser regression
+holds a real human power-choice network request and verifies that the computer
+waits until it is released.

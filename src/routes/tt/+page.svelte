@@ -113,6 +113,7 @@
   let playbackProductionDurationMs = 2_000;
   let playbackKey = "";
   let serverAtHead = false;
+  let computerStateConfirmed = false;
   let presentationTimelineIndex = 0;
   let presentationBusy = false;
   let presentationCountdownComplete = false;
@@ -319,10 +320,12 @@
               : "Waiting for race configuration";
         },
         (error) => {
+          computerStateConfirmed = false;
           console.error(error);
           status = "Connection interrupted. Reconnecting…";
         },
         (sync) => {
+          computerStateConfirmed = sync.source === "server" && !sync.hasPendingWrites;
           if (sync.source === "server" && !sync.hasPendingWrites) serverAtHead = true;
         },
       );
@@ -710,7 +713,7 @@
 
 <svelte:head><title>Robo Rally · Tabletop</title></svelte:head>
 
-<ComputerController {state} {services} {roomCode} synced={serverAtHead} />
+<ComputerController {state} {services} {roomCode} synced={computerStateConfirmed} />
 <main
   class="tabletop"
   data-e2e-tabletop

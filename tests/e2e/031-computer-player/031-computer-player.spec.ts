@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { TestStepHelper } from '../helpers/test-step-helper';
 import { enableSyntheticPlaybackClock } from '../helpers/playback-clock';
+import { replayRoom, type RoomEvent } from '../../../src/lib/room-model';
 
 async function computerPrograms(page: Page) {
   return page.evaluate(() => {
@@ -74,12 +75,12 @@ test('tabletop computers continue into another turn after the host reloads', asy
   steps.generateDocs();
 });
 
-test('web computers answer damage decisions after local playback finishes', async ({ page }, testInfo) => {
+test('web computers wait for playback and confirmed power decisions', async ({ page }, testInfo) => {
   const steps = new TestStepHelper(page, testInfo);
-  steps.setMetadata('Computer decisions during web playback', 'A computer waits until web playback reaches its laser damage decision, then answers without requiring a tabletop checkpoint.');
+  steps.setMetadata('Computer decisions during web playback', 'A computer waits until web playback reaches its laser damage decision, then waits for the preceding human power choice to reach the server before answering its own.');
   const room = `C31${testInfo.project.name === 'phone' ? 'P' : 'D'}DC`;
   await enableSyntheticPlaybackClock(page);
-  await page.goto(`/?e2eRoomCode=${room}&e2eCourse=option-lab&e2eSeed=BOT-CHOICE-3`);
+  await page.goto(`/?e2eRoomCode=${room}&e2eCourse=option-lab&e2eSeed=BOT-CHOICE-245`);
   await page.getByRole('button', { name: 'Create race', exact: true }).click();
   await page.getByLabel('Racer name').fill('Ada');
   await page.getByRole('button', { name: 'Axle' }).click();
@@ -91,29 +92,62 @@ test('web computers answer damage decisions after local playback finishes', asyn
   await page.getByRole('button', { name: 'Open programming console' }).click();
   const stay = page.getByRole('button', { name: 'Stay powered up', exact: true });
   if (await stay.isVisible()) await stay.click();
-  for (const priority of [700, 470, 340, 270, 610]) {
+  for (const priority of [840, 490, 200, 440, 350]) {
     await page.getByLabel('Your Program hand').getByRole('button', { name: new RegExp(`priority ${priority}$`) }).click();
   }
   await page.getByRole('button', { name: 'Lock program', exact: true }).click();
-  const decisions = () => page.evaluate(() => {
+  const roomEvents = () => page.evaluate(() => {
     const key = Object.keys(localStorage).find(key => key.startsWith('roborally.room-events.') && key.endsWith(new URL(location.href).searchParams.get('room')!.toLowerCase()))!;
     const { events } = JSON.parse(localStorage.getItem(key)!);
+    return events;
+  }) as Promise<RoomEvent[]>;
+  const decisions = async () => {
+    const events = await roomEvents();
     const bot = events.find((event: any) => event.type === 'player/joined' && event.payload.computerOwnerUid)?.actorUid;
-    return events.filter((event: any) => event.type === 'effect/chosen' && event.actorUid === bot && event.payload.choice.kind === 'option-decision');
-  });
+    return events.filter((event: any) => event.type === 'effect/chosen' && event.actorUid === bot && event.payload.choice.kind === 'option-decision') as any[];
+  };
   // The resolver has a pending decision, but the web clock has not shown it yet.
   await page.waitForTimeout(750);
   expect(await decisions()).toHaveLength(0);
-  await expect.poll(async () => {
+  const advance = async () => {
+    const takeDamage = page.getByRole('button', { name: 'Take this damage', exact: true });
+    if (await takeDamage.isVisible()) await takeDamage.click();
     await page.evaluate(() => window.__roborallyE2ePlaybackClock?.advanceToNext?.());
+  };
+  await expect.poll(async () => {
+    await advance();
     return (await decisions()).length;
   }, { timeout: 60_000, intervals: [100] }).toBeGreaterThan(0);
   expect((await decisions())[0].payload.choice.choiceId).toBe('take-damage');
   await expect.poll(async () => {
-    await page.evaluate(() => window.__roborallyE2ePlaybackClock?.advanceToNext?.());
+    await advance();
     return page.getByRole('heading', { name: 'Turn 1 complete', exact: true }).isVisible();
   }, { timeout: 60_000, intervals: [100] }).toBe(true);
   await expect.poll(async () => (await computerPrograms(page)).length).toBe(2);
+  let held = false, extraPowerWrites = 0;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const writeChannel = '**/google.firestore.v1.Firestore/Write/channel**';
+  await page.route(writeChannel, async route => {
+    const body = decodeURIComponent(route.request().postData() ?? '');
+    if (body.includes('power-down/responded')) {
+      if (!held) { held = true; await gate; }
+      else extraPowerWrites++;
+    }
+    await route.continue();
+  });
+  try {
+    await page.getByRole('button', { name: 'Stay active next turn', exact: true }).click();
+    await expect.poll(() => held).toBe(true);
+    await page.waitForTimeout(1000);
+    expect(extraPowerWrites, 'a bot must not act on an unconfirmed human choice').toBe(0);
+  } finally {
+    release();
+  }
+  await expect.poll(() => extraPowerWrites).toBe(1);
+  await page.unroute(writeChannel);
+  await expect.poll(async () => replayRoom(await roomEvents()).powerDownResponses.filter(({ turnId }) => turnId === 'turn-002').length).toBe(2);
+  expect(replayRoom(await roomEvents()).diagnostics).toEqual([]);
   await steps.step('computer-web-decision-resolved', { resetScroll: true, description: 'Computer Bit resolves its damage choice and web playback finishes the turn', verifications: [{ spec: 'The bot answered its own decision and the race is no longer waiting for it', check: async () => {
     expect((await decisions())[0].payload.choice.choiceId).toBe('take-damage');
     await expect(page.getByRole('heading', { name: 'Turn 1 complete', exact: true })).toBeVisible();

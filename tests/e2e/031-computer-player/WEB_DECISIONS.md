@@ -1,6 +1,6 @@
 # Computer decisions during web playback
 
-A computer waits until web playback reaches its laser damage decision, then answers without requiring a tabletop checkpoint.
+A computer waits until web playback reaches its laser damage decision, then waits for the preceding human power choice to reach the server before answering its own.
 
 ## Computer Bit resolves its damage choice and web playback finishes the turn
 
