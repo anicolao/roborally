@@ -1,4 +1,5 @@
 <script lang="ts">
+  import RobotMarker from "$lib/components/RobotMarker.svelte";
   import AddComputer from "$lib/components/AddComputer.svelte";
   import ComputerController from "$lib/components/ComputerController.svelte";
   import CaptureDeployment from "$lib/components/CaptureDeployment.svelte";
@@ -1210,7 +1211,7 @@
         <div class="your-robot" aria-label={`Your robot is ${currentRobot?.name ?? 'unknown'}`}>
           <span>YOUR ROBOT</span>
           <strong>{currentRobot?.name ?? 'Unknown'}</strong>
-          <small>{currentPlayer.name} · {currentRobot?.mark ?? '—'} · BRIGHT YELLOW ON BOARD</small>
+          <small>{currentPlayer.name} · BRIGHT OUTLINE ON BOARD</small>
         </div>
         {#if showProgramming && programmingPlayer && activeProgramming}
           <section class="program-console" data-program-card-count={activeProgramming ? programCardZones(activeProgramming).size : undefined} aria-labelledby="hand-heading">
@@ -1355,7 +1356,7 @@
                   {#each presentedResolutionRobots ?? [] as robot}
                     <li>
                       <PlayerStatusCard scenarioLabel={[robot.teamId?.replace('team-', 'Team '), robot.isSuperbot ? 'SuperBot' : '', robot.carriedFlag ? 'Carrying enemy flag' : '', robot.reentryWaitTurns ? 'Sitting out next turn' : ''].filter(Boolean).join(' · ')} compact uid={robot.uid} playerName={robot.name}
-                        robotName={ROBOTS.find(({ id }) => id === robot.robotId)?.name}
+                        robotId={robot.robotId} robotName={ROBOTS.find(({ id }) => id === robot.robotId)?.name}
                         startingLives={roomState.setup.players.find(({ uid }) => uid === robot.uid)?.lives ?? roomState.configuration.lives}
                         lives={robot.lives} damage={robot.damage}
                         powerMode={robot.poweredDown ? 'down' : robot.powerDownNextTurn ? 'announced' : 'active'}
@@ -1759,7 +1760,7 @@
                       disabled={unavailableRobots.has(robot.id)}
                       onclick={() => (selectedRobot = robot.id)}
                     >
-                      <span>{robot.mark}</span>{robot.name}
+                      <RobotMarker robotId={robot.id} decorative />{robot.name}
                     </button>
                   {/each}
                 </div>
@@ -2285,7 +2286,7 @@
   .join-panel input:focus { border-color: #d2ff37; box-shadow: 0 0 0 1px #d2ff37; }
   .join-panel fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
   .join-panel legend { margin-bottom: 7px; }
-  .robot-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .robot-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 5px; }
   .robot-options button {
     display: grid;
     min-width: 0;
@@ -2300,7 +2301,6 @@
     font-size: 16px;
     text-align: left;
   }
-  .robot-options button span { color: #d2ff37; font-size: 18px; }
   .robot-options button.selected {
     border-color: #d2ff37;
     color: #edf3ed;
@@ -2846,7 +2846,7 @@
     footer { font-size: 14px; }
 
     .join-panel { grid-column: 1 / -1; gap: 8px; margin-top: 12px; padding: 10px; }
-    .robot-options { grid-template-columns: repeat(4, 1fr); }
+    .robot-options { grid-template-columns: repeat(2, 1fr); }
     .robot-options button { min-height: 35px; font-size: 14px; }
     .lobby {
       grid-template-columns: minmax(0, 1fr);
@@ -3038,7 +3038,6 @@
       padding: 2px;
       font-size: 10px;
     }
-    .robot-options button span { font-size: 12px; }
     .join-panel > button[type='submit'] {
       min-height: 25px;
       padding: 0 4px;

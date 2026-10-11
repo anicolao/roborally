@@ -2772,6 +2772,40 @@ describe('priority Program movement', () => {
     expect(optionTrace.filter(({ kind }) => kind === 'option-drawn')).toHaveLength(3);
   });
 
+  it('repairs on any flag only at cleanup and unlocks registers without double repair', () => {
+    const course = compilePlayableCourse('risky-exchange');
+    const flag = course.course.flags[1];
+    const robot = raceRobot({ uid: 'flag-repair', name: 'Flag repair', x: flag.x, y: flag.y, damage: 5,
+      nextFlag: 1, lockedRegisters: [{ register: 5, cardId: 'program-060' }] });
+    const trace: ResolutionTraceEntry[] = [];
+    resolveFlagsAndArchives([robot], 1, trace, [], course.course.flags, course);
+    expect(robot.damage).toBe(5);
+    expect(robot.touchedFlags).toEqual([]);
+    resolveRepairCleanup([robot], trace, [], undefined, true, course);
+    expect(robot.damage).toBe(4);
+    expect(robot.lockedRegisters).toEqual([]);
+    expect(trace.filter(({ kind }) => kind === 'repair')).toHaveLength(1);
+    robot.damage = 5;
+    resolveRepairCleanup([robot], [], [{ x: flag.x, y: flag.y,
+      elements: [{ kind: 'repair', option: false }] }], undefined, true, course);
+    expect(robot.damage).toBe(4);
+    robot.status = 'destroyed';
+    resolveRepairCleanup([robot], [], [], undefined, true, course);
+    expect(robot.damage).toBe(4);
+  });
+
+  it('lets Mechanical Arm repair at a reachable flag without moving the robot', () => {
+    const course = compilePlayableCourse('risky-exchange');
+    const flag = course.course.flags[0];
+    const robot = raceRobot({ uid: 'arm-flag', name: 'Arm', x: flag.x, y: flag.y + 1,
+      damage: 2, options: [{ cardId: 'mechanical-arm', spent: 0, storedProgramCardId: null }] });
+    const trace: ResolutionTraceEntry[] = [];
+    resolveRepairCleanup([robot], trace, [], undefined, true, course);
+    expect(robot).toMatchObject({ x: flag.x, y: flag.y + 1, damage: 1 });
+    expect(trace).toContainEqual(expect.objectContaining({ kind: 'repair',
+      text: expect.stringContaining('using Mechanical Arm') }));
+  });
+
   it('repairs once in cleanup, unlocks low registers first, and preserves Option draws', () => {
     const single = raceRobot({
       uid: 'single',

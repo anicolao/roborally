@@ -160,6 +160,15 @@ test('ordered flags, archives, repairs, victory, and rematch span real turns', a
               }
             },
             {
+              spec: 'Ending the round on Flag 2 repairs once in both clients',
+              check: async () => {
+                for (const client of [host, guest]) {
+                  await expect(client.getByRole('list', { name: /^(Full resolution feed|Running turn history)$/ })
+                    .getByText('Ada repaired from 0 to 0 damage at Flag 2 (10,8).', { exact: false })).toHaveCount(1);
+                }
+              }
+            },
+            {
               spec: 'Grace re-enters with two damage and both clients converge',
               check: async () => {
                 await expect(host.getByRole('list', { name: 'Robot Life and damage state' })).toContainText(

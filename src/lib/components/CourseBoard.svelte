@@ -1,5 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { base } from '$app/paths';
+  import RobotMarker from '$lib/components/RobotMarker.svelte';
   import BoardTile from '$lib/components/BoardTile.svelte';
   import type { BoardElement, Direction, Wall } from '$lib/game/course-manifest';
   import type { ScenarioState } from '$lib/game/scenario-state';
@@ -192,7 +194,7 @@
             x={position.x}
             y={position.y}
           />
-          {#if flag}{@const team = scenario?.flagControl[flag] ?? scenario?.flags.find(({ number }) => number === flag)?.teamId ?? Object.entries(setup.capture?.homeBoards ?? {}).find(([, board]) => board === manifestCell?.boardInstanceId)?.[0]}<span class="course-flag" data-flag-team={team} title={team ? `Flag ${flag} · ${team.replace('team-', 'Team ')}` : `Flag ${flag}`}>{flag}</span>{/if}
+          {#if flag}{@const team = scenario?.flagControl[flag] ?? scenario?.flags.find(({ number }) => number === flag)?.teamId ?? Object.entries(setup.capture?.homeBoards ?? {}).find(([, board]) => board === manifestCell?.boardInstanceId)?.[0]}<span class="course-flag" data-flag-team={team} title={team ? `Flag ${flag} · ${team.replace('team-', 'Team ')}` : `Flag ${flag}`}><img src={`${base}/assets/flags/checkpoint-v1.webp`} alt="" /><b>{flag}</b></span>{/if}
           {#each displayedRobots.filter((player) => player.position.x === position.x && player.position.y === position.y) as player}
             {@const robot = ROBOTS.find((entry) => entry.id === player.robotId)}
             <span
@@ -201,7 +203,7 @@
               class={`race-robot robot-${player.robotId} facing-${player.facing}`}
               title={`${player.name}, ${robot?.name}, facing ${player.facing}`}
             >
-              <i></i>{robot?.mark}
+              <RobotMarker robotId={player.robotId} decorative />
             </span>
           {/each}
         </div>
@@ -218,7 +220,7 @@
             data-facing={player.facing}
             style={`left:${((player.position.x - compiledCourse.minX + 0.5) / compiledCourse.width) * 100}%;top:${((player.position.y - compiledCourse.minY + 0.5) / compiledCourse.height) * 100}%;--playback-duration:${transitionDurationMs}ms;--movement-delay:${movementDelayMs}ms;transform:translate(-50%, -50%) rotate(${playbackRotation(player)}deg)`}
           >
-            <i></i>{robot?.mark}
+            <RobotMarker robotId={player.robotId} decorative />
           </span>
         {/each}
       {/if}
@@ -330,6 +332,8 @@
     height: min(100cqh, calc(100cqw * var(--course-aspect)));
   }
   .course-board {
+    container-type: size;
+    --board-piece-size: min(32px, calc(85cqw / var(--course-columns)));
     position: relative;
     display: grid;
     width: 100%;
@@ -370,22 +374,23 @@
   .board-cell:nth-child(-n + 12) { border-top: 1px solid #344346; }
   .board-cell.dock-bay { background: #222a2b; }
   .course-board:focus .board-cell.active-cell { box-shadow: inset 0 0 0 2px #d2ff37; }
-  .course-flag[data-flag-team="team-1"] { background: #73dfed; }
-  .course-flag[data-flag-team="team-2"] { background: #f395df; }
+  .course-flag[data-flag-team="team-1"] { --flag-color: #73dfed; }
+  .course-flag[data-flag-team="team-2"] { --flag-color: #f395df; }
   .course-flag {
     position: absolute; z-index: 3; top: 50%; left: 50%;
-    display: grid; width: 18px; height: 18px; place-items: center;
-    border-radius: 50%;
-    color: #101510; background: #ffcf4b;
-    font: 700 18px 'Space Mono', monospace;
-    transform: translate(-50%, -50%);
-    box-shadow: 0 0 0 2px #151b1b;
+    width: var(--board-piece-size); height: var(--board-piece-size); transform: translate(-50%, -50%);
   }
+  .course-flag img { width: 100%; height: 100%; object-fit: contain; }
+  .course-flag b { position: absolute; top: 1px; right: 0; min-width: min(16px, calc(var(--board-piece-size) * .55));
+    border-radius: 4px; text-align: center; color: #101510;
+    background: var(--flag-color, #ffcf4b); font: 700 clamp(8px, calc(var(--board-piece-size) * .45), 14px) 'Space Mono', monospace;
+    box-shadow: 0 0 0 1px #151b1b; }
+  .race-robot, .animated-race-robot { --robot-art-size: var(--board-piece-size); }
   .race-robot {
     position: absolute; z-index: 4; top: 50%; left: 50%;
-    display: grid; width: 23px; height: 20px; place-items: center;
-    border: 2px solid #090d0e; border-radius: 3px;
-    color: #0c120d; background: var(--robot-color, #d2ff37);
+    display: grid; width: var(--board-piece-size); height: var(--board-piece-size); place-items: center;
+    border: 0; border-radius: 6px;
+    background: transparent;
     font: 700 14px 'Space Mono', monospace;
     transform: translate(-50%, -50%);
   }
@@ -394,13 +399,12 @@
     position: absolute;
     z-index: 5;
     display: grid;
-    width: 23px;
-    height: 20px;
+    width: var(--board-piece-size);
+    height: var(--board-piece-size);
     place-items: center;
-    border: 2px solid #090d0e;
-    border-radius: 3px;
-    color: #0c120d;
-    background: var(--robot-color, #d2ff37);
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
     font: 700 14px 'Space Mono', monospace;
     transform: translate(-50%, -50%);
     transition:
@@ -411,10 +415,6 @@
   .animated-race-robot { transition-delay: var(--movement-delay, 0ms); }
   .active-robot { outline: 3px solid #ffe493; z-index: 8;
     box-shadow: 0 0 12px 6px #ffce45e6, 0 0 28px 10px #ffb90099; }
-  .race-robot i, .animated-race-robot i {
-    position: absolute; top: -7px; left: 8px;
-    width: 4px; height: 7px; background: var(--robot-color, #d2ff37);
-  }
   .robot-axle { --robot-color: #65d8ff; }
   .robot-bit { --robot-color: #ffb454; }
   .robot-cog { --robot-color: #ff79c6; }
