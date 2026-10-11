@@ -1,0 +1,113 @@
+{
+  "tool": "Built-in image_gen",
+  "assets": [
+    {
+      "file": "static/assets/robots/axle-v2.webp",
+      "prompt": "Use case: style-transfer. Edit target Image 1: Axle robot silhouette. Images 2 and 3 are authoritative STYLE references from this game's Option cards. Redesign Axle as equipment manufactured in exactly the same world as those Options: dark worn gunmetal, machined steel, fine scratches and rubbed edges, restrained brass fasteners and hazard-yellow markings, subtle warm amber internal lights, realistic painted game illustration. Use cyan only on a few chipped identification panels, about 20 percent of the visible surface. Remove glossy toy enamel and cute face styling. Retain recognizable broad two-wheel chassis. Strict overhead view with forward laser barrel pointing UP at 12 o'clock, entire robot centered in square, silhouette fills 85 percent. No plinth, scene, floor, text or logo. True transparent background. Strong readable silhouette at 32 pixels. Match the Option references' materials, fine edge treatment and lighting rather than the target's cartoon outlines.",
+      "references": [
+        {
+          "file": "static/assets/robots/axle-v1.webp",
+          "revision": "6e85435"
+        },
+        "static/assets/options/brakes-poc.webp",
+        "static/assets/options/mechanical-arm-poc.webp"
+      ]
+    },
+    {
+      "file": "static/assets/robots/bit-v2.webp",
+      "prompt": "Use case: style-transfer. Edit target Image 1: bit robot silhouette. Images 2 and 3 are authoritative STYLE references from this game's Option cards. Redesign this robot as equipment manufactured in exactly the same world as those Options: dark worn gunmetal, machined steel, fine scratches and rubbed edges, restrained brass fasteners and hazard-yellow markings, subtle warm amber internal lights, realistic painted game illustration. amber-orange identification panels; compact square armored sensor housing and chunky tank treads. Colored identification panels cover about 20 percent of the visible surface; most of the body is weathered dark metal like the Options. Remove glossy toy enamel and cute face styling. Strict overhead view with forward laser barrel pointing UP at 12 o'clock, entire robot centered in square, silhouette fills 85 percent. No plinth, scene, floor, text or logo. True transparent background. Strong readable silhouette at 32 pixels. Match the Option references' materials, fine edge treatment and lighting rather than the target's cartoon outlines.",
+      "references": [
+        {
+          "file": "static/assets/robots/bit-v1.webp",
+          "revision": "6e85435"
+        },
+        "static/assets/options/brakes-poc.webp",
+        "static/assets/options/mechanical-arm-poc.webp"
+      ]
+    },
+    {
+      "file": "static/assets/robots/cog-v2.webp",
+      "prompt": "Use case: style-transfer. Edit target Image 1: cog robot silhouette. Images 2 and 3 are authoritative STYLE references from this game's Option cards. Redesign this robot as equipment manufactured in exactly the same world as those Options: dark worn gunmetal, machined steel, fine scratches and rubbed edges, restrained brass fasteners and hazard-yellow markings, subtle warm amber internal lights, realistic painted game illustration. muted magenta identification panels; circular gear-shaped chassis and two side wheels. Colored identification panels cover about 20 percent of the visible surface; most of the body is weathered dark metal like the Options. Remove glossy toy enamel and cute face styling. Strict overhead view with forward laser barrel pointing UP at 12 o'clock, entire robot centered in square, silhouette fills 85 percent. No plinth, scene, floor, text or logo. True transparent background. Strong readable silhouette at 32 pixels. Match the Option references' materials, fine edge treatment and lighting rather than the target's cartoon outlines.",
+      "references": [
+        {
+          "file": "static/assets/robots/cog-v1.webp",
+          "revision": "6e85435"
+        },
+        "static/assets/options/brakes-poc.webp",
+        "static/assets/options/mechanical-arm-poc.webp"
+      ]
+    },
+    {
+      "file": "static/assets/robots/dash-v2.webp",
+      "prompt": "Use case: style-transfer. Edit target Image 1: dash robot silhouette. Images 2 and 3 are authoritative STYLE references from this game's Option cards. Redesign this robot as equipment manufactured in exactly the same world as those Options: dark worn gunmetal, machined steel, fine scratches and rubbed edges, restrained brass fasteners and hazard-yellow markings, subtle warm amber internal lights, realistic painted game illustration. muted violet identification panels; sleek racing chassis and swept fins, nose and barrel both point NORTH toward top of image. Colored identification panels cover about 20 percent of the visible surface; most of the body is weathered dark metal like the Options. Remove glossy toy enamel and cute face styling. Strict overhead view with forward laser barrel pointing UP at 12 o'clock, entire robot centered in square, silhouette fills 85 percent. No plinth, scene, floor, text or logo. True transparent background. Strong readable silhouette at 32 pixels. Match the Option references' materials, fine edge treatment and lighting rather than the target's cartoon outlines.",
+      "references": [
+        {
+          "file": "static/assets/robots/dash-v1.webp",
+          "revision": "6e85435"
+        },
+        "static/assets/options/brakes-poc.webp",
+        "static/assets/options/mechanical-arm-poc.webp"
+      ]
+    },
+    {
+      "file": "static/assets/robots/flux-v2.webp",
+      "prompt": "Use case: style-transfer. Edit target Image 1: flux robot silhouette. Images 2 and 3 are authoritative STYLE references from this game's Option cards. Redesign this robot as equipment manufactured in exactly the same world as those Options: dark worn gunmetal, machined steel, fine scratches and rubbed edges, restrained brass fasteners and hazard-yellow markings, subtle warm amber internal lights, realistic painted game illustration. muted teal identification panels; round reactor chassis with large magnetic side pods. Colored identification panels cover about 20 percent of the visible surface; most of the body is weathered dark metal like the Options. Remove glossy toy enamel and cute face styling. Strict overhead view with forward laser barrel pointing UP at 12 o'clock, entire robot centered in square, silhouette fills 85 percent. No plinth, scene, floor, text or logo. True transparent background. Strong readable silhouette at 32 pixels. Match the Option references' materials, fine edge treatment and lighting rather than the target's cartoon outlines.",
+      "references": [
+        {
+          "file": "static/assets/robots/flux-v1.webp",
+          "revision": "6e85435"
+        },
+        "static/assets/options/brakes-poc.webp",
+        "static/assets/options/mechanical-arm-poc.webp"
+      ]
+    },
+    {
+      "file": "static/assets/robots/gizmo-v2.webp",
+      "prompt": "Use case: style-transfer. Edit target Image 1: gizmo robot silhouette. Images 2 and 3 are authoritative STYLE references from this game's Option cards. Redesign this robot as equipment manufactured in exactly the same world as those Options: dark worn gunmetal, machined steel, fine scratches and rubbed edges, restrained brass fasteners and hazard-yellow markings, subtle warm amber internal lights, realistic painted game illustration. chipped coral-red identification panels; asymmetric workshop chassis with articulated claw arms. Colored identification panels cover about 20 percent of the visible surface; most of the body is weathered dark metal like the Options. Remove glossy toy enamel and cute face styling. Strict overhead view with forward laser barrel pointing UP at 12 o'clock, entire robot centered in square, silhouette fills 85 percent. No plinth, scene, floor, text or logo. True transparent background. Strong readable silhouette at 32 pixels. Match the Option references' materials, fine edge treatment and lighting rather than the target's cartoon outlines.",
+      "references": [
+        {
+          "file": "static/assets/robots/gizmo-v1.webp",
+          "revision": "6e85435"
+        },
+        "static/assets/options/brakes-poc.webp",
+        "static/assets/options/mechanical-arm-poc.webp"
+      ]
+    },
+    {
+      "file": "static/assets/robots/hex-v2.webp",
+      "prompt": "Use case: style-transfer. Edit target Image 1: hex robot silhouette. Images 2 and 3 are authoritative STYLE references from this game's Option cards. Redesign this robot as equipment manufactured in exactly the same world as those Options: dark worn gunmetal, machined steel, fine scratches and rubbed edges, restrained brass fasteners and hazard-yellow markings, subtle warm amber internal lights, realistic painted game illustration. muted yellow-green identification panels; hexagonal armor shell and six short mechanical legs. Colored identification panels cover about 20 percent of the visible surface; most of the body is weathered dark metal like the Options. Remove glossy toy enamel and cute face styling. Strict overhead view with forward laser barrel pointing UP at 12 o'clock, entire robot centered in square, silhouette fills 85 percent. No plinth, scene, floor, text or logo. True transparent background. Strong readable silhouette at 32 pixels. Match the Option references' materials, fine edge treatment and lighting rather than the target's cartoon outlines.",
+      "references": [
+        {
+          "file": "static/assets/robots/hex-v1.webp",
+          "revision": "6e85435"
+        },
+        "static/assets/options/brakes-poc.webp",
+        "static/assets/options/mechanical-arm-poc.webp"
+      ]
+    },
+    {
+      "file": "static/assets/robots/rivet-v2.webp",
+      "prompt": "Use case: style-transfer. Edit target Image 1: rivet robot silhouette. Images 2 and 3 are authoritative STYLE references from this game's Option cards. Redesign this robot as equipment manufactured in exactly the same world as those Options: dark worn gunmetal, machined steel, fine scratches and rubbed edges, restrained brass fasteners and hazard-yellow markings, subtle warm amber internal lights, realistic painted game illustration. pale blue identification panels; heavy riveted rectangular armor and broad caterpillar tracks. Colored identification panels cover about 20 percent of the visible surface; most of the body is weathered dark metal like the Options. Remove glossy toy enamel and cute face styling. Strict overhead view with forward laser barrel pointing UP at 12 o'clock, entire robot centered in square, silhouette fills 85 percent. No plinth, scene, floor, text or logo. True transparent background. Strong readable silhouette at 32 pixels. Match the Option references' materials, fine edge treatment and lighting rather than the target's cartoon outlines.",
+      "references": [
+        {
+          "file": "static/assets/robots/rivet-v1.webp",
+          "revision": "6e85435"
+        },
+        "static/assets/options/brakes-poc.webp",
+        "static/assets/options/mechanical-arm-poc.webp"
+      ]
+    },
+    {
+      "file": "static/assets/flags/checkpoint-v2.webp",
+      "prompt": "Use case: style-transfer. Images 1 and 2 are authoritative STYLE references: this game's repair board tiles. Image 3 is the old flag concept to replace. Create a flag checkpoint overlay that belongs to the board tile artwork: flat orthographic overhead industrial icon, a dark brushed steel pennant flag on a slim staff, with a small steel wrench at its base, subtle amber edge glow exactly like the wrench reference. Restrained weathered charcoal and silver metal, fine wear, no bright yellow fabric, no glossy toy appearance, no isometric pedestal. The flag should read clearly as a flag at 32 pixels. Keep the upper right pennant area visually quiet for a number added by code. Transparent background with NO square tile, no floor, no panel border, no cast shadow outside the silhouette. Entire single emblem centered and occupying 85 percent of square canvas. No letters, numbers, logos or watermarks.",
+      "references": [
+        "static/assets/board-tiles/repair.webp",
+        "static/assets/board-tiles/repair-option.webp",
+        {
+          "file": "static/assets/flags/checkpoint-v1.webp",
+          "revision": "6e85435"
+        }
+      ]
+    }
+  ]
+}
