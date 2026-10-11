@@ -3,7 +3,7 @@
   import { initializeComputerFirebase, type FirebaseServices } from '$lib/firebase';
   import { nextComputerAction } from '$lib/computer-controller';
   import type { RoomState } from '$lib/room-model';
-  let { state: room, services, roomCode, synced }: { state: RoomState; services?: FirebaseServices; roomCode: string; synced: boolean } = $props();
+  let { state: room, services, roomCode, synced, playbackComplete }: { state: RoomState; services?: FirebaseServices; roomCode: string; synced: boolean; playbackComplete?: boolean } = $props();
   let error = $state('');
   let working = false;
   const attempted = new Set<string>();
@@ -13,7 +13,7 @@
       if (!services || room.hostUid !== services.user.uid || !synced || working || error) return;
       if (previousRoom !== roomCode) { attempted.clear(); previousRoom = roomCode; }
       for (const player of room.players.filter((player) => player.computerOwnerUid === services!.user.uid)) {
-        const action = nextComputerAction(room, player);
+        const action = nextComputerAction(room, player, playbackComplete);
         if (!action || attempted.has(action.key)) continue;
         working = true;
         attempted.add(action.key);

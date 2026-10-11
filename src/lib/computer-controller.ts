@@ -1,5 +1,5 @@
 import { initializeComputerFirebase, type FirebaseServices } from './firebase';
-import { ROBOTS, presentationDecisionAvailable, scenarioOptionDraft, type RoomState, type RoomPlayer, type EffectChosenPayload } from './room-model';
+import { ROBOTS, presentationDecisionAvailable, presentationUsesEventStream, scenarioOptionDraft, type RoomState, type RoomPlayer, type EffectChosenPayload } from './room-model';
 import * as service from './room-service';
 import { chooseComputerProgram } from './game/computer-player';
 import { compilePlayableCourse } from './game/playable-courses';
@@ -19,7 +19,8 @@ export async function addComputerPlayer(state: RoomState, host: FirebaseServices
 }
 
 type Action = { key: string; run: (computer: FirebaseServices, room: string) => Promise<void> };
-export function nextComputerAction(state: RoomState, player: RoomPlayer): Action | null {
+export function nextComputerAction(state: RoomState, player: RoomPlayer, playbackComplete = presentationDecisionAvailable(state)): Action | null {
+  const decisionAvailable = playbackComplete && (!presentationUsesEventStream(state) || presentationDecisionAvailable(state));
   const uid = player.uid;
   const action = (key: string, run: Action['run']): Action => ({ key: `${uid}:${state.raceEpoch}:${key}`, run });
   if (state.configurationEventId && !state.setup && !state.readyPlayerUids.includes(uid)) {
@@ -48,7 +49,7 @@ export function nextComputerAction(state: RoomState, player: RoomPlayer): Action
   const owned = robots.filter((robot) => robot.uid === uid || robot.ownerUid === uid);
   const turnId = state.programming?.turnId ?? 'turn-001';
   const effect = (key: string, robotUid: string, choice: EffectChosenPayload['choice']) => action(key, (s, room) => service.chooseEffect(s.db, s.user, room, choice, turnId, robotUid));
-  if (presentationDecisionAvailable(state)) {
+  if (decisionAvailable) {
     const pending = state.resolution?.pendingOptionDecision;
     if (pending && owned.some((robot) => robot.uid === pending.uid)) {
       const choice = pending.choices.find(({ id }) => id === 'decline') ?? pending.choices.find(({ id }) => id === 'take-damage') ?? pending.choices[0];
@@ -74,7 +75,7 @@ export function nextComputerAction(state: RoomState, player: RoomPlayer): Action
   }
   const programming = state.nextProgramming ?? state.programming;
   // Wait for the same playback barrier as the private controller before opening the next hand.
-  if (!programming || (state.nextProgramming && !presentationDecisionAvailable(state))) return null;
+  if (!programming || (state.nextProgramming && !decisionAvailable)) return null;
   const hand = programming.players.find((hand) => !hand.submitted && (hand.uid === uid || hand.ownerUid === uid));
   if (!hand) return null;
   const robot = owned.find((robot) => robot.uid === hand.uid);

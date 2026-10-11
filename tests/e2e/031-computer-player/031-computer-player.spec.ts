@@ -60,6 +60,11 @@ test('tabletop computers continue into another turn after the host reloads', asy
     await page.evaluate(() => window.__roborallyE2ePlaybackClock?.advanceToNext?.());
     return (await computerPrograms(page)).length;
   }, { timeout: 90_000, intervals: [100] }).toBeGreaterThanOrEqual(4);
+  await expect.poll(async () => {
+    if (await page.getByText('Moving in 1', { exact: true }).first().isVisible()) return true;
+    await page.evaluate(() => window.__roborallyE2ePlaybackClock?.advanceToNext?.());
+    return false;
+  }, { timeout: 30_000, intervals: [100] }).toBe(true);
   await steps.step('computer-second-turn', { description: 'Both computers continue playing after reloading the tabletop', verifications: [{ spec: 'Two occupied mats remain and both turn-two programs are persisted', check: async () => {
     const programs = await computerPrograms(page);
     expect(programs.filter((e: any) => e.payload.turnId === 'turn-002')).toHaveLength(2);
@@ -67,4 +72,52 @@ test('tabletop computers continue into another turn after the host reloads', asy
     await expect(page.getByRole('alert')).toHaveCount(0);
   }}] });
   steps.generateDocs();
+});
+
+test('web computers answer damage decisions after local playback finishes', async ({ page }, testInfo) => {
+  const steps = new TestStepHelper(page, testInfo);
+  steps.setMetadata('Computer decisions during web playback', 'A computer waits until web playback reaches its laser damage decision, then answers without requiring a tabletop checkpoint.');
+  const room = `C31${testInfo.project.name === 'phone' ? 'P' : 'D'}DC`;
+  await enableSyntheticPlaybackClock(page);
+  await page.goto(`/?e2eRoomCode=${room}&e2eCourse=option-lab&e2eSeed=BOT-CHOICE-3`);
+  await page.getByRole('button', { name: 'Create race', exact: true }).click();
+  await page.getByLabel('Racer name').fill('Ada');
+  await page.getByRole('button', { name: 'Axle' }).click();
+  await page.getByRole('button', { name: 'Create and claim seat' }).click();
+  await page.getByRole('button', { name: 'Add computer', exact: true }).click();
+  await expect(page.getByRole('list', { name: 'Race room players' })).toContainText('Computer Bit');
+  await page.getByRole('button', { name: 'Configure Risky Exchange', exact: true }).click();
+  await page.getByRole('button', { name: 'Ready for race', exact: true }).click();
+  await page.getByRole('button', { name: 'Open programming console' }).click();
+  const stay = page.getByRole('button', { name: 'Stay powered up', exact: true });
+  if (await stay.isVisible()) await stay.click();
+  for (const priority of [700, 470, 340, 270, 610]) {
+    await page.getByLabel('Your Program hand').getByRole('button', { name: new RegExp(`priority ${priority}$`) }).click();
+  }
+  await page.getByRole('button', { name: 'Lock program', exact: true }).click();
+  const decisions = () => page.evaluate(() => {
+    const key = Object.keys(localStorage).find(key => key.startsWith('roborally.room-events.') && key.endsWith(new URL(location.href).searchParams.get('room')!.toLowerCase()))!;
+    const { events } = JSON.parse(localStorage.getItem(key)!);
+    const bot = events.find((event: any) => event.type === 'player/joined' && event.payload.computerOwnerUid)?.actorUid;
+    return events.filter((event: any) => event.type === 'effect/chosen' && event.actorUid === bot && event.payload.choice.kind === 'option-decision');
+  });
+  // The resolver has a pending decision, but the web clock has not shown it yet.
+  await page.waitForTimeout(750);
+  expect(await decisions()).toHaveLength(0);
+  await expect.poll(async () => {
+    await page.evaluate(() => window.__roborallyE2ePlaybackClock?.advanceToNext?.());
+    return (await decisions()).length;
+  }, { timeout: 60_000, intervals: [100] }).toBeGreaterThan(0);
+  expect((await decisions())[0].payload.choice.choiceId).toBe('take-damage');
+  await expect.poll(async () => {
+    await page.evaluate(() => window.__roborallyE2ePlaybackClock?.advanceToNext?.());
+    return page.getByRole('heading', { name: 'Turn 1 complete', exact: true }).isVisible();
+  }, { timeout: 60_000, intervals: [100] }).toBe(true);
+  await expect.poll(async () => (await computerPrograms(page)).length).toBe(2);
+  await steps.step('computer-web-decision-resolved', { description: 'Computer Bit resolves its damage choice and web playback finishes the turn', verifications: [{ spec: 'The bot answered its own decision and the race is no longer waiting for it', check: async () => {
+    expect((await decisions())[0].payload.choice.choiceId).toBe('take-damage');
+    await expect(page.getByRole('heading', { name: 'Turn 1 complete', exact: true })).toBeVisible();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+  }}] });
+  steps.generateDocs('WEB_DECISIONS.md');
 });
