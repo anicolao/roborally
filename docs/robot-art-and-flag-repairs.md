@@ -1,33 +1,36 @@
 # Robot artwork and flag repairs
 
 The board used colored letter blocks for robots and plain numbered circles for
-flags. This change gives all eight robots distinct painted metal bodies, while
-keeping their familiar colors. The same robot asset appears on the board,
-in the robot picker, on tabletop mats, and on web player cards. The forward
+flags. This change gives all eight robots distinct industrial robot bodies using
+the same worn gunmetal, brass details, hazard markings, and restrained amber
+lighting as the Option illustrations. Chipped color panels retain each robot’s
+identity. The same robot asset appears on the board, in the robot picker, on
+tabletop mats, and on web player cards. The forward
 barrel points north in the source asset; existing facing rotations and playback
 movement rotate the whole robot. Board pieces shrink with their cells on dense
-courses so adjacent robots do not overlap. Existing active-player and execution highlights
-remain in place.
+courses so adjacent robots do not overlap. Existing active-player and execution
+highlights remain in place.
 
 | Axle | Bit | Cog | Dash |
 | --- | --- | --- | --- |
-| ![Axle](../static/assets/robots/axle-v1.webp) | ![Bit](../static/assets/robots/bit-v1.webp) | ![Cog](../static/assets/robots/cog-v1.webp) | ![Dash](../static/assets/robots/dash-v1.webp) |
+| ![Axle](../static/assets/robots/axle-v2.webp) | ![Bit](../static/assets/robots/bit-v2.webp) | ![Cog](../static/assets/robots/cog-v2.webp) | ![Dash](../static/assets/robots/dash-v2.webp) |
 
 | Flux | Gizmo | Hex | Rivet |
 | --- | --- | --- | --- |
-| ![Flux](../static/assets/robots/flux-v1.webp) | ![Gizmo](../static/assets/robots/gizmo-v1.webp) | ![Hex](../static/assets/robots/hex-v1.webp) | ![Rivet](../static/assets/robots/rivet-v1.webp) |
+| ![Flux](../static/assets/robots/flux-v2.webp) | ![Gizmo](../static/assets/robots/gizmo-v2.webp) | ![Hex](../static/assets/robots/hex-v2.webp) | ![Rivet](../static/assets/robots/rivet-v2.webp) |
 
-![Flag checkpoint](../static/assets/flags/checkpoint-v1.webp)
+![Flag checkpoint](../static/assets/flags/checkpoint-v2.webp)
 
-The flag has a wrench emblem on its base. Its number stays live text for crisp
+The flag uses the same brushed steel and amber edge lighting as the repair tiles,
+with a wrench incorporated into its base. Its number stays live text for crisp
 rendering, and team colors remain on the number badge. Accessible robot names,
 board-cell descriptions, and facing descriptions remain available.
 
 ## Existing art for comparison
 
-These are the existing board and card assets, unchanged by this PR. Compare
-their darker, weathered metal, flatter lighting, and restrained color accents
-with the brighter enamel and rounded robot shapes proposed above.
+These existing assets were used as direct visual references for the revised
+robot and flag artwork. Robots share the Option illustrations’ materials and
+lighting; flags share the repair tiles’ steel-and-amber icon treatment.
 
 | Repair tile | Conveyor tile | Program card frame |
 | --- | --- | --- |
@@ -37,9 +40,9 @@ with the brighter enamel and rounded robot shapes proposed above.
 | --- | --- | --- |
 | <img src="../static/assets/options/brakes-poc.webp" alt="Existing Brakes art" width="200"> | <img src="../static/assets/options/mechanical-arm-poc.webp" alt="Existing Mechanical Arm art" width="200"> | <img src="../static/assets/options/ablative-coat-poc.webp" alt="Existing Ablative Coat art" width="200"> |
 
-The new robot designs are a first proposal for visual review. A closer match
-would use darker worn metal, less glossy enamel, and smaller colored panels
-while retaining the silhouettes and north-facing barrels.
+This revised set replaces the initial glossy enamel proposal. Check that the
+shared material treatment is convincing while the color panels and silhouettes
+remain distinguishable at board size.
 
 ## Repair correction
 
@@ -66,9 +69,9 @@ is preserved. Moving flags use their current compiled positions.
 Pure tests cover damage reduction, register unlocking, register-versus-cleanup
 timing, out-of-order flags, overlapping wrench sites, destroyed robots, and
 Mechanical Arm reach. Scenario 009 checks that both real clients see exactly
-one flag repair at the round boundary. Scenario 032 checks every image loads and the picker names fit; scenario 029
-checks robot bodies fit their cells on all published courses. The full browser
-suite supplies the cross-device visual review.
+one flag repair at the round boundary. Scenario 032 checks every image loads and
+the picker names fit; scenario 029 checks robot bodies fit their cells on all
+published courses. The full browser suite supplies the cross-device visual review.
 
 ## Artwork provenance
 
@@ -77,35 +80,8 @@ The generated transparent PNGs were reduced to 256-pixel WebP assets with alpha
 preserved. The production files live in `static/assets/robots/` and
 `static/assets/flags/`; full-resolution originals remain outside the repository.
 
-Robot prompt template:
-
-> Use case: stylized-concept. Asset type: transparent top-down robot sprite for a
-> board game, NAME. Single original toy factory robot: DESCRIPTION. Polished
-> hand-painted 3D game art with bold dark outlines, simple readable silhouette,
-> brushed steel joints, colored enamel panels. Orthographic overhead view, front
-> points strictly UP toward top of image, visible short forward laser barrel at
-> top center. Robot centered occupying 85% of square canvas, entirely in frame.
-> Strong shape readable at 32px. Truly transparent background; no ground, base,
-> shadow outside silhouette, lettering, numbers, logos, border or other objects.
-
-Descriptions used:
-
-- Axle: cyan blue, rugged two-wheel axle chassis, broad shoulders.
-- Bit: amber orange, compact square head, chunky tank treads.
-- Cog: pink magenta, circular gear-shaped chassis, twin side wheels.
-- Dash: violet purple, sleek triangular racing chassis, swept fins.
-- Flux: mint teal, rounded reactor chassis, two large magnetic side pods.
-- Gizmo: coral red, asymmetric workshop chassis, small articulated claw arms.
-- Hex: pale yellow green, hexagonal armored shell, six short mechanical legs.
-- Rivet: ice blue, riveted heavy rectangular armor, broad caterpillar tracks.
-
-Flag prompt:
-
-> Use case: stylized-concept. Asset type: transparent flag checkpoint sprite for
-> a factory robot board game. A single golden yellow racing pennant on a short
-> steel pole and compact hexagonal industrial repair platform with a small
-> embossed wrench emblem. Polished hand-painted 3D toy game art, bold dark
-> outlines, simple clear silhouette readable at 32 pixels. Slight overhead view,
-> centered entire object fills square canvas, no ground or outside shadow. Large
-> flat blank yellow pennant area for a number overlay added in code. Truly
-> transparent background. No text, numbers, watermark, border or other objects.
+The complete final prompt set and reference assets are recorded in
+[robot-art-prompts.json](robot-art-prompts.json). Robots were edited using the
+existing Brakes and Mechanical Arm Option illustrations as direct style
+references. The flag was edited using the existing single and crossed repair
+tiles. Each edit retained transparency and a clear silhouette for small sizes.

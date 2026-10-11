@@ -194,7 +194,7 @@
             x={position.x}
             y={position.y}
           />
-          {#if flag}{@const team = scenario?.flagControl[flag] ?? scenario?.flags.find(({ number }) => number === flag)?.teamId ?? Object.entries(setup.capture?.homeBoards ?? {}).find(([, board]) => board === manifestCell?.boardInstanceId)?.[0]}<span class="course-flag" data-flag-team={team} title={team ? `Flag ${flag} · ${team.replace('team-', 'Team ')}` : `Flag ${flag}`}><img src={`${base}/assets/flags/checkpoint-v1.webp`} alt="" /><b>{flag}</b></span>{/if}
+          {#if flag}{@const team = scenario?.flagControl[flag] ?? scenario?.flags.find(({ number }) => number === flag)?.teamId ?? Object.entries(setup.capture?.homeBoards ?? {}).find(([, board]) => board === manifestCell?.boardInstanceId)?.[0]}<span class="course-flag" data-flag-team={team} title={team ? `Flag ${flag} · ${team.replace('team-', 'Team ')}` : `Flag ${flag}`}><img src={`${base}/assets/flags/checkpoint-v2.webp`} alt="" /><b>{flag}</b></span>{/if}
           {#each displayedRobots.filter((player) => player.position.x === position.x && player.position.y === position.y) as player}
             {@const robot = ROBOTS.find((entry) => entry.id === player.robotId)}
             <span
