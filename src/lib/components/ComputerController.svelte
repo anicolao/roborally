@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { initializeComputerFirebase, type FirebaseServices } from '$lib/firebase';
-  import { nextComputerAction } from '$lib/computer-controller';
+  import { ComputerActionAttempts, nextComputerAction } from '$lib/computer-controller';
   import type { RoomState } from '$lib/room-model';
   let { state: room, services, roomCode, synced, playbackComplete }: { state: RoomState; services?: FirebaseServices; roomCode: string; synced: boolean; playbackComplete?: boolean } = $props();
   let error = $state('');
   let working = false;
-  const attempted = new Set<string>();
+  const attempted = new ComputerActionAttempts();
   let previousRoom = '';
   onMount(() => {
     const timer = setInterval(async () => {
@@ -14,15 +14,20 @@
       if (previousRoom !== roomCode) { attempted.clear(); previousRoom = roomCode; }
       for (const player of room.players.filter((player) => player.computerOwnerUid === services!.user.uid)) {
         const action = nextComputerAction(room, player, playbackComplete);
-        if (!action || attempted.has(action.key)) continue;
-        working = true;
-        attempted.add(action.key);
+        if (!action) continue;
+        const actionRoom = roomCode;
         try {
+          if (!attempted.begin(action.key, room, player.uid)) continue;
+          working = true;
           const computer = await initializeComputerFirebase(services.user.uid, player.robotId);
           if (computer.user.uid !== player.uid) throw new Error('Keep the browser that added the computer players open to control them.');
+          if (!synced || actionRoom !== roomCode || nextComputerAction(room, player, playbackComplete)?.key !== action.key) {
+            attempted.cancel(action.key);
+            return;
+          }
           await action.run(computer, roomCode);
         } catch (cause) {
-          attempted.delete(action.key);
+          attempted.cancel(action.key);
           console.error(cause);
           error = cause instanceof Error && cause.message.startsWith('Keep the browser')
             ? cause.message
