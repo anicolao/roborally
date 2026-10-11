@@ -114,7 +114,7 @@ test('web computers answer damage decisions after local playback finishes', asyn
     return page.getByRole('heading', { name: 'Turn 1 complete', exact: true }).isVisible();
   }, { timeout: 60_000, intervals: [100] }).toBe(true);
   await expect.poll(async () => (await computerPrograms(page)).length).toBe(2);
-  await steps.step('computer-web-decision-resolved', { description: 'Computer Bit resolves its damage choice and web playback finishes the turn', verifications: [{ spec: 'The bot answered its own decision and the race is no longer waiting for it', check: async () => {
+  await steps.step('computer-web-decision-resolved', { resetScroll: true, description: 'Computer Bit resolves its damage choice and web playback finishes the turn', verifications: [{ spec: 'The bot answered its own decision and the race is no longer waiting for it', check: async () => {
     expect((await decisions())[0].payload.choice.choiceId).toBe('take-damage');
     await expect(page.getByRole('heading', { name: 'Turn 1 complete', exact: true })).toBeVisible();
     await expect(page.getByRole('alert')).toHaveCount(0);
