@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import '@fontsource/space-mono/700.css';
   import { base } from '$app/paths';
   import RobotHeadingOutline from '$lib/components/RobotHeadingOutline.svelte';
   import RobotMarker from '$lib/components/RobotMarker.svelte';
@@ -386,9 +387,10 @@
   }
   .course-flag img { width: 100%; height: 100%; object-fit: contain; }
   .course-flag b {
-    position: absolute; top: 25%; left: 49%; width: 28%; text-align: center;
+    position: absolute; top: 35%; left: 63%; width: 28%; text-align: center;
+    transform: translate(-50%, -50%);
     color: var(--flag-color, #eadab3);
-    font: 700 clamp(8px, calc(var(--board-flag-size) * .21), 15px) 'Space Mono', monospace;
+    font: 700 clamp(8px, calc(var(--board-flag-size) * .21), 15px)/1 'Space Mono', monospace;
     text-shadow: 0 1px 2px #000;
   }
   .race-robot, .animated-race-robot { --robot-art-size: var(--board-piece-size); }

@@ -63,6 +63,16 @@ is preserved. Moving flags use their current compiled positions.
 
 ## Review
 
+Open the [interactive art preview](https://anicolao.github.io/roborally/pr37/art-preview/)
+to rotate all eight robots, choose the executing robot, and compare full-size,
+desktop, and phone board widths. Locally, use
+[the same gallery](http://127.0.0.1:5187/art-preview/).
+
+The gallery and game use the same CourseBoard component and number font.
+The board loads its own font, and each flag number is anchored by its centre
+on the pennant with a fixed line height. This prevents the fallback-font and
+tile-size differences that made the previous preview misleading.
+
 - Check color and silhouette recognition on the board, especially Axle versus Rivet.
 - Rotate robots and follow playback to check that their forward barrels make facing clear.
 - Compare web player cards, tabletop mats, and phone robot selection.
