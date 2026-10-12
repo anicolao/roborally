@@ -63,7 +63,7 @@ is preserved. Moving flags use their current compiled positions.
 
 ## Review
 
-Open the [interactive art preview](https://anicolao.github.io/roborally/pr37/art-preview/)
+Open the [interactive art preview](https://anicolao.github.io/roborally/pr37/art-preview)
 to rotate all eight robots, choose the executing robot, and compare full-size,
 desktop, and phone board widths. Locally, use
 [the same gallery](http://127.0.0.1:5187/art-preview/).
