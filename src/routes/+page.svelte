@@ -260,6 +260,8 @@
   );
   $: playbackIsActive = playbackPhase === 'countdown' || playbackPhase === 'register';
   $: playbackTransitionMs = Math.round(playbackProductionDurationMs * playbackTimeScale);
+  $: actorIsExecuting = playbackPhase === 'register' && playbackStage === 'program-card';
+  $: robotCueMs = actorIsExecuting ? Math.min(350, Math.round(playbackTransitionMs * 0.3)) : 0;
   $: countdownStepMs = Math.round(PRODUCTION_COUNTDOWN_STEP_MS * playbackTimeScale);
   $: playbackCard = PROGRAM_CARDS.find(({ id }) => id === playbackCardId);
   $: playbackStageLabel = playbackStage === 'program-card'
@@ -1127,7 +1129,9 @@
         robots={presentedResolutionRobots}
         currentPlayerUid={currentPlayer.uid}
         animateRobots={playbackIsActive}
-        transitionDurationMs={playbackTransitionMs}
+        transitionDurationMs={Math.max(0, playbackTransitionMs - robotCueMs)}
+        movementDelayMs={robotCueMs}
+        activeRobotUid={actorIsExecuting ? playbackActorUid ?? undefined : undefined}
         laserBeams={playbackLaserBeams}
       />
       <div class="play-column">
