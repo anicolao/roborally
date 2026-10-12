@@ -70,6 +70,7 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     const countdown = host.getByTestId('program-countdown');
     await expect(countdown).toContainText('ALL PROGRAMS LOCKED');
     await expect(countdown).toContainText('3');
+    await expect(host.locator('.animated-race-robot.active-robot')).toHaveCount(0);
     if (testInfo.project.name === 'desktop') {
       await steps.step('countdown-beside-board', {
         description: 'The movement countdown stays beside the unobstructed board',
@@ -101,9 +102,25 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
     await advanceSyntheticPlayback([host, guest]);
     await expect(registerPlayback).toContainText('Ada · rotate right');
     await expect(registerPlayback).toContainText('priority 110');
+    // The same executing robot is lime for its owner and blue for the other player.
+    // Half-speed playback reserves 300 ms of its 1,000 ms frame for the cue.
+    for (const [viewer, color] of [[host, '#d2ff37'], [guest, '#65d8ff']] as const) {
+      const activeRobot = viewer.locator('.animated-race-robot.active-robot');
+      await expect(activeRobot).toHaveCount(1);
+      await expect(activeRobot).toHaveClass(/robot-axle/);
+      await expect.poll(() => activeRobot.evaluate(node => {
+        const style = getComputedStyle(node);
+        return {
+          color: style.getPropertyValue('--heading-color').trim(),
+          stroke: style.getPropertyValue('--heading-stroke').trim(),
+          delay: style.transitionDelay,
+          duration: [...new Set(style.transitionDuration.split(', '))]
+        };
+      })).toEqual({ color, stroke: '3', delay: '0.3s', duration: ['0.7s'] });
+    }
     if (testInfo.project.name === 'desktop') {
       await steps.step('execution-and-running-log', {
-        description: 'The current instruction and accumulated moves share the right column',
+        description: 'The executing robot glows while its instruction and earlier moves remain beside the board',
         verifications: [{
           spec: 'The current step is readable beside the board and earlier moves remain in the log',
           check: async () => {
@@ -133,6 +150,8 @@ test('Programs resolve by priority through rotations, stepwise movement, seams, 
 
     await advanceSyntheticPlayback([host, guest]);
     await expect(registerPlayback).toHaveAttribute('data-stage', 'express-conveyors');
+    await expect(host.locator('.animated-race-robot.active-robot')).toHaveCount(0);
+    await expect(guest.locator('.animated-race-robot.active-robot')).toHaveCount(0);
     // This scenario uses half-speed test time: 100 production ms is 50 clock ms.
     await Promise.all([host, guest].map((page) => page.evaluate(() => window.__roborallyE2ePlaybackClock?.advanceBy?.(49))));
     await expect(registerPlayback).toHaveAttribute('data-stage', 'express-conveyors');

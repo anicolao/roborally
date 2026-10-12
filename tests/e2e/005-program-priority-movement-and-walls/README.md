@@ -10,9 +10,9 @@ Two ordinary five-card programs cover every 2005 instruction class. A synchroniz
 
 - [x] The countdown fits inside the right column and never overlaps the board
 
-## The current instruction and accumulated moves share the right column
+## The executing robot glows while its instruction and earlier moves remain beside the board
 
-![The current instruction and accumulated moves share the right column](./screenshots/001-execution-and-running-log-desktop.png)
+![The executing robot glows while its instruction and earlier moves remain beside the board](./screenshots/001-execution-and-running-log-desktop.png)
 
 **Verifications:**
 
